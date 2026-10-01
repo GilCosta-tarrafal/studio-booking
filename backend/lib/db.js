@@ -1,0 +1,295 @@
+'use strict';
+
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const { parseHM, weekday } = require('./util');
+
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const db = new Database(process.env.DB_FILE || path.join(DATA_DIR, 'estudio.db'));
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('owner','staff')),
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS studios (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  city        TEXT NOT NULL DEFAULT '',
+  address     TEXT NOT NULL DEFAULT '',
+  phone       TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  hours       TEXT NOT NULL,
+  -- Coordenadas do estúdio, para o globo do formulário de marcação.
+  lat         REAL,
+  lon         REAL,
+  active      INTEGER NOT NULL DEFAULT 1,
+  sort        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS rooms (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  studio_id   INTEGER NOT NULL REFERENCES studios(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  hourly_rate INTEGER NOT NULL DEFAULT 0,
+  active      INTEGER NOT NULL DEFAULT 1,
+  sort        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS services (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  -- 1 = o trabalho pode ser feito sem o cliente vir ao estúdio (mistura, masterização)
+  remote_ok   INTEGER NOT NULL DEFAULT 0,
+  active      INTEGER NOT NULL DEFAULT 1,
+  sort        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  code           TEXT NOT NULL UNIQUE,
+  room_id        INTEGER NOT NULL REFERENCES rooms(id) ON DELETE RESTRICT,
+  service_id     INTEGER REFERENCES services(id) ON DELETE SET NULL,
+  title          TEXT NOT NULL DEFAULT '',
+  date           TEXT NOT NULL,
+  start_min      INTEGER NOT NULL,
+  end_min        INTEGER NOT NULL,
+  client_name    TEXT NOT NULL,
+  client_phone   TEXT NOT NULL DEFAULT '',
+  client_email   TEXT NOT NULL DEFAULT '',
+  notes          TEXT NOT NULL DEFAULT '',
+  internal_notes TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'pedido'
+                 CHECK (status IN ('pedido','confirmado','em_curso','concluido','cancelado')),
+  -- 1 = o cliente não vai ao estúdio; manda os ficheiros
+  remote         INTEGER NOT NULL DEFAULT 0,
+  price          INTEGER NOT NULL DEFAULT 0,
+  paid           INTEGER NOT NULL DEFAULT 0,
+  source         TEXT NOT NULL DEFAULT 'site',
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL,
+  CHECK (end_min > start_min)
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, date);
+CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
+CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
+
+CREATE TABLE IF NOT EXISTS blocks (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id   INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  date      TEXT NOT NULL,
+  start_min INTEGER NOT NULL,
+  end_min   INTEGER NOT NULL,
+  reason    TEXT NOT NULL DEFAULT '',
+  CHECK (end_min > start_min)
+);
+CREATE INDEX IF NOT EXISTS idx_blocks_room_date ON blocks(room_id, date);
+`);
+
+// Colunas acrescentadas depois da primeira versão. CREATE TABLE IF NOT EXISTS não
+// toca numa tabela que já exista, por isso as bases antigas precisam deste passo.
+function acrescentaColuna(tabela, coluna, ddl) {
+  const tem = db.prepare(`PRAGMA table_info(${tabela})`).all().some((c) => c.name === coluna);
+  if (!tem) db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${ddl}`);
+}
+acrescentaColuna('services', 'remote_ok', 'INTEGER NOT NULL DEFAULT 0');
+acrescentaColuna('bookings', 'remote', 'INTEGER NOT NULL DEFAULT 0');
+acrescentaColuna('bookings', 'style', "TEXT NOT NULL DEFAULT ''");
+// Onde fica cada estúdio, para o globo do formulário saber para onde voar.
+// Vazio (null) quando não se sabe: aí o globo fica parado, sem marcador.
+acrescentaColuna('studios', 'lat', 'REAL');
+acrescentaColuna('studios', 'lon', 'REAL');
+
+// As bases criadas antes de haver coordenadas ficaram com os estúdios de
+// exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
+// quando ainda estão tal e qual como saíram do molde ("Cidade A", sem
+// coordenadas): num estúdio a sério, o que o dono escreveu nunca se toca.
+for (const [cidadeDemo, cidade, lat, lon] of [
+  ['Cidade A', 'Paris, França', 48.8566, 2.3522],
+  ['Cidade B', 'Assomada, Cabo Verde', 15.1, -23.6833],
+]) {
+  db.prepare(
+    `UPDATE studios SET city=?, lat=?, lon=?, address=''
+      WHERE city=? AND lat IS NULL AND lon IS NULL AND address IN ('', 'Morada a definir')`
+  ).run(cidade, lat, lon, cidadeDemo);
+}
+
+// ---------------------------------------------------------------- Definições
+
+const DEFAULT_SETTINGS = {
+  business_name: 'Suavita Records',
+  tagline: 'Gravação, mistura e produção musical',
+  phone: '',
+  whatsapp: '',
+  email: '',
+  instagram: '',
+  spotify: '',
+  youtube: '',
+  currency: 'CVE',
+  country_code: '238',
+  slot_minutes: '60',
+  min_minutes: '60',
+  max_minutes: '480',
+  lead_hours: '12',
+  max_advance_days: '90',
+  auto_confirm: '0',
+  terms: 'O pedido fica pendente até ser confirmado pelo estúdio. Receberá a confirmação por telefone ou WhatsApp.',
+};
+
+const INT_SETTINGS = ['slot_minutes', 'min_minutes', 'max_minutes', 'lead_hours', 'max_advance_days'];
+
+function getSettings() {
+  const out = { ...DEFAULT_SETTINGS };
+  for (const r of db.prepare('SELECT key, value FROM settings').all()) {
+    if (r.key in DEFAULT_SETTINGS) out[r.key] = r.value;
+  }
+  for (const k of INT_SETTINGS) out[k] = parseInt(out[k], 10) || parseInt(DEFAULT_SETTINGS[k], 10);
+  out.auto_confirm = out.auto_confirm === '1' || out.auto_confirm === 1;
+  return out;
+}
+
+function saveSettings(obj) {
+  const up = db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+  db.transaction(() => {
+    for (const [k, v] of Object.entries(obj)) {
+      if (k in DEFAULT_SETTINGS) up.run(k, String(typeof v === 'boolean' ? (v ? 1 : 0) : v));
+    }
+  })();
+}
+
+// ---------------------------------------------------------------- Horários
+
+// 7 posições (0 = domingo). null = fechado.
+const DEFAULT_HOURS = [
+  null,
+  { open: '09:00', close: '21:00' },
+  { open: '09:00', close: '21:00' },
+  { open: '09:00', close: '21:00' },
+  { open: '09:00', close: '21:00' },
+  { open: '09:00', close: '21:00' },
+  { open: '10:00', close: '20:00' },
+];
+
+function parseHours(json) {
+  try {
+    const a = JSON.parse(json);
+    if (Array.isArray(a) && a.length === 7) return a;
+  } catch (_) { /* usa o padrão */ }
+  return DEFAULT_HOURS;
+}
+
+// {open, close} em minutos para uma data, ou null se fechado.
+function hoursFor(studio, date) {
+  const h = parseHours(studio.hours)[weekday(date)];
+  if (!h) return null;
+  const open = parseHM(h.open), close = parseHM(h.close);
+  if (open == null || close == null || close <= open) return null;
+  return { open, close };
+}
+
+// ---------------------------------------------------------------- Marcações
+
+// Verifica se já existe marcação ativa ou bloqueio sobreposto nessa sala.
+function findConflict(roomId, date, start, end, excludeBookingId = 0) {
+  const b = db.prepare(
+    `SELECT id, code FROM bookings
+      WHERE room_id=? AND date=? AND status!='cancelado'
+        AND start_min<? AND end_min>? AND id!=? LIMIT 1`
+  ).get(roomId, date, end, start, excludeBookingId);
+  if (b) return { type: 'booking', ...b };
+  const k = db.prepare(
+    `SELECT id, reason FROM blocks
+      WHERE room_id=? AND date=? AND start_min<? AND end_min>? LIMIT 1`
+  ).get(roomId, date, end, start);
+  if (k) return { type: 'block', ...k };
+  return null;
+}
+
+// Intervalos ocupados (marcações ativas + bloqueios) de uma sala num dia.
+function busyIntervals(roomId, date) {
+  const a = db.prepare(
+    `SELECT start_min AS s, end_min AS e FROM bookings
+      WHERE room_id=? AND date=? AND status!='cancelado'`
+  ).all(roomId, date);
+  const b = db.prepare('SELECT start_min AS s, end_min AS e FROM blocks WHERE room_id=? AND date=?').all(roomId, date);
+  return [...a, ...b].sort((x, y) => x.s - y.s);
+}
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function newCode() {
+  for (let tries = 0; tries < 20; tries++) {
+    let c = '';
+    const bytes = crypto.randomBytes(6);
+    for (let i = 0; i < 6; i++) c += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+    if (!db.prepare('SELECT 1 FROM bookings WHERE code=?').get(c)) return c;
+  }
+  throw new Error('Não foi possível gerar um código único');
+}
+
+const BOOKING_SELECT = `
+  SELECT b.*, r.name AS room_name, r.studio_id, s.name AS studio_name, sv.name AS service_name
+    FROM bookings b
+    JOIN rooms r ON r.id = b.room_id
+    JOIN studios s ON s.id = r.studio_id
+    LEFT JOIN services sv ON sv.id = b.service_id`;
+
+function priceFor(room, start, end) {
+  return Math.round((room.hourly_rate * (end - start)) / 60);
+}
+
+// ---------------------------------------------------------------- Dados iniciais
+
+function seedIfEmpty() {
+  const seeded = db.prepare("SELECT value FROM settings WHERE key='seeded'").get();
+  if (seeded) return;
+  const anyStudio = db.prepare('SELECT 1 FROM studios LIMIT 1').get();
+  if (!anyStudio && process.env.SEED_DEMO !== '0') {
+    const hours = JSON.stringify(DEFAULT_HOURS);
+    const st = db.prepare('INSERT INTO studios(name,city,address,phone,description,hours,lat,lon,sort) VALUES(?,?,?,?,?,?,?,?,?)');
+    const rm = db.prepare('INSERT INTO rooms(studio_id,name,description,hourly_rate,sort) VALUES(?,?,?,?,?)');
+    const a = st.run('Estúdio Central', 'Paris, França', '', '', 'Estúdio principal, com sala de gravação e cabine de voz.', hours, 48.8566, 2.3522, 1).lastInsertRowid;
+    rm.run(a, 'Sala de gravação', 'Sala grande para bandas e gravação de instrumentos.', 2500, 1);
+    rm.run(a, 'Cabine de voz', 'Cabine tratada para voz e locução.', 1500, 2);
+    const b = st.run('Estúdio Norte', 'Assomada, Cabo Verde', '', '', 'Segundo estúdio, para produção e mistura.', hours, 15.1000, -23.6833, 2).lastInsertRowid;
+    rm.run(b, 'Sala de produção', 'Produção, mistura e masterização.', 2000, 1);
+    const sv = db.prepare('INSERT INTO services(name,description,remote_ok,sort) VALUES(?,?,?,?)');
+    sv.run('Gravação', 'Sessão de gravação de voz ou instrumentos, com técnico.', 0, 1);
+    sv.run('Mistura', 'Mistura das faixas gravadas.', 1, 2);
+    sv.run('Masterização', 'Acabamento final para edição e streaming.', 1, 3);
+    sv.run('Produção', 'Criação e arranjo de instrumentais.', 1, 4);
+    sv.run('Ensaio', 'Aluguer da sala para ensaio, sem técnico.', 0, 5);
+  }
+  saveSettings({});
+  db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('seeded','1')").run();
+}
+seedIfEmpty();
+
+module.exports = {
+  db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
+  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor,
+};

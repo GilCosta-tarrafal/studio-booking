@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="{{LANG}}" data-tema="{{TEMA}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n-tpl="{marcar.titulo} | {{NAME}}">{{t:marcar.titulo}} | {{NAME}}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="page-inner">
+<a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
+<header class="cabecalho">
+  <div class="container">
+    <nav class="topbar" aria-label="Principal" data-i18n-attr="aria-label:nav.principal">
+      <a class="brand" href="/"><img class="brand-mark" src="/img/logo.png" alt="" width="34" height="34"><span>{{NAME}}</span></a>
+      <div class="topnav">
+        <a href="/" data-i18n="nav.inicio">Início</a>
+        <a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a>
+      </div>
+      <div class="topacoes">{{PREFS}}</div>
+    </nav>
+  </div>
+</header>
+
+<main id="conteudo" class="container book">
+  <div id="book-wrap">
+    <h1 data-i18n="marcar.titulo">Marcar sessão</h1>
+    <p class="lead" data-i18n="marcar.lead">Diga o que precisa, escolha o estúdio, o dia e a hora. O estúdio recebe o pedido e responde para confirmar.</p>
+
+    <div id="load-error" class="notice error" role="alert" hidden></div>
+
+    <!-- Em dois passos: primeiro o que se quer e em que dia, depois onde, a que
+         horas e quem marca. Os dois estão aqui no HTML; /js/book.js mostra um
+         e esconde o outro, sem recarregar a página, para não se perder nada do
+         que já foi preenchido. -->
+    <form id="book-form" novalidate>
+      <p class="passo-conta" id="passo-conta" aria-live="polite"></p>
+
+      <div class="passo" id="passo-1" tabindex="-1">
+        <fieldset class="step">
+          <legend data-i18n="passo.trabalho">O trabalho</legend>
+          <div class="field" id="service-field" hidden>
+            <span class="label" id="service-label"><span data-i18n="campo.servico">Serviço</span> <span class="opt" data-i18n="campo.opcional">(opcional)</span></span>
+            <div class="choices choices-services" id="service" role="radiogroup" aria-labelledby="service-label"></div>
+          </div>
+          <div class="field" id="presence-field" hidden>
+            <span class="label" id="presence-label" data-i18n="campo.presenca">Vai estar no estúdio?</span>
+            <div class="choices choices-2" role="radiogroup" aria-labelledby="presence-label">
+              <label class="choice">
+                <input type="radio" name="presence" value="presencial" checked>
+                <span class="choice-body"><strong data-i18n="presenca.sim.t">Sim, vou ao estúdio</strong><span data-i18n="presenca.sim.d">Trabalhamos consigo na sala.</span></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="presence" value="distancia">
+                <span class="choice-body"><strong data-i18n="presenca.nao.t">Não, é à distância</strong><span id="presence-remote-hint" data-i18n="presenca.nao.d">Envia os ficheiros e recebe o trabalho.</span></span>
+              </label>
+            </div>
+          </div>
+          <div class="field" id="style-field" hidden>
+            <span class="label" id="style-label"><span data-i18n="campo.estilo">Estilo de música</span> <span class="opt" data-i18n="campo.opcional">(opcional)</span>
+              <button type="button" id="style-som" class="som-botao" aria-pressed="true" aria-label="Som ligado. Carregue para silenciar." title="Som ligado. Carregue para silenciar."
+                      data-i18n-attr="aria-label:som.ligado title:som.ligado">
+                <svg class="som-on" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z"/><path d="M15.6 9.4a3.6 3.6 0 0 1 0 5.2"/><path d="M18.2 6.8a7.2 7.2 0 0 1 0 10.4"/></svg>
+                <svg class="som-off" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z"/><path d="m16.2 10 4.4 4.4M20.6 10l-4.4 4.4"/></svg>
+              </button>
+              <span class="som-dica opt" data-i18n="som.dica">Carregue num estilo para ouvir.</span></span>
+            <!-- As etiquetas vêm de /js/estilos.js; a última é "Outro", e é ela
+                 que mostra a caixa de texto ao lado. -->
+            <div class="etiquetas" id="style" role="radiogroup" aria-labelledby="style-label"></div>
+            <input id="style-other" class="style-other" type="text" maxlength="60" autocomplete="off"
+                   placeholder="Qual? Ex.: Amapiano, Tabanka…" aria-label="Qual? Ex.: Amapiano, Tabanka…"
+                   data-i18n-attr="placeholder:estilo.outroDica aria-label:estilo.outroDica" hidden>
+          </div>
+        </fieldset>
+
+        <p class="submit-row"><button class="btn btn-lg" type="button" id="btn-seguinte" data-i18n="botao.seguinte">Seguinte</button></p>
+      </div>
+
+      <div class="passo" id="passo-2" tabindex="-1" hidden>
+        <fieldset class="step">
+          <legend data-i18n="passo.estudio">Estúdio e sala</legend>
+          <div id="studios" class="choices" role="radiogroup" aria-label="Estúdio" data-i18n-attr="aria-label:aria.estudio"></div>
+          <div id="rooms" class="choices" role="radiogroup" aria-label="Sala" data-i18n-attr="aria-label:aria.sala"></div>
+        </fieldset>
+
+        <fieldset class="step">
+          <legend data-i18n="passo.quando">Dia e hora</legend>
+          <div class="date-row">
+            <div class="field">
+              <label for="date" data-i18n="campo.dia">Dia</label>
+              <input id="date" type="date" required>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-today" data-i18n="botao.hoje">Hoje</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-tomorrow" data-i18n="botao.amanha">Amanhã</button>
+          </div>
+          <p class="hint slot-note" id="slot-note" aria-live="polite"></p>
+          <div id="cells" class="cells" role="group" aria-label="Hora de início" data-i18n-attr="aria-label:aria.horaInicio"></div>
+          <div class="duration" id="duration" hidden>
+            <span class="label" id="dur-label" data-i18n="campo.duracao">Duração</span>
+            <div class="stepper" role="group" aria-labelledby="dur-label">
+              <button type="button" id="dur-minus" aria-label="Menos tempo" data-i18n-attr="aria-label:botao.menosTempo">−</button>
+              <output id="dur-out" aria-live="polite"></output>
+              <button type="button" id="dur-plus" aria-label="Mais tempo" data-i18n-attr="aria-label:botao.maisTempo">+</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <div id="passo2-error" class="notice error" role="alert" hidden></div>
+        <p class="submit-row">
+          <button class="btn btn-outline" type="button" id="btn-voltar-2" data-i18n="botao.voltar">Voltar</button>
+          <button class="btn btn-lg" type="button" id="btn-seguinte-2" data-i18n="botao.seguinte">Seguinte</button>
+        </p>
+      </div>
+
+      <div class="passo" id="passo-3" tabindex="-1" hidden>
+        <fieldset class="step">
+          <legend data-i18n="passo.dados">Os seus dados</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="name" data-i18n="campo.nome">Nome</label>
+              <input id="name" type="text" maxlength="80" autocomplete="name" required>
+            </div>
+            <div class="field">
+              <label for="phone" data-i18n="campo.telefoneWa">Telefone ou WhatsApp</label>
+              <input id="phone" type="tel" inputmode="tel" maxlength="30" autocomplete="tel" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="email"><span data-i18n="campo.email">Email</span> <span class="opt" data-i18n="campo.opcional">(opcional)</span></label>
+            <input id="email" type="email" maxlength="120" autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="notes"><span data-i18n="campo.mensagem">Mensagem</span> <span class="opt" data-i18n="campo.opcional">(opcional)</span></label>
+            <textarea id="notes" maxlength="1000" placeholder="Quantas pessoas vêm, o que precisa de gravar, equipamento que traz…" data-i18n-attr="placeholder:campo.mensagemDica"></textarea>
+          </div>
+          <input class="hp" type="text" id="website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        </fieldset>
+
+        <div class="summary" id="summary" aria-live="polite">
+          <p class="hint" data-i18n="resumo.escolha">Escolha uma hora de início para ver o resumo do pedido.</p>
+        </div>
+        <p class="terms" id="terms"></p>
+        <div id="form-error" class="notice error" role="alert" hidden></div>
+        <p class="submit-row">
+          <button class="btn btn-outline" type="button" id="btn-voltar" data-i18n="botao.voltar">Voltar</button>
+          <button class="btn btn-lg" type="submit" id="submit" data-i18n="botao.enviar">Enviar pedido de marcação</button>
+        </p>
+      </div>
+    </form>
+  </div>
+
+  <section id="done" class="done" hidden aria-live="polite">
+    <h1 id="done-title" tabindex="-1"></h1>
+    <p id="done-text"></p>
+    <p class="code-label" data-i18n="feito.codigo">O seu código de marcação</p>
+    <div><span class="code-tape" id="done-code"></span></div>
+    <dl class="detail-list" id="done-details"></dl>
+    <div class="actions" id="done-actions"></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-sobre">
+      <h2>{{NAME}}</h2>
+      <p class="fine">{{TAGLINE}}</p>
+      <ul class="social" id="social" hidden></ul>
+    </div>
+
+    <nav aria-labelledby="t-links">
+      <h3 id="t-links" data-i18n="rodape.links">Links rápidos</h3>
+      <ul class="footer-links">
+        <li><a href="/#servicos" data-i18n="nav.servicos">Serviços</a></li>
+        <li><a href="/marcar" data-i18n="nav.marcar">Marcar sessão</a></li>
+        <li><a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a></li>
+      </ul>
+    </nav>
+
+    <div>
+      <h3 data-i18n="rodape.contactos">Contactos</h3>
+      <ul class="contact-list" id="contacts"><li class="fine" data-i18n="rodape.semContactos">Use o formulário de marcação para falar com o estúdio.</li></ul>
+    </div>
+
+    <div>
+      <h3 data-i18n="rodape.horario">Horário</h3>
+      <div id="footer-hours"></div>
+    </div>
+  </div>
+
+  <div class="container footer-fim">
+    <img class="footer-mark" src="/img/logo.png" alt="{{NAME}}" width="34" height="34">
+    <p class="fine">© {{YEAR}} {{NAME}}. <span data-i18n="rodape.direitos">Todos os direitos reservados.</span></p>
+  </div>
+</footer>
+
+<script src="/js/dicionario.js"></script>
+<script src="/js/prefs.js"></script>
+<script src="/js/cabecalho.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/rodape.js"></script>
+<script src="/js/estilos.js"></script>
+<script src="/js/sons.js"></script>
+<script src="/js/som.js"></script>
+<script src="/js/book.js"></script>
+</body>
+</html>

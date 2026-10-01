@@ -1,0 +1,24 @@
+{
+  "name": "studio-booking",
+  "version": "1.0.0",
+  "description": "Site de marcações e painel de gestão para produtor com vários estúdios",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "start:env": "node --env-file=.env backend/server.js",
+    "dev": "node --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=publico/assets/js/dicionario.js backend/server.js",
+    "test": "node test/api.test.js && node test/integracoes.test.js",
+    "test:integracoes": "node test/integracoes.test.js",
+    "backup": "node backend/scripts/backup.js",
+    "test:frontend": "node test/frontend.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1"
+  }
+}

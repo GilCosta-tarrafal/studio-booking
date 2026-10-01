@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- O texto visível está aqui em português; é o original. O servidor troca-o
+     pela tradução antes de enviar a página (ver backend/server.js e o
+     dicionário em publico/assets/js/dicionario.js). As marcas são:
+       data-i18n="chave"                -> o texto do elemento
+       data-i18n-attr="attr:chave"      -> um atributo
+       data-i18n-tpl="…{chave}…"        -> texto composto, para o <title>
+       {{t:chave}}                      -> texto solto, onde não há elemento -->
+<html lang="{{LANG}}" data-tema="{{TEMA}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n-tpl="{{NAME}}{inicio.titulo}">{{NAME}}{{t:inicio.titulo}}</title>
+<meta name="description" content="{{TAGLINE}}. {{t:inicio.descricao}}">
+<link rel="icon" href="/img/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
+
+<!-- Fora do herói de propósito: preso ao topo, tem de acompanhar a página toda
+     e não só a primeira secção. -->
+<header class="cabecalho">
+  <div class="container">
+    <nav class="topbar" aria-label="Principal" data-i18n-attr="aria-label:nav.principal">
+      <a class="brand" href="/"><img class="brand-mark" src="/img/logo.png" alt="" width="34" height="34"><span>{{NAME}}</span></a>
+      <div class="topnav">
+        <a href="#servicos" data-i18n="nav.servicos">Serviços</a>
+        <a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a>
+      </div>
+      <div class="topacoes">
+        {{PREFS}}
+        <a class="btn btn-amber btn-sm" href="/marcar" data-i18n="nav.marcar">Marcar sessão</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<div class="hero on-dark">
+  <div class="hero-slides" aria-hidden="true">
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+  </div>
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <h1 data-i18n="inicio.h1">Tempo de estúdio, marcado em minutos.</h1>
+        <p class="lead">{{TAGLINE}}. <span data-i18n="inicio.lead">Veja o que está livre hoje em cada estúdio, escolha a sala e a hora, e envie o pedido.</span></p>
+      </div>
+
+      <section class="board" aria-labelledby="board-title">
+        <div class="board-head">
+          <h2 id="board-title" data-i18n="quadro.hoje">Hoje</h2>
+          <p class="board-date" id="board-date"></p>
+        </div>
+        <div class="wave" aria-hidden="true"><canvas id="wave"></canvas></div>
+        <div id="board" aria-live="polite"><p class="board-empty" data-i18n="quadro.carregar">A carregar…</p></div>
+        <p class="board-legend">
+          <span><span class="swatch free"></span><span data-i18n="legenda.livre">Livre</span></span>
+          <span><span class="swatch busy"></span><span data-i18n="legenda.ocupado">Ocupado</span></span>
+          <span><span class="swatch now"></span><span data-i18n="legenda.agora">Agora</span></span>
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<main id="conteudo">
+  <section class="section novidades" id="novidades" aria-labelledby="t-novidades" hidden>
+    <div class="container">
+      <h2 id="t-novidades" class="sr-only" data-i18n="novidades.titulo">Novidades</h2>
+      <div class="promo" role="region" aria-roledescription="carrossel" aria-label="Lançamentos e novidades" data-i18n-attr="aria-label:novidades.carrossel">
+        <div class="promo-janela">
+          <ul class="promo-pista" id="novidades-pista"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section destaques" id="destaques" aria-labelledby="t-destaques" hidden>
+    <div class="container destaques-topo">
+      <h2 id="t-destaques" class="surge" data-i18n="singles.titulo">Saíram deste estúdio</h2>
+      <p class="destaques-sub surge" data-i18n="singles.sub">Trabalhos que passaram por este estúdio. Carregue para ouvir no Spotify.</p>
+    </div>
+    <ul class="destaques-grelha" id="destaques-lista" aria-label="Singles em destaque" data-i18n-attr="aria-label:singles.lista"></ul>
+  </section>
+
+  <section class="faixa-foto">
+    <img src="/img/many.jpg" alt="" width="1307" height="727" loading="lazy" decoding="async">
+  </section>
+
+  <section class="section" id="servicos" aria-labelledby="t-servicos" hidden>
+    <div class="container">
+      <h2 id="t-servicos" data-i18n="servicos.titulo">Serviços</h2>
+      <ul class="services" id="services"></ul>
+    </div>
+  </section>
+
+  <section class="section section-fim" aria-labelledby="t-como">
+    <div class="container">
+      <h2 id="t-como" data-i18n="como.titulo">Como funciona</h2>
+      <ol class="steps">
+        <li><strong data-i18n="como.1.t">Escolha o estúdio e a hora</strong><span data-i18n="como.1.d">Veja a disponibilidade de cada sala e selecione o dia, a hora de início e a duração.</span></li>
+        <li><strong data-i18n="como.2.t">Envie o pedido</strong><span data-i18n="como.2.d">Indique o nome e o telefone. Recebe logo um código de marcação.</span></li>
+        <li><strong data-i18n="como.3.t">Aguarde a confirmação</strong><span data-i18n="como.3.d">O estúdio confirma por telefone ou WhatsApp. Pode acompanhar o estado com o código.</span></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-sobre">
+      <h2>{{NAME}}</h2>
+      <p class="fine">{{TAGLINE}}</p>
+      <ul class="social" id="social" hidden></ul>
+    </div>
+
+    <nav aria-labelledby="t-links">
+      <h3 id="t-links" data-i18n="rodape.links">Links rápidos</h3>
+      <ul class="footer-links">
+        <li><a href="/#servicos" data-i18n="nav.servicos">Serviços</a></li>
+        <li><a href="/marcar" data-i18n="nav.marcar">Marcar sessão</a></li>
+        <li><a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a></li>
+      </ul>
+    </nav>
+
+    <div>
+      <h3 data-i18n="rodape.contactos">Contactos</h3>
+      <ul class="contact-list" id="contacts"><li class="fine" data-i18n="rodape.semContactos">Use o formulário de marcação para falar com o estúdio.</li></ul>
+    </div>
+
+    <div>
+      <h3 data-i18n="rodape.horario">Horário</h3>
+      <div id="footer-hours"></div>
+    </div>
+  </div>
+
+  <div class="container footer-fim">
+    <img class="footer-mark" src="/img/logo.png" alt="{{NAME}}" width="34" height="34">
+    <p class="fine">© {{YEAR}} {{NAME}}. <span data-i18n="rodape.direitos">Todos os direitos reservados.</span></p>
+  </div>
+</footer>
+
+<script src="/js/dicionario.js"></script>
+<script src="/js/prefs.js"></script>
+<script src="/js/cabecalho.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/rodape.js"></script>
+<script src="/js/singles.js"></script>
+<script src="/js/novidades.js"></script>
+<script src="/js/home.js"></script>
+<script src="/js/wave.js"></script>
+</body>
+</html>

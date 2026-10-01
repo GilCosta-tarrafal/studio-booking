@@ -1,0 +1,281 @@
+/* ---------- Tokens ---------- */
+:root {
+  color-scheme: dark;      /* seletores de data, menus e barras nativas em escuro */
+
+  /* Preto e prata, tirados do logótipo Suavita Records */
+  --ink: #ECECEC;          /* texto principal */
+  --silver: #C4C4C4;       /* prata média */
+  --console: #080808;      /* faixas de topo e rodapé */
+  --console-deep: #111;    /* cartões sobre essas faixas */
+  --slate: #4C4C4C;
+  --paper: #000;           /* fundo da página */
+  --surface: #0D0D0D;      /* cartões, painéis e campos */
+  --surface-2: #171717;    /* cabeçalhos de tabela e realces */
+  --white: #fff;
+  --mist: #1E1E1E;         /* fundo ao passar o rato */
+  --line: #282828;         /* separadores */
+  --edge: #3D3D3D;         /* limite dos campos */
+  --muted: #9A9A9A;        /* texto secundário */
+  --chrome: linear-gradient(160deg, #FAFAFA 0%, #CFCFCF 26%, #8C8C8C 52%, #DCDCDC 76%, #FBFBFB 100%);
+  --chrome-hover: linear-gradient(160deg, #fff 0%, #E2E2E2 26%, #A6A6A6 52%, #EDEDED 76%, #fff 100%);
+  --chrome-text: linear-gradient(180deg, #fff 0%, #E6E6E6 42%, #ADADAD 100%);
+  --chrome-edge: #E2E2E2;    /* limite de tudo o que leva o metal */
+  --chrome-ink: #0A0A0A;     /* texto por cima do metal */
+  --chrome-glow: rgba(255, 255, 255, .45);
+  --btn-ink: #0A0A0A;        /* texto do botão comum */
+  --btn-hover: #E0E0E0;
+  --amber: #F2B331;
+  --amber-ink: #F5DCA4;      /* texto sobre o âmbar apagado */
+  --amber-deep: #D6A02A;
+  --amber-soft: #382A0C;
+  --free: #33B6A8;
+  --free-deep: #7FD8CD;
+  --free-soft: #10302C;
+  --danger: #E4695D;
+  --focus: #7FB2F5;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Régua do dia */
+  --strip-free: var(--free-soft);
+  --strip-busy-bg: #1C1C1C;
+  --strip-busy-line: var(--slate);
+  --strip-tick: rgba(255, 255, 255, .12);
+  --strip-label: var(--muted);
+
+  /* Blocos de hora já ocupados */
+  --cell-off-a: #1A1A1A;
+  --cell-off-b: #101010;
+  --cell-off-ink: #6A6A6A;
+
+  /* Barra do cabeçalho: opaca, para nada passar por trás dela ao rolar */
+  --barra-fundo: #0C0C0C;
+  --barra-linha: rgba(255, 255, 255, .11);
+
+  /* Véu por cima da fotografia de fundo das páginas de marcar e consultar:
+     cerrado por trás do formulário, aberto nas margens */
+  --veu-perto: rgba(0, 0, 0, .93);
+  --veu-longe: rgba(0, 0, 0, .5);
+  /* Entrada do rodapé nas páginas internas: nasce transparente para não
+     cortar a fotografia de fundo a direito */
+  --rodape-inicio: rgba(8, 8, 8, 0);
+  --rodape-meio: rgba(8, 8, 8, .96);
+}
+
+/* ---------- Tema claro ---------- */
+/* O escuro é o tema da casa e fica por omissão; este é o que se escolhe no
+   cabeçalho (o servidor escreve data-tema no <html>, por isso a página já
+   chega pintada e não há um instante em branco). Só se trocam as fichas: o
+   resto da folha não sabe que temas existem.
+   O herói não entra aqui — é fotografia com texto por cima e continua escuro
+   nos dois temas; as exceções dele estão em site.css. */
+:root[data-tema="claro"] {
+  color-scheme: light;
+
+  --ink: #16181A;
+  --silver: #1E2124;       /* o botão principal inverte-se: escuro sobre claro */
+  --console: #F4F5F6;
+  --console-deep: #fff;
+  --slate: #9BA1A6;
+  --paper: #fff;
+  --surface: #FAFAFA;
+  --surface-2: #F0F1F2;
+  --mist: #F1F2F3;
+  --line: #E4E6E8;
+  --edge: #C6CACE;
+  --muted: #5A6066;
+  --chrome: linear-gradient(160deg, #5A6065 0%, #2E3236 26%, #121416 52%, #3B3F43 76%, #5F646A 100%);
+  --chrome-hover: linear-gradient(160deg, #6A7075 0%, #3A3E42 26%, #1C1E20 52%, #474B4F 76%, #6E7378 100%);
+  --chrome-text: linear-gradient(180deg, #34383C 0%, #16181A 44%, #000 100%);
+  --chrome-edge: #2E3236;
+  --chrome-ink: #F7F8F8;
+  --chrome-glow: rgba(0, 0, 0, .3);
+  --btn-ink: #fff;
+  --btn-hover: #34383C;
+  --amber-deep: #A8751B;
+  --amber-soft: #FBF0D6;
+  --amber-ink: #6B4A08;
+  --free: #1F8A80;
+  --free-deep: #14635C;
+  --free-soft: #E1F2F0;
+  --danger: #C13A2E;
+  --focus: #1D5FC4;
+
+  --strip-busy-bg: #E8EAEC;
+  --strip-busy-line: #A9AFB5;
+  --strip-tick: rgba(0, 0, 0, .12);
+
+  --cell-off-a: #EDEEF0;
+  --cell-off-b: #F6F7F8;
+  --cell-off-ink: #9AA0A6;
+
+  --barra-fundo: #fff;
+  --barra-linha: rgba(0, 0, 0, .1);
+  --veu-perto: rgba(255, 255, 255, .97);
+  --veu-longe: rgba(255, 255, 255, .45);
+  --rodape-inicio: rgba(255, 255, 255, 0);
+  --rodape-meio: rgba(255, 255, 255, .96);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1rem/1.55 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { max-width: 100%; }
+a { color: inherit; }
+h1, h2, h3, h4 { font-family: var(--display); }
+[hidden] { display: none !important; }
+
+.container { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.skip {
+  position: absolute; left: 12px; top: -60px; z-index: 100;
+  background: var(--amber); color: #111; padding: 10px 14px; border-radius: 6px; font-weight: 600;
+}
+.skip:focus { top: 12px; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.on-dark :focus-visible { outline-color: var(--amber); }
+
+/* ---------- Botões ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 44px; padding: 0 1.15rem;
+  border: 1.5px solid var(--silver); border-radius: 6px;
+  background: var(--silver); color: var(--btn-ink);
+  font: 600 1rem/1 var(--body); text-decoration: none; cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+.btn:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+/* Botão principal: o metal do logótipo */
+.btn-amber { background: var(--chrome); border-color: var(--chrome-edge); color: var(--chrome-ink); text-shadow: 0 1px 0 var(--chrome-glow); }
+.btn-amber:hover { background: var(--chrome-hover); border-color: var(--chrome-ink); }
+.btn-outline { background: transparent; color: var(--ink); border-color: var(--edge); }
+.btn-outline:hover { background: var(--mist); border-color: var(--silver); }
+.btn-outline-light { background: transparent; border-color: rgba(255, 255, 255, .6); color: #fff; }
+.btn-outline-light:hover { background: rgba(255, 255, 255, .1); border-color: #fff; }
+.btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); border-color: var(--danger); color: var(--paper); }
+.btn-quiet { background: transparent; border-color: transparent; color: var(--silver); text-decoration: underline; }
+.btn-quiet:hover { background: var(--mist); border-color: transparent; }
+.btn-sm { min-height: 36px; padding: 0 .8rem; font-size: .9rem; }
+.btn-lg { min-height: 54px; padding: 0 1.7rem; font-size: 1.05rem; }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Formulários ---------- */
+.field { display: grid; gap: 6px; margin-bottom: 16px; }
+.field > label, .field > .label { font-weight: 600; font-size: .95rem; }
+.field .opt { font-weight: 400; color: var(--muted); }
+.hint { color: var(--muted); font-size: .9rem; margin: 0; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; }
+
+input[type=text], input[type=tel], input[type=email], input[type=date], input[type=time],
+input[type=number], input[type=password], input[type=search], input[type=url], select, textarea {
+  width: 100%; min-height: 44px; padding: 9px 12px;
+  border: 1.5px solid var(--edge); border-radius: 6px;
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+::placeholder { color: #6E6E6E; opacity: 1; }
+textarea { min-height: 96px; resize: vertical; line-height: 1.45; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: var(--focus); }
+input[readonly], textarea[readonly] { background: var(--mist); }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 500; }
+.check input { width: 20px; height: 20px; margin: 0; accent-color: var(--silver); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+/* ---------- Avisos ---------- */
+.notice { padding: 12px 14px; border-radius: 8px; border: 1.5px solid; font-size: .95rem; }
+.notice { --notice-bg: #2A100D; --notice-ink: #F3A79E; }
+.notice.error { background: var(--notice-bg); border-color: var(--danger); color: var(--notice-ink); }
+.notice.info { background: var(--free-soft); border-color: var(--free); color: var(--free-deep); }
+.notice.warn { background: var(--amber-soft); border-color: var(--amber-deep); color: var(--amber-ink); }
+:root:not([data-tema="claro"]) .notice.info { color: #8FE0D6; }
+:root:not([data-tema="claro"]) .notice.warn { color: #F2CE7E; }
+:root[data-tema="claro"] .notice { --notice-bg: #FCEDEB; --notice-ink: #8E2A20; }
+
+/* ---------- Estados ---------- */
+.tag {
+  --tag-bg: var(--mist); --tag-ink: var(--ink); --tag-dot: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 10px 2px 8px; border-radius: 999px;
+  background: var(--tag-bg); color: var(--tag-ink);
+  font-size: .82rem; font-weight: 600; white-space: nowrap;
+}
+.tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--tag-dot); }
+.tag[data-s="pedido"] { --tag-bg: #33270A; --tag-ink: #F0C878; --tag-dot: #E0A63A; }
+.tag[data-s="confirmado"] { --tag-bg: #12243A; --tag-ink: #9CC4F0; --tag-dot: #5A9BE0; }
+.tag[data-s="em_curso"] { --tag-bg: #102E20; --tag-ink: #8AD9AC; --tag-dot: #46B87C; }
+.tag[data-s="concluido"] { --tag-bg: #202020; --tag-ink: #B4B4B4; --tag-dot: #8A8A8A; }
+.tag[data-s="cancelado"] { --tag-bg: #2E1210; --tag-ink: #EFA79F; --tag-dot: #C85A4E; }
+/* No claro trocam-se por tons lavados do mesmo matiz, para as cores dos
+   estados continuarem a dizer o mesmo. */
+:root[data-tema="claro"] .tag { --tag-bg: var(--surface-2); --tag-ink: var(--ink); }
+:root[data-tema="claro"] .tag[data-s="pedido"] { --tag-bg: #FBEFD5; --tag-ink: #7A5408; }
+:root[data-tema="claro"] .tag[data-s="confirmado"] { --tag-bg: #E2ECFA; --tag-ink: #1B4A86; }
+:root[data-tema="claro"] .tag[data-s="em_curso"] { --tag-bg: #DFF2E7; --tag-ink: #14603C; }
+:root[data-tema="claro"] .tag[data-s="concluido"] { --tag-bg: #ECEDEF; --tag-ink: #4C5256; }
+:root[data-tema="claro"] .tag[data-s="cancelado"] { --tag-bg: #FBE6E3; --tag-ink: #8E2A20; }
+
+/* ---------- Régua do dia ---------- */
+.strip { position: relative; }
+.strip-track {
+  position: relative; height: 28px; border-radius: 4px; overflow: hidden;
+  background: var(--strip-free);
+}
+.strip-tick { position: absolute; top: 0; bottom: 0; left: var(--l); width: 1px; background: var(--strip-tick); }
+.strip-seg { position: absolute; top: 0; bottom: 0; left: var(--l); width: var(--w); }
+.strip-seg.busy {
+  background:
+    repeating-linear-gradient(135deg, var(--strip-busy-line) 0 2px, transparent 2px 6px),
+    var(--strip-busy-bg);
+}
+.strip-track.is-closed {
+  background: repeating-linear-gradient(135deg, var(--strip-busy-line) 0 1px, transparent 1px 7px), var(--strip-busy-bg);
+  opacity: .5;
+}
+.strip-now { position: absolute; top: 0; bottom: 0; left: var(--l); width: 3px; margin-left: -1px; background: var(--amber); }
+.strip-scale { position: relative; height: 18px; margin-top: 5px; font-size: .75rem; color: var(--strip-label); font-variant-numeric: tabular-nums; }
+.strip-scale span { position: absolute; left: var(--l); transform: translateX(-50%); white-space: nowrap; }
+.strip-scale span.first { transform: none; }
+.strip-scale span.last { transform: translateX(-100%); }
+
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+.swatch.free { background: var(--strip-free); border: 1px solid var(--free); }
+.swatch.busy { background: repeating-linear-gradient(135deg, var(--strip-busy-line) 0 2px, transparent 2px 5px), var(--strip-busy-bg); }
+.swatch.now { background: var(--amber); width: 4px; border-radius: 1px; margin-right: 8px; }
+
+/* ---------- Blocos de hora (escolha de início) ---------- */
+.cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.cell {
+  min-height: 46px; border-radius: 4px; border: 1.5px solid var(--free);
+  background: var(--surface); color: var(--ink);
+  font: 600 1rem/1 var(--body); font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.cell:hover:not([disabled]) { background: var(--free-soft); }
+.cell[disabled] {
+  border-color: var(--line); color: var(--cell-off-ink); cursor: not-allowed;
+  background: repeating-linear-gradient(135deg, var(--cell-off-a) 0 2px, var(--cell-off-b) 2px 6px);
+}
+.cell.in-range { background: var(--amber-soft); border-color: var(--amber-deep); color: var(--amber-ink); }
+.cell.is-start { background: var(--amber); border-color: #F7C453; color: #1A1204; }
+
+/* ---------- Toque ---------- */
+/* Num ecrã pequeno o dedo não acerta em alvos de 25px: tudo o que se carrega
+   ganha altura, mesmo os botões pequenos. */
+@media (pointer: coarse), (max-width: 700px) {
+  .btn-sm { min-height: 40px; }
+  .check { min-height: 48px; }
+}
+
+/* ---------- Movimento reduzido ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}

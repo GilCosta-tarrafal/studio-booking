@@ -1,0 +1,13 @@
+Trechos de música dos estilos
+=============================
+
+Ponha aqui os ficheiros de áudio, com cerca de 5 segundos cada, e aponte-lhes
+as linhas em marcacoes/assets/js/sons.js. Por exemplo:
+
+    marcacoes/assets/audio/drill.mp3   ->   'Drill': '/audio/drill.mp3'
+
+Enquanto esta pasta estiver vazia, o site sintetiza a batida de cada estilo
+(ver marcacoes/assets/js/som.js). Dá o andamento e o feitio, mas não é uma
+gravação — assim que puser as suas, são elas que tocam.
+
+Use música sua ou com licença: o trecho fica no site, à vista de toda a gente.
