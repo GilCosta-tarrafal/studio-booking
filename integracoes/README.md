@@ -1,6 +1,6 @@
 # Integrações
 
-Serviços de fora ligados ao site: **pagamentos online (Stripe)** e a **plataforma da gravadora** (lançamentos e reproduções). O módulo está preparado para receber mais.
+Serviços de fora ligados ao site: **pagamentos online (Stripe)**, a **plataforma da gravadora** (lançamentos e reproduções) e o **YouTube** (views dos vídeos). O módulo está preparado para receber mais.
 
 Fica à parte do resto do backend. Tem as suas tabelas (todas começam por `int_`), as suas rotas e as suas variáveis de ambiente, e o código das marcações nunca chama um serviço de fora. Partilha a base de dados com o site porque são um só ficheiro e um só disco. A única coisa que escreve fora das suas tabelas é o **"Já pago"** de uma marcação, quando entra um pagamento.
 
@@ -15,6 +15,8 @@ integracoes/
   fornecedores/
     stripe.js           pagamento das marcações
     gravadora.js        lançamentos e reproduções
+    youtube.js          views dos vídeos (atualizam os números dos cartões)
+    youtube-musicas.js  lista, à mão, de cada música → vídeo no YouTube
   rotas/
     publico.js          /api/integracoes/...        (site)
     admin.js            /api/admin/integracoes/...  (painel, com sessão)
@@ -67,7 +69,7 @@ Ela mostra um `whsec_...` próprio: ponha esse em `STRIPE_WEBHOOK_SECRET` enquan
 
 ## Plataforma da gravadora
 
-Tudo o que a gravadora lança entra no site sozinho, no carrossel de **novidades** da página inicial. O que passar do limite de reproduções (100 000 por omissão, muda-se no painel) entra em **"Saíram deste estúdio"**. Juntam-se às listas escritas à mão em `publico/assets/js/novidades.js` e `singles.js`. Se uma música estiver nos dois sítios, aparece uma vez só, com os números da plataforma.
+Tudo o que a gravadora lança entra no site sozinho, no carrossel de **novidades** da página inicial. O que passar do limite de reproduções (100 000 por omissão, muda-se no painel) entra em **"Saíram deste estúdio"**. Juntam-se às listas escritas à mão em `publico/assets/js/novidades.js` e `singles.js`. Se uma música estiver nos dois sítios, aparece uma vez só, e o número do cartão é o **maior** entre o escrito à mão e o da plataforma (o mesmo vale para as views do YouTube, abaixo) — sobe sozinho sem nunca descer abaixo do manual.
 
 Não está presa a nenhuma plataforma. O que segue é o **contrato**: a plataforma da gravadora cumpre-o, ou cumpre-o um pequeno script do lado dela (a ler os relatórios do distribuidor, por exemplo). Há dois caminhos, e podem estar os dois ligados.
 
@@ -149,6 +151,51 @@ O servidor pede `GET GRAVADORA_FEED_URL` de tantos em tantos minutos, e também 
 | `GRAVADORA_NOME` | Nome mostrado no painel. |
 
 > **De onde vêm as reproduções?** A API pública do Spotify não dá números de reproduções. Esses números estão no Spotify for Artists e nos relatórios do distribuidor, e é daí que a plataforma da gravadora os tem de tirar para os mandar para cá.
+
+---
+
+## YouTube (views dos vídeos)
+
+Os números dos cartões em **"Saíram deste estúdio"** vêm escritos à mão em `publico/assets/js/singles.js`. Esta integração vai ao YouTube de tantos em tantos minutos buscar as **views** de cada vídeo e atualiza esses números sozinha. O cartão mostra sempre o **maior** entre o número escrito à mão e as views do YouTube, por isso nunca desce e sobe à medida que o vídeo cresce.
+
+Ao contrário do Spotify, **as views do YouTube são públicas**: basta uma chave da API. Sem chave, a integração fica desligada e o site mostra os números à mão, como antes.
+
+### A lista de músicas
+
+Em [`fornecedores/youtube-musicas.js`](fornecedores/youtube-musicas.js), uma por bloco. Já lá estão as sete de `singles.js`; falta colar o link do YouTube de cada uma:
+
+```js
+{
+  id: 'boca-mundo',                 // identificador estável
+  titulo: 'Boca Mundo',
+  artista: 'Brou As, khalashy',
+  youtube: 'https://youtu.be/XXXXXXXXXXX',   // <- o link do vídeo no YouTube
+  link: 'https://open.spotify.com/intl-pt/track/7Ges...',  // IGUAL ao de singles.js
+  data: '2023',
+}
+```
+
+O campo **`link`** (o do Spotify, igual ao de `singles.js`) é o que faz as views juntarem-se ao cartão certo em vez de criarem um repetido. Uma música sem `youtube` é ignorada até lhe colar o link; uma música tirada da lista desaparece do site (fica no histórico).
+
+### A chave da API (gratuita)
+
+1. Entre em [console.cloud.google.com](https://console.cloud.google.com) com a conta Google e crie um projeto (*Select a project → New project*).
+2. Em *APIs & Services → Library*, procure **YouTube Data API v3** e carregue em **Enable**.
+3. Em *APIs & Services → Credentials → Create credentials → API key*. Copie a chave.
+4. (Recomendado) Carregue em **Edit API key → Restrict key → API restrictions** e limite-a à *YouTube Data API v3*, para a chave não servir para mais nada se vazar.
+5. Ponha a chave na variável `YOUTUBE_API_KEY` e reinicie.
+
+> O limite gratuito é de 10 000 unidades por dia e cada ida ao YouTube custa 1. Mesmo de 15 em 15 minutos são menos de 100 por dia: fica muito à vontade.
+
+### Ligar
+
+| Variável | Para quê |
+| --- | --- |
+| `YOUTUBE_API_KEY` | Liga a integração. A chave da YouTube Data API v3. |
+| `YOUTUBE_INTERVALO_MIN` | De quantos em quantos minutos se vão buscar as views (60 por omissão, mínimo 15). |
+| `YOUTUBE_NOME` | Nome mostrado no painel. |
+
+No painel, em **Integrações**, o cartão **YouTube** mostra quantas músicas já têm vídeo e quando foi a última ida ao YouTube. **Sincronizar agora** vai buscar as views na hora, sem esperar pelo relógio.
 
 ---
 

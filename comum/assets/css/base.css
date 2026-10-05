@@ -225,7 +225,7 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 :root[data-tema="claro"] .tag[data-s="cancelado"] { --tag-bg: #FBE6E3; --tag-ink: #8E2A20; }
 
 /* ---------- Régua do dia ---------- */
-.strip { position: relative; }
+.strip { position: relative; container-type: inline-size; }
 .strip-track {
   position: relative; height: 28px; border-radius: 4px; overflow: hidden;
   background: var(--strip-free);
@@ -246,6 +246,8 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 .strip-scale span { position: absolute; left: var(--l); transform: translateX(-50%); white-space: nowrap; }
 .strip-scale span.first { transform: none; }
 .strip-scale span.last { transform: translateX(-100%); }
+/* Cada etiqueta ocupa ~30px; abaixo disto uma hora sim, outra não. */
+@container (max-width: 460px) { .strip-scale span.menor { display: none; } }
 
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
 .swatch.free { background: var(--strip-free); border: 1px solid var(--free); }
@@ -274,6 +276,62 @@ input[readonly], textarea[readonly] { background: var(--mist); }
   .btn-sm { min-height: 40px; }
   .check { min-height: 48px; }
 }
+
+/* ---------- Ecrã de carregamento (logótipo + anel) ---------- */
+/* Cobre a página enquanto a plataforma espera: ao abrir, ao recarregar e ao
+   mudar de página. O cartão é escuro como as faixas de topo e rodapé, para o
+   logótipo claro da Suavita se ler bem em qualquer tema. A animação do anel é
+   desligada sozinha no bloco de "movimento reduzido", mais abaixo. */
+.carregar {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .62);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  opacity: 1;
+  transition: opacity .35s ease;
+}
+.carregar.sai { opacity: 0; }                /* a esvanecer, antes de desaparecer */
+.carregar[hidden] { display: none; }
+.carregar-cartao {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 30px 44px;
+  border-radius: 22px;
+  background: var(--console-deep);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+}
+.carregar-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+}
+.carregar-logo img { width: 52px; height: 52px; object-fit: contain; }
+.carregar-anel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, .10);
+  border-top-color: var(--amber);
+  animation: carregar-girar .85s linear infinite;
+}
+.carregar-marca {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: .82rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--silver);
+}
+@keyframes carregar-girar { to { transform: rotate(360deg); } }
 
 /* ---------- Movimento reduzido ---------- */
 @media (prefers-reduced-motion: reduce) {

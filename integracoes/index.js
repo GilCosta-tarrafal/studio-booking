@@ -20,8 +20,9 @@ const express = require('express');
 const base = require('./lib/base');
 const stripe = require('./fornecedores/stripe');
 const gravadora = require('./fornecedores/gravadora');
+const youtube = require('./fornecedores/youtube');
 
-const FORNECEDORES = [stripe, gravadora];
+const FORNECEDORES = [stripe, gravadora, youtube];
 const porId = Object.fromEntries(FORNECEDORES.map((f) => [f.id, f]));
 
 // ---------------------------------------------------------------- Webhooks

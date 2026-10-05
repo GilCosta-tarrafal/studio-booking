@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { h, api, t, fmtMin, fmtDate, fmtDuration, money, waLink, statusTag, icone, fundoServico, som } = window.Studio;
+  const { h, api, t, tr, fmtMin, fmtDate, fmtDuration, money, waLink, statusTag, icone, fundoServico, som } = window.Studio;
   const $ = (id) => document.getElementById(id);
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -72,8 +72,8 @@
       h('input', { type: 'radio', name: 'studio', value: s.id, checked: state.studio && state.studio.id === s.id, onchange: () => selectStudio(s) }),
       h('span', { class: 'choice-body' },
         h('span', { class: 'choice-texto' },
-          h('strong', {}, s.name),
-          h('span', {}, [s.city, s.address].filter(Boolean).join(', ') || t('marcar.estudioSemMorada')))))));
+          h('strong', {}, tr(s, 'name')),
+          h('span', {}, [tr(s, 'city'), s.address].filter(Boolean).join(', ') || t('marcar.estudioSemMorada')))))));
   }
 
   function renderRooms() {
@@ -87,8 +87,8 @@
     box.append(...state.studio.rooms.map((r) => h('label', { class: 'choice' },
       h('input', { type: 'radio', name: 'room', value: r.id, checked: state.room && state.room.id === r.id, onchange: () => selectRoom(r) }),
       h('span', { class: 'choice-body' },
-        h('strong', {}, r.name),
-        h('span', {}, [r.hourly_rate > 0 ? t('marcar.porHora', { valor: money(r.hourly_rate, cur) }) : '', r.description].filter(Boolean).join('. ') || t('marcar.salaSemDescricao'))))));
+        h('strong', {}, tr(r, 'name')),
+        h('span', {}, [r.hourly_rate > 0 ? t('marcar.porHora', { valor: money(r.hourly_rate, cur) }) : '', tr(r, 'description')].filter(Boolean).join('. ') || t('marcar.salaSemDescricao'))))));
   }
 
   // Lista de serviços. Ao voltar a desenhá-la (mudança de língua) mantém-se o
@@ -105,7 +105,7 @@
     const semDesenho = icone('duvida', 78);
     semDesenho.setAttribute('class', 'fundo-servico');
     $('service').replaceChildren(opcao('', t('servico.naoSei.t'), t('servico.naoSei.d'), semDesenho),
-      ...state.cfg.services.map((s) => opcao(String(s.id), s.name, s.description, fundoServico(s.name))));
+      ...state.cfg.services.map((s) => opcao(String(s.id), tr(s, 'name'), tr(s, 'description'), fundoServico(s.name))));
   }
 
   // Etiquetas do estilo de música. A lista vem de /js/estilos.js; a última,
@@ -303,7 +303,7 @@
       h('p', { class: 'when' }, cap(t('resumo.quando', {
         dia: fmtDate(state.date), de: fmtMin(state.start), ate: fmtMin(end), duracao: fmtDuration(state.duration),
       }))),
-      h('p', { class: 'where' }, `${state.studio.name}, ${state.room.name}`),
+      h('p', { class: 'where' }, `${tr(state.studio, 'name')}, ${tr(state.room, 'name')}`),
       h('p', { class: aDistancia() ? 'modo remoto' : 'modo' },
         t(aDistancia() ? 'resumo.distancia' : 'resumo.presencial')),
       price > 0 && h('p', { class: 'cost' }, t('resumo.valor', { valor: money(price, state.cfg.business.currency) })));
@@ -332,7 +332,7 @@
       const presencial = document.querySelector('input[name=presence][value=presencial]');
       if (presencial) presencial.checked = true;
     } else {
-      $('presence-remote-hint').textContent = t('presenca.dica', { servico: sv.name.toLowerCase() });
+      $('presence-remote-hint').textContent = t('presenca.dica', { servico: tr(sv, 'name').toLowerCase() });
     }
     renderSelection();
   }
@@ -399,7 +399,7 @@
     const dl = $('done-details');
     dl.replaceChildren();
     const rows = [
-      [t('linha.estudio'), b.studio_name], [t('linha.sala'), b.room_name], [t('linha.dia'), cap(fmtDate(b.date))],
+      [t('linha.estudio'), tr(b, 'studio_name')], [t('linha.sala'), tr(b, 'room_name')], [t('linha.dia'), cap(fmtDate(b.date))],
       [t('linha.hora'), t('linha.horas', { de: b.start, ate: b.end })],
       b.style && [t('linha.estilo'), b.style],
       [t('linha.sessao'), t(b.remote ? 'linha.distancia' : 'linha.presencial')],
@@ -411,7 +411,7 @@
     const actions = $('done-actions');
     actions.replaceChildren();
     const text = t('wa.pedido', {
-      codigo: b.code, data: fmtDate(b.date), de: b.start, ate: b.end, estudio: b.studio_name, sala: b.room_name,
+      codigo: b.code, data: fmtDate(b.date), de: b.start, ate: b.end, estudio: tr(b, 'studio_name'), sala: tr(b, 'room_name'),
     }) + (b.remote ? t('wa.distancia') : '');
     const wa = waLink(biz, biz.whatsapp || biz.phone, text);
     if (wa) actions.append(h('a', { class: 'btn btn-amber', href: wa, rel: 'noopener' }, t('botao.waEstudio')));
@@ -440,6 +440,7 @@
     renderEstilos();
     renderCells(state.avail ? undefined : 'pick');
     servicoMudou();
+    $('terms').textContent = tr(state.cfg.business, 'terms') || '';
   }
 
   // ---------------------------------------------------------- Arranque
@@ -490,7 +491,7 @@
       for (const r of document.querySelectorAll('input[name=presence]')) r.addEventListener('change', renderSelection);
       servicoMudou();
     }
-    $('terms').textContent = cfg.business.terms || '';
+    $('terms').textContent = tr(cfg.business, 'terms') || '';
 
     contarPasso();
     renderStudios();

@@ -6,6 +6,7 @@ const {
   newCode, BOOKING_SELECT, priceFor,
 } = require('../lib/db');
 const U = require('../lib/util');
+const TR = require('../lib/traducoes');
 const { HttpError } = U;
 const { rateLimit } = require('../lib/ratelimit');
 
@@ -18,7 +19,7 @@ function businessInfo(s) {
   return {
     name: s.business_name, tagline: s.tagline, phone: s.phone, whatsapp: s.whatsapp,
     email: s.email, instagram: s.instagram, spotify: s.spotify, youtube: s.youtube,
-    currency: s.currency, country_code: s.country_code, terms: s.terms,
+    currency: s.currency, country_code: s.country_code, terms: s.terms, i18n: s.traducoes,
   };
 }
 
@@ -35,6 +36,9 @@ function publicBooking(b) {
     start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min),
     studio_name: b.studio_name, room_name: b.room_name, service_name: b.service_name || '',
     title: b.title, style: b.style || '', price: b.price, paid: b.paid, client_name: b.client_name, remote: !!b.remote,
+    i18n: TR.juntar([
+      [b.studio_tr, { name: 'studio_name' }], [b.room_tr, { name: 'room_name' }], [b.service_tr, { name: 'service_name' }],
+    ]),
   };
 }
 
@@ -74,12 +78,13 @@ router.get('/config', (_req, res) => {
     .map((st) => ({
       id: st.id, name: st.name, city: st.city, address: st.address, phone: st.phone,
       description: st.description, hours: parseHours(st.hours),
-      lat: st.lat, lon: st.lon,
+      lat: st.lat, lon: st.lon, i18n: TR.ler(st.traducoes),
       rooms: rooms.filter((r) => r.studio_id === st.id)
-        .map((r) => ({ id: r.id, name: r.name, description: r.description, hourly_rate: r.hourly_rate })),
+        .map((r) => ({ id: r.id, name: r.name, description: r.description, hourly_rate: r.hourly_rate, i18n: TR.ler(r.traducoes) })),
     }))
     .filter((st) => st.rooms.length > 0);
-  const services = db.prepare('SELECT id, name, description, remote_ok FROM services WHERE active=1 ORDER BY sort, id').all();
+  const services = db.prepare('SELECT id, name, description, remote_ok, traducoes FROM services WHERE active=1 ORDER BY sort, id').all()
+    .map(({ traducoes, ...sv }) => ({ ...sv, i18n: TR.ler(traducoes) }));
   res.json({ business: businessInfo(s), rules: rulesInfo(s), studios: out, services, today: U.nowLocal().date });
 });
 
@@ -97,7 +102,8 @@ router.get('/availability', (req, res) => {
 router.get('/today', (_req, res) => {
   const now = U.nowLocal();
   const rows = db.prepare(
-    `SELECT r.id AS room_id, r.name AS room_name, s.id AS studio_id, s.name AS studio_name, s.hours
+    `SELECT r.id AS room_id, r.name AS room_name, s.id AS studio_id, s.name AS studio_name, s.hours,
+            r.traducoes AS room_tr, s.traducoes AS studio_tr
        FROM rooms r JOIN studios s ON s.id = r.studio_id
       WHERE r.active=1 AND s.active=1 ORDER BY s.sort, s.id, r.sort, r.id`
   ).all().map((r) => {
@@ -106,6 +112,7 @@ router.get('/today', (_req, res) => {
       room_id: r.room_id, room_name: r.room_name, studio_id: r.studio_id, studio_name: r.studio_name,
       closed: !hrs, open: hrs ? hrs.open : null, close: hrs ? hrs.close : null,
       busy: hrs ? busyIntervals(r.room_id, now.date).map((b) => [b.s, b.e]) : [],
+      i18n: TR.juntar([[r.studio_tr, { name: 'studio_name' }], [r.room_tr, { name: 'room_name' }]]),
     };
   });
   res.json({ date: now.date, now: now.minutes, rows });
@@ -157,11 +164,13 @@ router.post('/bookings', bookingLimiter, (req, res) => {
   let serviceId = null;
   let remote = false;
   if (b.service_id) {
-    const sv = db.prepare('SELECT id, name, remote_ok FROM services WHERE id=? AND active=1').get(U.toInt(b.service_id));
+    const sv = db.prepare('SELECT id, name, remote_ok, traducoes FROM services WHERE id=? AND active=1').get(U.toInt(b.service_id));
     if (!sv) throw new HttpError(400, req.t('api.servicoInvalido'));
     serviceId = sv.id;
     if (b.remote) {
-      if (!sv.remote_ok) throw new HttpError(400, req.t('api.servicoPresencial', { servico: sv.name }));
+      if (!sv.remote_ok) {
+        throw new HttpError(400, req.t('api.servicoPresencial', { servico: TR.local(sv.name, sv.traducoes, req.lingua, 'name') }));
+      }
       remote = true;
     }
   } else if (b.remote) {

@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { h, api, t, fmtDate, renderStrip, icone, fundoServico, renderRodape } = window.Studio;
+  const { h, api, t, tr, trTexto, fmtDate, renderStrip, icone, fundoServico, renderRodape } = window.Studio;
 
   // Guardado para poder voltar a desenhar quando a língua muda, sem ter de ir
   // outra vez ao servidor buscar os mesmos dados.
@@ -21,8 +21,8 @@
         : renderStrip({ open: r.open, close: r.close, busy: r.busy, now: d.now });
       box.append(h('a', { class: 'board-row', href: `/marcar?room=${r.room_id}&date=${d.date}` },
         h('div', { class: 'board-row-head' },
-          h('strong', {}, r.studio_name),
-          h('span', {}, r.closed ? t('quadro.fechadaHoje', { sala: r.room_name }) : r.room_name)),
+          h('strong', {}, tr(r, 'studio_name')),
+          h('span', {}, r.closed ? t('quadro.fechadaHoje', { sala: tr(r, 'room_name') }) : tr(r, 'room_name'))),
         strip));
     }
   }
@@ -33,10 +33,10 @@
     const ul = document.getElementById('services');
     ul.replaceChildren(...cfg.services.map((s) => h('li', { class: 'surge' },
       fundoServico(s.name, 64),
-      h('strong', {}, s.name),
+      h('strong', {}, tr(s, 'name')),
       h('span', { class: 'modo ' + (s.remote_ok ? 'remoto' : 'presencial') },
         t(s.remote_ok ? 'servicos.distancia' : 'servicos.presencial')),
-      s.description && h('span', {}, s.description))));
+      tr(s, 'description') && h('span', {}, tr(s, 'description')))));
   }
 
   const movimentoOk = typeof window.matchMedia !== 'function'
@@ -118,7 +118,7 @@
     const rotulo = { instagram: t('novidades.instagram'), youtube: t('novidades.youtube'),
       spotify: t(futuro ? 'novidades.guardar' : 'novidades.ouvir') }[sitio];
     const botao = n.link && h('a', { class: 'btn btn-amber', href: n.link, target: '_blank', rel: 'noopener' },
-      n.botao || rotulo);
+      trTexto(n.botao) || rotulo);
 
     return h('li', { class: 'promo-slide', 'aria-roledescription': 'slide', 'aria-label': t('novidades.slide', { i: i + 1, n: total }) },
       h('img', { class: 'promo-fundo', src: n.capa, alt: '', 'aria-hidden': 'true' }),
@@ -131,7 +131,7 @@
           h('span', { class: 'promo-etiqueta' + (futuro ? ' em-breve' : '') }, etiqueta),
           h('h3', {}, n.titulo),
           n.artista && h('p', { class: 'promo-artista' }, n.artista),
-          n.texto && h('p', { class: 'promo-desc' }, n.texto),
+          trTexto(n.texto) && h('p', { class: 'promo-desc' }, trTexto(n.texto)),
           linhaData, relogio, botao)));
   }
 
@@ -225,7 +225,7 @@
         : null;
       const texto = h('span', { class: 'single-texto' },
         h('strong', {}, s.titulo || ''),
-        s.descricao && h('span', {}, s.descricao),
+        trTexto(s.descricao) && h('span', {}, trTexto(s.descricao)),
         streams);
       const miolo = s.link
         ? h('a', { href: s.link, target: '_blank', rel: 'noopener' }, capa, texto)
@@ -255,10 +255,12 @@
   }
 
   // ---------------------------------------------------------- Da plataforma
-  // Os lançamentos que chegam da plataforma da gravadora (ver /integracoes)
-  // juntam-se aos que estão escritos à mão em novidades.js e singles.js. Uma
-  // música que esteja nos dois sítios aparece uma vez só, com os números da
-  // plataforma — que são os que se mantêm atualizados sozinhos.
+  // Os lançamentos que chegam das plataformas (ver /integracoes) juntam-se aos
+  // que estão escritos à mão em novidades.js e singles.js. Uma música que esteja
+  // nos dois sítios aparece uma vez só: o número do cartão é o MAIOR entre o
+  // escrito à mão (p.ex. streams do Spotify) e o da plataforma (p.ex. views do
+  // YouTube) — sobe sozinho sem nunca descer abaixo do manual; o subtítulo
+  // escrito à mão mantém-se.
   const chave = (x) => (x.link ? x.link.replace(/\/intl-[a-z]+\//, '/').replace(/[?#].*$/, '').replace(/\/$/, '')
     : (x.titulo + '|' + (x.artista || x.descricao || '')).toLowerCase());
 
@@ -267,8 +269,17 @@
     for (const x of aMao || []) if (x) porChave.set(chave(x), x);
     for (const x of daPlataforma || []) {
       const k = chave(x);
+      const base = porChave.get(k);
       const sem = Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined && v !== null && v !== ''));
-      porChave.set(k, { ...(porChave.get(k) || {}), ...sem });
+      const junto = { ...(base || {}), ...sem };
+      if (base) {
+        // O número sobe, nunca desce: fica o maior dos dois.
+        const aMaoN = Number(base.streams), daPlat = Number(sem.streams);
+        if (Number.isFinite(aMaoN) && Number.isFinite(daPlat)) junto.streams = Math.max(aMaoN, daPlat);
+        // O subtítulo curado à mão fica; a plataforma só atualiza o número.
+        if (base.descricao) junto.descricao = base.descricao;
+      }
+      porChave.set(k, junto);
     }
     return [...porChave.values()];
   }

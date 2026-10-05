@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { h, api, t, fmtDate, money, waLink, statusTag } = window.Studio;
+  const { h, api, t, tr, fmtDate, money, waLink, statusTag } = window.Studio;
   const $ = (id) => document.getElementById(id);
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   let biz = null;
@@ -21,8 +21,8 @@
     dl.replaceChildren();
     const rows = [
       [t('linha.estado'), statusTag(b.status)], [t('linha.nome'), b.client_name],
-      [t('linha.estudio'), b.studio_name], [t('linha.sala'), b.room_name],
-      b.service_name && [t('linha.servico'), b.service_name], b.style && [t('linha.estilo'), b.style],
+      [t('linha.estudio'), tr(b, 'studio_name')], [t('linha.sala'), tr(b, 'room_name')],
+      b.service_name && [t('linha.servico'), tr(b, 'service_name')], b.style && [t('linha.estilo'), b.style],
       b.title && [t('linha.projeto'), b.title],
       [t('linha.dia'), cap(fmtDate(b.date))], [t('linha.hora'), t('linha.horas', { de: b.start, ate: b.end })],
       b.price > 0 && [t('linha.valor'), money(b.price, cur)],
@@ -66,6 +66,8 @@
     botao.textContent = t('pagar.aAbrir');
     try {
       const r = await api('/api/integracoes/pagamentos/checkout', { method: 'POST', body: { code, phone: $('phone').value } });
+      // Vamos sair para o Stripe: o ecrã de carregamento cobre a espera até lá.
+      if (window.Studio.carregar) window.Studio.carregar.mostrar();
       window.location.assign(r.url);
     } catch (e) {
       showError(e.message);

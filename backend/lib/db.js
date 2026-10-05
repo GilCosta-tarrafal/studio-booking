@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { parseHM, weekday } = require('./util');
+const TR = require('./traducoes');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -46,6 +47,8 @@ CREATE TABLE IF NOT EXISTS studios (
   -- Coordenadas do estúdio, para o globo do formulário de marcação.
   lat         REAL,
   lon         REAL,
+  -- Nome, cidade e descrição noutras línguas (ver lib/traducoes.js).
+  traducoes   TEXT NOT NULL DEFAULT '{}',
   active      INTEGER NOT NULL DEFAULT 1,
   sort        INTEGER NOT NULL DEFAULT 0
 );
@@ -56,6 +59,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   name        TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   hourly_rate INTEGER NOT NULL DEFAULT 0,
+  traducoes   TEXT NOT NULL DEFAULT '{}',
   active      INTEGER NOT NULL DEFAULT 1,
   sort        INTEGER NOT NULL DEFAULT 0
 );
@@ -66,6 +70,7 @@ CREATE TABLE IF NOT EXISTS services (
   description TEXT NOT NULL DEFAULT '',
   -- 1 = o trabalho pode ser feito sem o cliente vir ao estúdio (mistura, masterização)
   remote_ok   INTEGER NOT NULL DEFAULT 0,
+  traducoes   TEXT NOT NULL DEFAULT '{}',
   active      INTEGER NOT NULL DEFAULT 1,
   sort        INTEGER NOT NULL DEFAULT 0
 );
@@ -124,6 +129,14 @@ acrescentaColuna('bookings', 'style', "TEXT NOT NULL DEFAULT ''");
 // Vazio (null) quando não se sabe: aí o globo fica parado, sem marcador.
 acrescentaColuna('studios', 'lat', 'REAL');
 acrescentaColuna('studios', 'lon', 'REAL');
+// O que o dono escreve noutras línguas (nome, descrição...). Ver lib/traducoes.js.
+for (const tabela of ['studios', 'rooms', 'services']) acrescentaColuna(tabela, 'traducoes', "TEXT NOT NULL DEFAULT '{}'");
+// Agentes de estúdio: um utilizador da equipa pode ficar preso a um estúdio
+// (o seu). Nesse caso só vê e gere as marcações, o calendário, os bloqueios e
+// os clientes desse estúdio. Vazio (null) = vê tudo (proprietário ou equipa
+// sem estúdio atribuído). ON DELETE SET NULL: se o estúdio for eliminado, o
+// agente deixa de estar preso — não se perde a conta.
+acrescentaColuna('users', 'studio_id', 'INTEGER REFERENCES studios(id) ON DELETE SET NULL');
 
 // As bases criadas antes de haver coordenadas ficaram com os estúdios de
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
@@ -138,6 +151,81 @@ for (const [cidadeDemo, cidade, lat, lon] of [
       WHERE city=? AND lat IS NULL AND lon IS NULL AND address IN ('', 'Morada a definir')`
   ).run(cidade, lat, lon, cidadeDemo);
 }
+
+// Os textos dos estúdios, salas e serviços de exemplo, já em inglês e francês,
+// para o site de exemplo não aparecer meio em português noutra língua. Só se
+// aplicam a um campo que ainda esteja tal e qual saiu do molde e a uma linha
+// sem traduções nenhumas: o que o dono escreveu nunca se toca.
+const TEXTOS_EXEMPLO = {
+  'Estúdio Central': { en: 'Central Studio', fr: 'Studio Central' },
+  'Estúdio Norte': { en: 'North Studio', fr: 'Studio Nord' },
+  'Paris, França': { en: 'Paris, France', fr: 'Paris, France' },
+  'Assomada, Cabo Verde': { en: 'Assomada, Cape Verde', fr: 'Assomada, Cap-Vert' },
+  'Estúdio principal, com sala de gravação e cabine de voz.': {
+    en: 'Main studio, with a recording room and a vocal booth.',
+    fr: 'Studio principal, avec une salle d’enregistrement et une cabine voix.',
+  },
+  'Segundo estúdio, para produção e mistura.': {
+    en: 'Second studio, for production and mixing.', fr: 'Deuxième studio, pour la production et le mixage.',
+  },
+  'Sala de gravação': { en: 'Recording room', fr: 'Salle d’enregistrement' },
+  'Sala grande para bandas e gravação de instrumentos.': {
+    en: 'Large room for bands and recording instruments.', fr: 'Grande salle pour les groupes et l’enregistrement d’instruments.',
+  },
+  'Cabine de voz': { en: 'Vocal booth', fr: 'Cabine voix' },
+  'Cabine tratada para voz e locução.': {
+    en: 'Acoustically treated booth for vocals and voice-over.', fr: 'Cabine traitée pour la voix et la voix off.',
+  },
+  'Sala de produção': { en: 'Production room', fr: 'Salle de production' },
+  'Produção, mistura e masterização.': { en: 'Production, mixing and mastering.', fr: 'Production, mixage et mastering.' },
+  'Gravação': { en: 'Recording', fr: 'Enregistrement' },
+  'Sessão de gravação de voz ou instrumentos, com técnico.': {
+    en: 'Vocal or instrument recording session, with an engineer.', fr: 'Séance d’enregistrement voix ou instruments, avec un ingénieur du son.',
+  },
+  'Mistura': { en: 'Mixing', fr: 'Mixage' },
+  'Mistura das faixas gravadas.': { en: 'Mixing of the recorded tracks.', fr: 'Mixage des pistes enregistrées.' },
+  'Masterização': { en: 'Mastering', fr: 'Mastering' },
+  'Acabamento final para edição e streaming.': {
+    en: 'Final polish for release and streaming.', fr: 'Finition pour la sortie et le streaming.',
+  },
+  'Produção': { en: 'Production', fr: 'Production' },
+  'Criação e arranjo de instrumentais.': { en: 'Creating and arranging instrumentals.', fr: 'Création et arrangement d’instrumentales.' },
+  'Ensaio': { en: 'Rehearsal', fr: 'Répétition' },
+  'Aluguer da sala para ensaio, sem técnico.': {
+    en: 'Room hire for rehearsals, without an engineer.', fr: 'Location de salle pour répéter, sans ingénieur du son.',
+  },
+  'Gravação, mistura e produção musical': {
+    en: 'Music recording, mixing and production', fr: 'Enregistrement, mixage et production musicale',
+  },
+  'O pedido fica pendente até ser confirmado pelo estúdio. Receberá a confirmação por telefone ou WhatsApp.': {
+    en: 'Your request stays pending until the studio confirms it. You will get the confirmation by phone or WhatsApp.',
+    fr: 'Votre demande reste en attente jusqu’à sa confirmation par le studio. Vous recevrez la confirmation par téléphone ou WhatsApp.',
+  },
+};
+
+// As traduções de exemplo para os campos de uma linha, ou {} se nenhum campo
+// for texto de exemplo.
+function traducoesExemplo(linha, campos) {
+  const out = {};
+  for (const campo of Object.keys(campos)) {
+    const t = TEXTOS_EXEMPLO[linha[campo]];
+    if (!t) continue;
+    for (const lingua of TR.OUTRAS) if (t[lingua]) (out[lingua] = out[lingua] || {})[campo] = t[lingua];
+  }
+  return out;
+}
+
+function traduzExemplos() {
+  for (const tabela of ['studios', 'rooms', 'services']) {
+    const campos = TR.CAMPOS[tabela];
+    const up = db.prepare(`UPDATE ${tabela} SET traducoes=? WHERE id=?`);
+    for (const linha of db.prepare(`SELECT * FROM ${tabela} WHERE traducoes='{}'`).all()) {
+      const tr = traducoesExemplo(linha, campos);
+      if (Object.keys(tr).length) up.run(JSON.stringify(tr), linha.id);
+    }
+  }
+}
+traduzExemplos();
 
 // ---------------------------------------------------------------- Definições
 
@@ -159,6 +247,8 @@ const DEFAULT_SETTINGS = {
   max_advance_days: '90',
   auto_confirm: '0',
   terms: 'O pedido fica pendente até ser confirmado pelo estúdio. Receberá a confirmação por telefone ou WhatsApp.',
+  // A frase de apresentação e o texto antes de enviar, noutras línguas (JSON).
+  traducoes: '',
 };
 
 const INT_SETTINGS = ['slot_minutes', 'min_minutes', 'max_minutes', 'lead_hours', 'max_advance_days'];
@@ -170,6 +260,9 @@ function getSettings() {
   }
   for (const k of INT_SETTINGS) out[k] = parseInt(out[k], 10) || parseInt(DEFAULT_SETTINGS[k], 10);
   out.auto_confirm = out.auto_confirm === '1' || out.auto_confirm === 1;
+  // Enquanto o dono não guardar traduções, a frase e o texto que ainda forem
+  // os de origem levam as suas traduções de exemplo.
+  out.traducoes = out.traducoes ? TR.ler(out.traducoes) : traducoesExemplo(out, TR.CAMPOS.settings);
   return out;
 }
 
@@ -177,7 +270,8 @@ function saveSettings(obj) {
   const up = db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
   db.transaction(() => {
     for (const [k, v] of Object.entries(obj)) {
-      if (k in DEFAULT_SETTINGS) up.run(k, String(typeof v === 'boolean' ? (v ? 1 : 0) : v));
+      if (!(k in DEFAULT_SETTINGS)) continue;
+      up.run(k, typeof v === 'boolean' ? (v ? '1' : '0') : v && typeof v === 'object' ? JSON.stringify(v) : String(v));
     }
   })();
 }
@@ -252,7 +346,8 @@ function newCode() {
 }
 
 const BOOKING_SELECT = `
-  SELECT b.*, r.name AS room_name, r.studio_id, s.name AS studio_name, sv.name AS service_name
+  SELECT b.*, r.name AS room_name, r.studio_id, s.name AS studio_name, sv.name AS service_name,
+         r.traducoes AS room_tr, s.traducoes AS studio_tr, sv.traducoes AS service_tr
     FROM bookings b
     JOIN rooms r ON r.id = b.room_id
     JOIN studios s ON s.id = r.studio_id
@@ -283,6 +378,7 @@ function seedIfEmpty() {
     sv.run('Masterização', 'Acabamento final para edição e streaming.', 1, 3);
     sv.run('Produção', 'Criação e arranjo de instrumentais.', 1, 4);
     sv.run('Ensaio', 'Aluguer da sala para ensaio, sem técnico.', 0, 5);
+    traduzExemplos();
   }
   saveSettings({});
   db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('seeded','1')").run();

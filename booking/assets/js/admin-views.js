@@ -184,23 +184,26 @@
             listBox.replaceChildren(h('div', { class: 'panel' }, h('p', { class: 'empty' }, ui.q ? 'Nenhuma marcação corresponde à pesquisa.' : 'Sem marcações para mostrar.')));
             return;
           }
-          listBox.replaceChildren(
-            h('div', { class: 'table-wrap' }, labelCells(h('table', { class: 'data' },
-              h('thead', {}, h('tr', {}, ['Data e hora', 'Estúdio e sala', 'Cliente', 'Trabalho', 'Estado', 'Valor', ''].map((t) => h('th', { scope: 'col', class: t === 'Valor' ? 'num' : '' }, t)))),
-              h('tbody', {}, bookings.map((b) => h('tr', {},
-                h('td', {}, h('strong', {}, `${b.start}–${b.end}`), h('span', { class: 'sub' }, fmtDate(b.date, 'short'))),
-                h('td', {}, b.studio_name, h('span', { class: 'sub' }, b.room_name)),
-                h('td', {}, b.client_name, b.client_phone && h('span', { class: 'sub' }, b.client_phone)),
-                h('td', {}, b.title || '—',
-                  [b.service_name, b.style].filter(Boolean).length
-                    && h('span', { class: 'sub' }, [b.service_name, b.style].filter(Boolean).join(' · ')),
-                  !!b.remote && h('span', { class: 'modo remoto' }, 'À distância')),
-                h('td', {}, statusTag(b.status)),
-                payCell(b),
-                h('td', { class: 'acts' },
-                  b.status === 'pedido' && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => A.api(`/api/admin/bookings/${b.id}/status`, { method: 'PATCH', body: { status: 'confirmado' } }).then(() => { toast('Pedido confirmado.'); onChange(); }).catch((e) => toast(e.message, true)) }, 'Confirmar'),
-                  h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => openBooking({ booking: b, onSaved: onChange }) }, 'Abrir')))))))),
-            bookings.length >= 500 ? h('p', { class: 'hint' }, 'A mostrar as primeiras 500 marcações. Use a pesquisa para refinar.') : null);
+          const tableWrap = h('div', { class: 'table-wrap' }, labelCells(h('table', { class: 'data' },
+            h('thead', {}, h('tr', {}, ['Data e hora', 'Estúdio e sala', 'Cliente', 'Trabalho', 'Estado', 'Valor', ''].map((t) => h('th', { scope: 'col', class: t === 'Valor' ? 'num' : '' }, t)))),
+            h('tbody', {}, bookings.map((b) => h('tr', {},
+              h('td', {}, h('strong', {}, `${b.start}–${b.end}`), h('span', { class: 'sub' }, fmtDate(b.date, 'short'))),
+              h('td', {}, b.studio_name, h('span', { class: 'sub' }, b.room_name)),
+              h('td', {}, b.client_name, b.client_phone && h('span', { class: 'sub' }, b.client_phone)),
+              h('td', {}, b.title || '—',
+                [b.service_name, b.style].filter(Boolean).length
+                  && h('span', { class: 'sub' }, [b.service_name, b.style].filter(Boolean).join(' · ')),
+                !!b.remote && h('span', { class: 'modo remoto' }, 'À distância')),
+              h('td', {}, statusTag(b.status)),
+              payCell(b),
+              h('td', { class: 'acts' },
+                b.status === 'pedido' && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => A.api(`/api/admin/bookings/${b.id}/status`, { method: 'PATCH', body: { status: 'confirmado' } }).then(() => { toast('Pedido confirmado.'); onChange(); }).catch((e) => toast(e.message, true)) }, 'Confirmar'),
+                h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => openBooking({ booking: b, onSaved: onChange }) }, 'Abrir'))))))));
+          // Nota só quando se atinge o limite; antes passava-se null, que o
+          // replaceChildren transformava no texto "null" por baixo da tabela.
+          const nodes = [tableWrap];
+          if (bookings.length >= 500) nodes.push(h('p', { class: 'hint' }, 'A mostrar as primeiras 500 marcações. Use a pesquisa para refinar.'));
+          listBox.replaceChildren(...nodes);
         } catch (e) {
           listBox.replaceChildren(h('div', { class: 'notice error', role: 'alert' }, e.message));
         }
@@ -251,6 +254,51 @@
   const DEFAULT_HOURS = [null, ...Array(5).fill({ open: '09:00', close: '21:00' }), { open: '10:00', close: '20:00' }];
   const ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+  // ============================================================ Traduções
+  // O site fala português, inglês e francês. O que se escreve aqui em
+  // português (nome de um serviço, descrição de uma sala...) pode levar a sua
+  // versão nas outras línguas; um campo vazio mostra o português no site.
+  // campos: [['name', 'Nome', 80], ['description', 'Descrição', 300, true]]
+  // (o quarto valor pede uma caixa de várias linhas).
+  const LINGUAS_TRADUCAO = window.DICIONARIO.LINGUAS.filter((l) => l.cod !== 'pt');
+
+  function blocoTraducoes(campos, atual, { disabled = false } = {}) {
+    let dados = atual || {};
+    if (typeof dados === 'string') { try { dados = JSON.parse(dados) || {}; } catch (_) { dados = {}; } }
+    const caixas = {};
+    const contaPreenchidas = () => LINGUAS_TRADUCAO.filter((l) =>
+      campos.some(([k]) => caixas[l.cod][k].value.trim())).length;
+    const estado = h('span', { class: 'meta' });
+    const atualizaEstado = () => {
+      const n = contaPreenchidas();
+      estado.textContent = n ? `${n} de ${LINGUAS_TRADUCAO.length} línguas` : 'por traduzir: o site mostra o português';
+    };
+    const blocos = LINGUAS_TRADUCAO.map((l) => {
+      caixas[l.cod] = {};
+      const linha = campos.map(([k, rotulo, max, area]) => {
+        const valor = (dados[l.cod] && dados[l.cod][k]) || '';
+        const el = area
+          ? h('textarea', { maxlength: max, rows: 2, lang: l.cod, disabled, oninput: atualizaEstado }, valor)
+          : h('input', { type: 'text', maxlength: max, value: valor, lang: l.cod, disabled, oninput: atualizaEstado });
+        caixas[l.cod][k] = el;
+        return field(rotulo, el);
+      });
+      return h('fieldset', { class: 'traducao-lingua' }, h('legend', {}, l.nome), linha);
+    });
+    atualizaEstado();
+    return {
+      el: h('details', { class: 'traducoes' }, h('summary', {}, 'Traduções ', estado), blocos),
+      valor() {
+        const out = {};
+        for (const l of LINGUAS_TRADUCAO) {
+          out[l.cod] = {};
+          for (const [k] of campos) out[l.cod][k] = caixas[l.cod][k].value;
+        }
+        return out;
+      },
+    };
+  }
+
   async function afterChange(msg) {
     toast(msg);
     await A.reloadRefs();
@@ -271,6 +319,7 @@
       description: h('textarea', { maxlength: 400 }, st.description),
       active: h('input', { type: 'checkbox', checked: !!st.active }),
     };
+    const traducoes = blocoTraducoes([['name', 'Nome do estúdio', 80], ['city', 'Cidade ou ilha', 60], ['description', 'Descrição', 400, true]], st.traducoes);
     const rows = ORDER.map((i) => {
       const d = st.hours[i];
       const on = h('input', { type: 'checkbox', checked: !!d, 'aria-label': 'Aberto ' + DAY_LONG[i] });
@@ -290,7 +339,8 @@
       const hours = Array(7).fill(null);
       for (const r of rows) hours[r.i] = r.on.checked ? { open: r.open.value, close: r.close.value } : null;
       const body = { name: f.name.value, city: f.city.value, address: f.address.value, phone: f.phone.value,
-        lat: f.lat.value, lon: f.lon.value, description: f.description.value, active: f.active.checked, hours };
+        lat: f.lat.value, lon: f.lon.value, description: f.description.value, active: f.active.checked, hours,
+        traducoes: traducoes.valor() };
       try {
         if (isNew) await api('/api/admin/studios', { method: 'POST', body });
         else await api(`/api/admin/studios/${s.id}`, { method: 'PUT', body });
@@ -308,6 +358,7 @@
       h('div', { class: 'grid-2' }, field('Morada', f.address), field('Telefone do estúdio', f.phone)),
       localizacao(f),
       field('Descrição', f.description),
+      traducoes.el,
       h('h3', {}, 'Horário de funcionamento'),
       h('table', { class: 'hours-table' }, h('tbody', {}, rows.map((r) => r.tr))),
       h('label', { class: 'check' }, f.active, 'Visível no site e aberto a marcações'),
@@ -414,8 +465,10 @@
     const rate = h('input', { type: 'number', min: 0, step: 100, value: r ? r.hourly_rate : 0 });
     const desc = h('input', { type: 'text', maxlength: 300, value: r ? r.description : '' });
     const active = h('input', { type: 'checkbox', checked: r ? !!r.active : true });
+    const traducoes = blocoTraducoes([['name', 'Sala', 80], ['description', 'Descrição', 300]], r && r.traducoes);
     const save = async () => {
-      const body = { studio_id: studioId, name: name.value, hourly_rate: rate.value, description: desc.value, active: active.checked };
+      const body = { studio_id: studioId, name: name.value, hourly_rate: rate.value, description: desc.value, active: active.checked,
+        traducoes: traducoes.valor() };
       try {
         if (isNew) await api('/api/admin/rooms', { method: 'POST', body });
         else await api(`/api/admin/rooms/${r.id}`, { method: 'PUT', body });
@@ -432,7 +485,8 @@
       h('label', { class: 'check' }, active, 'Ativa'),
       h('div', { class: 'row-actions' },
         h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),
-        !isNew && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar')));
+        !isNew && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar')),
+      traducoes.el);
   }
 
   views.estudios = {
@@ -468,8 +522,10 @@
     const desc = h('input', { type: 'text', maxlength: 300, value: sv ? sv.description : '' });
     const active = h('input', { type: 'checkbox', checked: sv ? !!sv.active : true });
     const remoteOk = h('input', { type: 'checkbox', checked: sv ? !!sv.remote_ok : false });
+    const traducoes = blocoTraducoes([['name', 'Serviço', 80], ['description', 'Descrição', 300]], sv && sv.traducoes);
     const save = async () => {
-      const body = { name: name.value, description: desc.value, remote_ok: remoteOk.checked, active: active.checked };
+      const body = { name: name.value, description: desc.value, remote_ok: remoteOk.checked, active: active.checked,
+        traducoes: traducoes.valor() };
       try {
         if (isNew) await api('/api/admin/services', { method: 'POST', body });
         else await api(`/api/admin/services/${sv.id}`, { method: 'PUT', body });
@@ -487,7 +543,8 @@
       h('label', { class: 'check' }, active, 'Visível'),
       h('div', { class: 'row-actions' },
         h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),
-        !isNew && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar')));
+        !isNew && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar')),
+      traducoes.el);
   }
 
   views.servicos = {
@@ -524,11 +581,13 @@
       auto_confirm: h('input', { type: 'checkbox', checked: !!s.auto_confirm, disabled: dis }),
       terms: h('textarea', { maxlength: 500, disabled: dis }, s.terms),
     };
+    const traducoes = blocoTraducoes([['tagline', 'Frase de apresentação', 160], ['terms', 'Texto mostrado antes de enviar o pedido', 500, true]],
+      s.traducoes, { disabled: dis });
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
     const submit = async (e) => {
       e.preventDefault();
       err.hidden = true;
-      const body = {};
+      const body = { traducoes: traducoes.valor() };
       for (const [k, el] of Object.entries(f)) body[k] = el.type === 'checkbox' ? el.checked : el.value;
       try {
         const r = await api('/api/admin/settings', { method: 'PUT', body });
@@ -538,7 +597,7 @@
         toast('Definições guardadas.');
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };
-    return h('form', { class: 'panel', onsubmit: submit },
+    return h('form', { class: 'panel panel-stack', onsubmit: submit },
       h('h2', {}, 'Negócio e contactos'),
       !isOwner && h('p', { class: 'notice info' }, 'Só o proprietário pode alterar as definições.'),
       h('div', { class: 'grid-2' }, field('Nome do negócio', f.business_name), field('Frase de apresentação', f.tagline)),
@@ -561,6 +620,7 @@
       h('label', { class: 'check' }, f.auto_confirm, 'Confirmar automaticamente os pedidos feitos no site'),
       h('p', { class: 'hint' }, 'Desligado: os pedidos ficam "por confirmar" até os aceitar no painel. O horário fica reservado em ambos os casos.'),
       field('Texto mostrado antes de enviar o pedido', f.terms, { hint: 'Por exemplo, política de cancelamento ou de sinal.' }),
+      traducoes.el,
       err,
       isOwner && h('div', { class: 'modal-foot' }, h('button', { class: 'btn', type: 'submit' }, 'Guardar definições')));
   }
@@ -569,13 +629,26 @@
     const isNew = !u;
     const name = h('input', { type: 'text', maxlength: 80, value: u ? u.name : '' });
     const email = isNew ? h('input', { type: 'email', maxlength: 120, autocomplete: 'off' }) : h('input', { type: 'email', value: u.email, readonly: true });
-    const role = h('select', { value: u ? u.role : 'staff' }, h('option', { value: 'staff' }, 'Equipa'), h('option', { value: 'owner' }, 'Proprietário'));
+    const role = h('select', { value: u ? u.role : 'staff' },
+      h('option', { value: 'staff' }, 'Equipa'),
+      h('option', { value: 'agent' }, 'Agente de estúdio'),
+      h('option', { value: 'owner' }, 'Proprietário'));
+    // Um agente pertence a um estúdio. O seletor só aparece nesse perfil.
+    const studio = h('select', {},
+      h('option', { value: '' }, 'Escolher estúdio…'),
+      app.studios.map((s) => h('option', { value: s.id }, s.name)));
+    if (u && u.studio_id) studio.value = String(u.studio_id);
+    const studioField = field('Estúdio do agente', studio);
+    const syncStudio = () => { studioField.hidden = role.value !== 'agent'; };
+    role.addEventListener('change', syncStudio);
+    syncStudio();
     const pass = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, placeholder: isNew ? 'Mínimo 8 caracteres' : 'Deixe vazio para manter' });
     const active = h('input', { type: 'checkbox', checked: u ? !!u.active : true });
     const save = async () => {
+      const common = { name: name.value, role: role.value, studio_id: role.value === 'agent' ? studio.value : null };
       try {
-        if (isNew) await api('/api/admin/users', { method: 'POST', body: { name: name.value, email: email.value, password: pass.value, role: role.value } });
-        else await api(`/api/admin/users/${u.id}`, { method: 'PUT', body: { name: name.value, role: role.value, active: active.checked, password: pass.value || undefined } });
+        if (isNew) await api('/api/admin/users', { method: 'POST', body: { ...common, email: email.value, password: pass.value } });
+        else await api(`/api/admin/users/${u.id}`, { method: 'PUT', body: { ...common, active: active.checked, password: pass.value || undefined } });
         toast(isNew ? 'Utilizador criado.' : 'Utilizador guardado.');
         A.refresh();
       } catch (ex) { toast(ex.message, true); }
@@ -585,13 +658,21 @@
       try { await api(`/api/admin/users/${u.id}`, { method: 'DELETE' }); toast('Utilizador eliminado.'); A.refresh(); }
       catch (ex) { toast(ex.message, true); }
     };
-    return h('div', { class: 'row-form user' },
-      field(isNew ? 'Novo utilizador' : 'Nome', name), field('Email', email), field('Perfil', role),
-      field(isNew ? 'Palavra-passe' : 'Nova palavra-passe', pass),
-      !isNew && h('label', { class: 'check' }, active, 'Ativo'),
-      h('div', { class: 'row-actions' },
-        h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),
-        !isNew && u.id !== meId && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar')));
+    return h('div', { class: 'user-card' + (isNew ? ' is-new' : '') },
+      isNew
+        ? h('h3', { class: 'user-card-title' }, 'Novo utilizador')
+        : h('div', { class: 'user-card-id' },
+          h('strong', {}, u.name),
+          h('span', { class: 'tag' }, u.role === 'owner' ? 'Proprietário' : u.studio_id ? 'Agente' : 'Equipa'),
+          !u.active && h('span', { class: 'tag off' }, 'Inativo')),
+      h('div', { class: 'grid-2' }, field('Nome', name), field('Email', email)),
+      h('div', { class: 'grid-2' }, field('Perfil', role), studioField),
+      h('div', { class: 'user-card-foot' },
+        field(isNew ? 'Palavra-passe' : 'Nova palavra-passe', pass),
+        !isNew && h('label', { class: 'check' }, active, 'Ativo'),
+        h('div', { class: 'row-actions' },
+          h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),
+          !isNew && u.id !== meId && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar'))));
   }
 
   function passwordPanel() {
@@ -600,7 +681,7 @@
     const n2 = h('input', { type: 'password', autocomplete: 'new-password' });
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
     return h('form', {
-      class: 'panel',
+      class: 'panel panel-stack',
       onsubmit: async (e) => {
         e.preventDefault();
         err.hidden = true;
@@ -626,15 +707,22 @@
       app.settings = settings;
       box.append(pageHead('Definições'));
       box.append(settingsPanel(settings, isOwner));
-      if (isOwner) {
-        const { users } = await api('/api/admin/users');
-        box.append(h('section', { class: 'panel' },
-          h('h2', {}, 'Equipa'),
-          h('p', { class: 'hint' }, 'A equipa vê e gere marcações, clientes e estúdios. Só o proprietário altera definições e utilizadores.'),
-          users.map((u) => userRow(u, app.user.id)),
-          userRow(null, app.user.id)));
-      }
       box.append(passwordPanel());
+    },
+  };
+
+  // ============================================================ Gestão de acesso (só proprietário)
+  views.acesso = {
+    title: 'Gestão de acesso',
+    async render(box) {
+      const { users } = await api('/api/admin/users');
+      box.append(pageHead('Gestão de acesso'));
+      box.append(h('section', { class: 'panel' },
+        h('h2', {}, 'Contas de acesso'),
+        h('p', { class: 'hint' }, 'O proprietário vê e faz tudo. A equipa gere marcações, clientes e estúdios. '
+          + 'Um agente de estúdio só vê e gere o seu estúdio — para quem trabalha num dos estúdios espalhados pelo mundo.'),
+        users.map((u) => userRow(u, app.user.id)),
+        userRow(null, app.user.id)));
     },
   };
 

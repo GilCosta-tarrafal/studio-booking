@@ -16,7 +16,7 @@
       h('table', { class: 'hours-table' }, h('tbody', {},
         f.detalhes.map(([k, v]) => h('tr', {}, h('td', { style: { width: '16em' } }, k), h('td', {}, v))))),
       f.sincronizavel && h('div', { class: 'row-actions' },
-        h('button', { class: 'btn btn-sm', type: 'button', onclick: aoSincronizar }, 'Sincronizar agora')));
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: () => aoSincronizar(f.id) }, 'Sincronizar agora')));
   }
 
   function painelDefinicoes(def, isOwner) {
@@ -103,9 +103,9 @@
     title: 'Integrações',
     async render(box) {
       const d = await api('/api/admin/integracoes');
-      const sincronizar = async () => {
+      const sincronizar = async (id) => {
         try {
-          const r = await api('/api/admin/integracoes/gravadora/sincronizar', { method: 'POST' });
+          const r = await api(`/api/admin/integracoes/${id}/sincronizar`, { method: 'POST' });
           toast(`${r.guardados} lançamentos atualizados.` + (r.erros.length ? ` ${r.erros.length} com erros.` : ''), r.erros.length > 0);
           A.refresh();
         } catch (ex) { toast(ex.message, true); }

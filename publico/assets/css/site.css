@@ -449,6 +449,17 @@ body { padding-top: var(--altura-cabecalho); }
   .page-inner::before { background-image: linear-gradient(var(--veu-perto), var(--veu-perto)), url("/img/many.jpg"); }
 }
 
+/* Faixa-herói destas páginas: a mesma fotografia em slides da entrada, mas só
+   atrás do cabeçalho e do título. Reaproveita toda a maquinaria de .hero (slides,
+   véu, texto claro, tema claro). Fecha no fundo real da página (--paper) para o
+   formulário continuar em baixo sobre fundo limpo. Por isso estas páginas não
+   precisam da fotografia fixa que emoldurava o formulário. */
+.page-faixa::before { content: none; }
+.hero-curto { --hero-fim: var(--paper); --ate: var(--paper); padding-bottom: 36px; }
+.hero-curto > .container { padding-top: 40px; }
+.hero-curto h1 { font: 800 clamp(2rem, 4.5vw, 2.9rem)/1.05 var(--display); letter-spacing: -.02em; margin: 0 0 12px; }
+.hero-curto .lead { margin: 0; max-width: 46em; }
+
 .book { padding-bottom: 96px; }
 
 /* O rodapé foi desenhado para a página inicial, onde o fundo já vem a clarear

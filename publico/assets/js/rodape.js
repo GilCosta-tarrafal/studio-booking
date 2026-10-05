@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 (function () {
   const S = window.Studio;
-  const { h, t, telLink, waLink, hoursSummary, icone } = S;
+  const { h, t, tr, telLink, waLink, hoursSummary, icone } = S;
 
   // Cada contacto leva o seu ícone, como no rodapé de referência.
   function linhaContacto(nome, texto, href) {
@@ -60,7 +60,7 @@
     box.replaceChildren(...(todosIguais
       ? [h('div', { class: 'horario' }, lista(resumos[0]))]
       : cfg.studios.map((s, i) => h('div', { class: 'horario' },
-        h('p', { class: 'horario-estudio' }, s.name),
+        h('p', { class: 'horario-estudio' }, tr(s, 'name')),
         lista(resumos[i])))));
   }
 
@@ -68,7 +68,7 @@
     if (!cfg || !document.getElementById('contacts')) return;
     const b = cfg.business;
     const items = [];
-    const morada = cfg.studios.map((s) => [s.city, s.address].filter(Boolean).join(', ')).filter(Boolean)[0];
+    const morada = cfg.studios.map((s) => [tr(s, 'city'), s.address].filter(Boolean).join(', ')).filter(Boolean)[0];
     if (morada) items.push(linhaContacto('local', morada, null));
     const tel = telLink(b.phone);
     if (tel) items.push(linhaContacto('telefone', b.phone, tel));
@@ -79,11 +79,14 @@
     if (b.email && /^[^\s@]+@[^\s@]+$/.test(b.email)) items.push(linhaContacto('email', b.email, 'mailto:' + b.email));
     for (const s of cfg.studios) {
       const t2 = telLink(s.phone);
-      if (t2 && s.phone !== b.phone) items.push(linhaContacto('telefone', `${s.name}: ${s.phone}`, t2));
+      if (t2 && s.phone !== b.phone) items.push(linhaContacto('telefone', `${tr(s, 'name')}: ${s.phone}`, t2));
     }
     if (items.length) document.getElementById('contacts').replaceChildren(...items);
     renderSocial(b);
     renderHorario(cfg);
+    // A frase de apresentação sai do servidor já na língua da página; ao trocar
+    // de língua sem recarregar, é aqui que acompanha.
+    for (const el of document.querySelectorAll('[data-tagline]')) el.textContent = tr(b, 'tagline');
   }
 
   S.renderRodape = renderRodape;

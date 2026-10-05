@@ -11,6 +11,21 @@
   };
   const t = I18N.t;
 
+  // O texto escrito no painel (nome de um serviço, descrição de uma sala...)
+  // na língua ativa. As traduções vêm do servidor no campo "i18n" de cada
+  // objeto; sem tradução, fica o português, que é o original.
+  function tr(obj, campo) {
+    const l = obj && obj.i18n && obj.i18n[I18N.lingua];
+    return (l && l[campo]) || (obj ? obj[campo] : '');
+  }
+
+  // Texto dos ficheiros de conteúdo (novidades, singles): ou só uma frase, que
+  // vale para todas as línguas, ou { pt: '...', en: '...', fr: '...' }.
+  function trTexto(v) {
+    if (!v || typeof v !== 'object') return v || '';
+    return v[I18N.lingua] || v.pt || Object.values(v)[0] || '';
+  }
+
   const ESTADOS = ['pedido', 'confirmado', 'em_curso', 'concluido', 'cancelado'];
   const estados = () => Object.fromEntries(ESTADOS.map((k) => [k, t('estado.' + k)]));
 
@@ -276,10 +291,17 @@
 
     const step = span / 60 > 12 ? 120 : 60;
     const scale = h('div', { class: 'strip-scale', 'aria-hidden': 'true' });
-    for (let m = Math.ceil(open / 60) * 60; m <= close; m += step) {
-      const cls = m === open ? 'first' : m === close ? 'last' : '';
+    const marks = [];
+    for (let m = Math.ceil(open / 60) * 60; m <= close; m += step) marks.push(m);
+    // Numa régua estreita só cabe uma etiqueta sim, outra não ("menor" fica
+    // escondida no CSS). A primeira e a última ficam sempre; se a última cair
+    // numa posição ímpar, esconde-se a anterior para não ficarem coladas.
+    const n = marks.length - 1;
+    marks.forEach((m, i) => {
+      const menor = i > 0 && i < n && (i % 2 === 1 || (n % 2 === 1 && i === n - 1));
+      const cls = [m === open ? 'first' : m === close ? 'last' : '', menor ? 'menor' : ''].join(' ').trim();
       scale.append(h('span', { class: cls, style: { '--l': pct(m) } }, Math.floor(m / 60) + 'h'));
-    }
+    });
     const label = closed ? t('regua.fechado')
       : busy.length ? t('regua.ocupado', { lista: busy.map(([s, e]) => t('regua.intervalo', { de: fmtMin(s), ate: fmtMin(e) })).join('; ') })
         : t('regua.livre');
@@ -309,7 +331,7 @@
   // STATUS, DAY_SHORT e DAY_LONG são lidos uma vez por quem os usa; por isso
   // são propriedades calculadas, que devolvem já os textos da língua ativa.
   window.Studio = {
-    t, I18N, h, api, fmtMin, parseHM, fmtDate, fmtDateFull, fmtDuration,
+    t, tr, trTexto, I18N, h, api, fmtMin, parseHM, fmtDate, fmtDateFull, fmtDuration,
     addDays, money, waLink, telLink, statusTag, renderStrip, hoursSummary, icone,
     servicoIcone, fundoServico,
     get STATUS() { return estados(); },

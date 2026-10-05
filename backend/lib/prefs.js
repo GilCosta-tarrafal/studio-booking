@@ -10,7 +10,7 @@
 // cookie) está em publico/assets/js/prefs.js.
 // ---------------------------------------------------------------------------
 
-const D = require('../../publico/assets/js/dicionario.js');
+const D = require('../../comum/assets/js/dicionario.js');
 
 const TEMAS = ['escuro', 'claro'];
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // um ano

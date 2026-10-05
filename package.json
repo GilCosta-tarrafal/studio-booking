@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "start:env": "node --env-file=.env backend/server.js",
-    "dev": "node --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=publico/assets/js/dicionario.js backend/server.js",
+    "dev": "node --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=comum/assets/js/dicionario.js backend/server.js",
     "test": "node test/api.test.js && node test/integracoes.test.js",
     "test:integracoes": "node test/integracoes.test.js",
     "backup": "node backend/scripts/backup.js",

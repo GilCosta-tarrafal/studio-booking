@@ -6,6 +6,7 @@ const {
 } = require('../lib/db');
 const auth = require('../lib/auth');
 const U = require('../lib/util');
+const TR = require('../lib/traducoes');
 const { HttpError } = U;
 
 const router = express.Router();
@@ -18,6 +19,25 @@ const idParam = (req) => {
   if (!id) throw new HttpError(400, 'Identificador inválido.');
   return id;
 };
+
+// ------------------------------------------------------------ Âmbito por estúdio
+// Um agente está preso ao seu estúdio (req.user.studio_id); vê e mexe apenas no
+// que lhe pertence. Proprietário e equipa sem estúdio devolvem null = veem tudo.
+const scopeStudio = (req) => req.user.studio_id || null;
+const roomStudio = (roomId) => {
+  const r = db.prepare('SELECT studio_id FROM rooms WHERE id=?').get(U.toInt(roomId));
+  return r ? r.studio_id : null;
+};
+// Recurso já existente fora do estúdio do agente: faz de conta que não existe.
+function assertInScope(req, roomId) {
+  const scope = scopeStudio(req);
+  if (scope && roomStudio(roomId) !== scope) throw new HttpError(404, 'Não encontrado.');
+}
+// Sala escolhida num formulário fora do estúdio do agente: recusa com clareza.
+function assertRoomInScope(req, roomId) {
+  const scope = scopeStudio(req);
+  if (scope && roomStudio(roomId) !== scope) throw new HttpError(403, 'Essa sala não pertence ao seu estúdio.');
+}
 
 // ------------------------------------------------------------ Marcações
 
@@ -79,6 +99,8 @@ router.get('/bookings', (req, res) => {
   }
   if (q.studio_id) { where.push('r.studio_id=?'); args.push(U.toInt(q.studio_id)); }
   if (q.room_id) { where.push('b.room_id=?'); args.push(U.toInt(q.room_id)); }
+  const scope = scopeStudio(req);
+  if (scope) { where.push('r.studio_id=?'); args.push(scope); }
   if (q.q) {
     const like = '%' + U.clean(String(q.q), 60).replace(/[%_\\]/g, '\\$&') + '%';
     where.push("(b.client_name LIKE ? ESCAPE '\\' OR b.client_phone LIKE ? ESCAPE '\\' OR b.title LIKE ? ESCAPE '\\' OR b.code LIKE ? ESCAPE '\\')");
@@ -92,11 +114,14 @@ router.get('/bookings', (req, res) => {
 router.get('/bookings/:id', (req, res) => {
   const row = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(idParam(req));
   if (!row) throw new HttpError(404, 'Marcação não encontrada.');
+  const scope = scopeStudio(req);
+  if (scope && row.studio_id !== scope) throw new HttpError(404, 'Marcação não encontrada.');
   res.json({ booking: withTimes(row) });
 });
 
 router.post('/bookings', (req, res) => {
   const n = normalizeBooking(req.body || {});
+  assertRoomInScope(req, n.room_id);
   const now = new Date().toISOString();
   const id = db.transaction(() => {
     assertNoConflict(n);
@@ -112,8 +137,11 @@ router.post('/bookings', (req, res) => {
 
 router.put('/bookings/:id', (req, res) => {
   const id = idParam(req);
-  if (!db.prepare('SELECT 1 FROM bookings WHERE id=?').get(id)) throw new HttpError(404, 'Marcação não encontrada.');
+  const existing = db.prepare('SELECT room_id FROM bookings WHERE id=?').get(id);
+  if (!existing) throw new HttpError(404, 'Marcação não encontrada.');
+  assertInScope(req, existing.room_id);        // tem de ser do estúdio do agente
   const n = normalizeBooking(req.body || {});
+  assertRoomInScope(req, n.room_id);            // e não pode movê-la para fora dele
   db.transaction(() => {
     assertNoConflict(n, id);
     db.prepare(
@@ -133,6 +161,7 @@ router.patch('/bookings/:id/status', (req, res) => {
   if (!STATUSES.includes(status)) throw new HttpError(400, 'Estado inválido.');
   const row = db.prepare('SELECT * FROM bookings WHERE id=?').get(id);
   if (!row) throw new HttpError(404, 'Marcação não encontrada.');
+  assertInScope(req, row.room_id);
   db.transaction(() => {
     assertNoConflict({ status, room_id: row.room_id, date: row.date, start: row.start_min, end: row.end_min }, id);
     db.prepare('UPDATE bookings SET status=?, updated_at=? WHERE id=?').run(status, new Date().toISOString(), id);
@@ -141,19 +170,26 @@ router.patch('/bookings/:id/status', (req, res) => {
 });
 
 router.delete('/bookings/:id', (req, res) => {
-  db.prepare('DELETE FROM bookings WHERE id=?').run(idParam(req));
+  const id = idParam(req);
+  const row = db.prepare('SELECT room_id FROM bookings WHERE id=?').get(id);
+  if (row) assertInScope(req, row.room_id);
+  db.prepare('DELETE FROM bookings WHERE id=?').run(id);
   res.json({ ok: true });
 });
 
 // ------------------------------------------------------------ Painel
 
-router.get('/pending-count', (_req, res) => {
-  res.json({ pending: db.prepare("SELECT COUNT(*) n FROM bookings WHERE status='pedido'").get().n });
+router.get('/pending-count', (req, res) => {
+  const scope = scopeStudio(req);
+  const sql = "SELECT COUNT(*) n FROM bookings b JOIN rooms r ON r.id=b.room_id WHERE b.status='pedido'"
+    + (scope ? ' AND r.studio_id=' + scope : '');
+  res.json({ pending: db.prepare(sql).get().n });
 });
 
 router.get('/dashboard', (req, res) => {
   const now = U.nowLocal();
-  const studioId = U.toInt(req.query.studio_id);
+  // O agente vê sempre só o seu estúdio; o filtro do painel não o liberta disso.
+  const studioId = scopeStudio(req) || U.toInt(req.query.studio_id);
   const sf = studioId ? ' AND r.studio_id=' + studioId : '';
   const base = 'FROM bookings b JOIN rooms r ON r.id=b.room_id WHERE 1=1' + sf;
   const monthStart = now.date.slice(0, 8) + '01';
@@ -181,7 +217,7 @@ router.get('/dashboard', (req, res) => {
 router.get('/calendar', (req, res) => {
   const date = String(req.query.date || U.nowLocal().date);
   if (!U.isValidDate(date)) throw new HttpError(400, 'Data inválida.');
-  const studioId = U.toInt(req.query.studio_id);
+  const studioId = scopeStudio(req) || U.toInt(req.query.studio_id);
   const studios = db.prepare('SELECT * FROM studios WHERE active=1' + (studioId ? ' AND id=' + studioId : '') + ' ORDER BY sort, id').all();
   const rooms = db.prepare('SELECT * FROM rooms WHERE active=1 ORDER BY sort, id').all();
   const dow = U.weekday(date);
@@ -208,6 +244,7 @@ router.post('/blocks', (req, res) => {
   const b = req.body || {};
   const room = db.prepare('SELECT id FROM rooms WHERE id=?').get(U.toInt(b.room_id));
   if (!room) throw new HttpError(400, 'Escolha uma sala.');
+  assertRoomInScope(req, room.id);
   const date = String(b.date || '');
   if (!U.isValidDate(date)) throw new HttpError(400, 'Data inválida.');
   const start = U.parseHM(String(b.start || ''));
@@ -221,7 +258,10 @@ router.post('/blocks', (req, res) => {
 });
 
 router.delete('/blocks/:id', (req, res) => {
-  db.prepare('DELETE FROM blocks WHERE id=?').run(idParam(req));
+  const id = idParam(req);
+  const blk = db.prepare('SELECT room_id FROM blocks WHERE id=?').get(id);
+  if (blk) assertInScope(req, blk.room_id);
+  db.prepare('DELETE FROM blocks WHERE id=?').run(id);
   res.json({ ok: true });
 });
 
@@ -248,6 +288,12 @@ function coord(v, limite) {
   return Number.isFinite(n) && Math.abs(n) <= limite ? n : null;
 }
 
+// As traduções que chegam do painel, limpas e prontas a gravar. null quando o
+// pedido não as traz, para o UPDATE deixar ficar as que já havia.
+function traducoes(b, campos) {
+  return b.traducoes === undefined ? null : JSON.stringify(TR.limpar(b.traducoes, campos));
+}
+
 function studioBody(b) {
   const name = U.clean(b.name, 80);
   if (!name) throw new HttpError(400, 'Indique o nome do estúdio.');
@@ -255,12 +301,14 @@ function studioBody(b) {
     name, city: U.clean(b.city, 60), address: U.clean(b.address, 160), phone: U.clean(b.phone, 30),
     lat: coord(b.lat, 90), lon: coord(b.lon, 180),
     description: U.clean(b.description, 400), hours: JSON.stringify(normalizeHours(b.hours)), active: flag(b.active),
+    traducoes: traducoes(b, TR.CAMPOS.studios),
     sort: U.toInt(b.sort),
   };
 }
 
-router.get('/studios', (_req, res) => {
-  const studios = db.prepare('SELECT * FROM studios ORDER BY sort, id').all();
+router.get('/studios', (req, res) => {
+  const scope = scopeStudio(req);
+  const studios = db.prepare('SELECT * FROM studios' + (scope ? ' WHERE id=' + scope : '') + ' ORDER BY sort, id').all();
   const rooms = db.prepare('SELECT * FROM rooms ORDER BY sort, id').all();
   const counts = Object.fromEntries(
     db.prepare('SELECT room_id, COUNT(*) n FROM bookings GROUP BY room_id').all().map((r) => [r.room_id, r.n])
@@ -273,24 +321,24 @@ router.get('/studios', (_req, res) => {
   });
 });
 
-router.post('/studios', (req, res) => {
+router.post('/studios', auth.requireManager, (req, res) => {
   const b = studioBody(req.body || {});
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM studios').get().m;
-  const id = db.prepare('INSERT INTO studios(name,city,address,phone,description,hours,lat,lon,active,sort) VALUES(?,?,?,?,?,?,?,?,?,?)')
-    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.active, max + 1).lastInsertRowid;
+  const id = db.prepare(`INSERT INTO studios(name,city,address,phone,description,hours,lat,lon,traducoes,active,sort) VALUES(?,?,?,?,?,?,?,?,COALESCE(?, '{}'),?,?)`)
+    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, max + 1).lastInsertRowid;
   res.status(201).json({ id });
 });
 
-router.put('/studios/:id', (req, res) => {
+router.put('/studios/:id', auth.requireManager, (req, res) => {
   const id = idParam(req);
   const b = studioBody(req.body || {});
-  const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, description=?, hours=?, lat=?, lon=?, active=? WHERE id=?')
-    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.active, id);
+  const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
+    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
   if (!info.changes) throw new HttpError(404, 'Estúdio não encontrado.');
   res.json({ ok: true });
 });
 
-router.delete('/studios/:id', (req, res) => {
+router.delete('/studios/:id', auth.requireManager, (req, res) => {
   const id = idParam(req);
   const used = db.prepare('SELECT COUNT(*) n FROM bookings b JOIN rooms r ON r.id=b.room_id WHERE r.studio_id=?').get(id).n;
   if (used) throw new HttpError(409, 'Este estúdio tem marcações. Desative-o em vez de o eliminar.');
@@ -301,28 +349,31 @@ router.delete('/studios/:id', (req, res) => {
 function roomBody(b) {
   const name = U.clean(b.name, 80);
   if (!name) throw new HttpError(400, 'Indique o nome da sala.');
-  return { name, description: U.clean(b.description, 300), hourly_rate: Math.max(0, U.toInt(b.hourly_rate)), active: flag(b.active) };
+  return {
+    name, description: U.clean(b.description, 300), hourly_rate: Math.max(0, U.toInt(b.hourly_rate)), active: flag(b.active),
+    traducoes: traducoes(b, TR.CAMPOS.rooms),
+  };
 }
 
-router.post('/rooms', (req, res) => {
+router.post('/rooms', auth.requireManager, (req, res) => {
   const studioId = U.toInt((req.body || {}).studio_id);
   if (!db.prepare('SELECT 1 FROM studios WHERE id=?').get(studioId)) throw new HttpError(400, 'Estúdio inválido.');
   const b = roomBody(req.body || {});
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM rooms WHERE studio_id=?').get(studioId).m;
-  const id = db.prepare('INSERT INTO rooms(studio_id,name,description,hourly_rate,active,sort) VALUES(?,?,?,?,?,?)')
-    .run(studioId, b.name, b.description, b.hourly_rate, b.active, max + 1).lastInsertRowid;
+  const id = db.prepare(`INSERT INTO rooms(studio_id,name,description,hourly_rate,traducoes,active,sort) VALUES(?,?,?,?,COALESCE(?, '{}'),?,?)`)
+    .run(studioId, b.name, b.description, b.hourly_rate, b.traducoes, b.active, max + 1).lastInsertRowid;
   res.status(201).json({ id });
 });
 
-router.put('/rooms/:id', (req, res) => {
+router.put('/rooms/:id', auth.requireManager, (req, res) => {
   const b = roomBody(req.body || {});
-  const info = db.prepare('UPDATE rooms SET name=?, description=?, hourly_rate=?, active=? WHERE id=?')
-    .run(b.name, b.description, b.hourly_rate, b.active, idParam(req));
+  const info = db.prepare('UPDATE rooms SET name=?, description=?, hourly_rate=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
+    .run(b.name, b.description, b.hourly_rate, b.traducoes, b.active, idParam(req));
   if (!info.changes) throw new HttpError(404, 'Sala não encontrada.');
   res.json({ ok: true });
 });
 
-router.delete('/rooms/:id', (req, res) => {
+router.delete('/rooms/:id', auth.requireManager, (req, res) => {
   const id = idParam(req);
   if (db.prepare('SELECT COUNT(*) n FROM bookings WHERE room_id=?').get(id).n) {
     throw new HttpError(409, 'Esta sala tem marcações. Desative-a em vez de a eliminar.');
@@ -336,37 +387,46 @@ router.delete('/rooms/:id', (req, res) => {
 function serviceBody(b) {
   const name = U.clean(b.name, 80);
   if (!name) throw new HttpError(400, 'Indique o nome do serviço.');
-  return { name, description: U.clean(b.description, 300), remote_ok: flag(b.remote_ok), active: flag(b.active) };
+  return {
+    name, description: U.clean(b.description, 300), remote_ok: flag(b.remote_ok), active: flag(b.active),
+    traducoes: traducoes(b, TR.CAMPOS.services),
+  };
 }
 
 router.get('/services', (_req, res) => {
   res.json({ services: db.prepare('SELECT * FROM services ORDER BY sort, id').all() });
 });
 
-router.post('/services', (req, res) => {
+router.post('/services', auth.requireManager, (req, res) => {
   const b = serviceBody(req.body || {});
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM services').get().m;
-  const id = db.prepare('INSERT INTO services(name,description,remote_ok,active,sort) VALUES(?,?,?,?,?)')
-    .run(b.name, b.description, b.remote_ok, b.active, max + 1).lastInsertRowid;
+  const id = db.prepare(`INSERT INTO services(name,description,remote_ok,traducoes,active,sort) VALUES(?,?,?,COALESCE(?, '{}'),?,?)`)
+    .run(b.name, b.description, b.remote_ok, b.traducoes, b.active, max + 1).lastInsertRowid;
   res.status(201).json({ id });
 });
 
-router.put('/services/:id', (req, res) => {
+router.put('/services/:id', auth.requireManager, (req, res) => {
   const b = serviceBody(req.body || {});
-  const info = db.prepare('UPDATE services SET name=?, description=?, remote_ok=?, active=? WHERE id=?').run(b.name, b.description, b.remote_ok, b.active, idParam(req));
+  const info = db.prepare('UPDATE services SET name=?, description=?, remote_ok=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
+    .run(b.name, b.description, b.remote_ok, b.traducoes, b.active, idParam(req));
   if (!info.changes) throw new HttpError(404, 'Serviço não encontrado.');
   res.json({ ok: true });
 });
 
-router.delete('/services/:id', (req, res) => {
+router.delete('/services/:id', auth.requireManager, (req, res) => {
   db.prepare('DELETE FROM services WHERE id=?').run(idParam(req));
   res.json({ ok: true });
 });
 
 // ------------------------------------------------------------ Clientes
 
-router.get('/clients', (_req, res) => {
-  const rows = db.prepare("SELECT client_name, client_phone, client_email, date, paid, price FROM bookings WHERE status!='cancelado' ORDER BY date").all();
+router.get('/clients', (req, res) => {
+  const scope = scopeStudio(req);
+  const rows = db.prepare(
+    'SELECT b.client_name, b.client_phone, b.client_email, b.date, b.paid, b.price FROM bookings b'
+    + (scope ? ' JOIN rooms r ON r.id=b.room_id' : '')
+    + " WHERE b.status!='cancelado'" + (scope ? ' AND r.studio_id=' + scope : '') + ' ORDER BY b.date'
+  ).all();
   const map = new Map();
   for (const r of rows) {
     const key = U.digits(r.client_phone).slice(-7) || 'n:' + r.client_name.toLowerCase();
@@ -413,6 +473,8 @@ router.put('/settings', auth.requireOwner, (req, res) => {
     currency: U.clean(b.currency, 8) || 'CVE', country_code: U.digits(b.country_code).slice(0, 4),
     slot_minutes: slot, min_minutes: min, max_minutes: max, lead_hours: lead, max_advance_days: adv,
     auto_confirm: !!b.auto_confirm, terms: U.clean(b.terms, 500),
+    // Sem traduções no pedido (um cliente antigo do painel), ficam as que havia.
+    ...(b.traducoes === undefined ? {} : { traducoes: TR.limpar(b.traducoes, TR.CAMPOS.settings) }),
   });
   res.json({ settings: getSettings() });
 });
@@ -421,8 +483,28 @@ router.put('/settings', auth.requireOwner, (req, res) => {
 
 const activeOwners = () => db.prepare("SELECT COUNT(*) n FROM users WHERE role='owner' AND active=1").get().n;
 
+// O perfil que chega do painel pode ser 'owner', 'staff' ou 'agent'. Na base há
+// só 'owner'/'staff'; o agente é equipa presa a um estúdio (studio_id). Daqui
+// sai o que se grava: o papel e o estúdio (ou null).
+function roleAndStudio(b) {
+  if (b.role === 'owner') return { role: 'owner', studio_id: null };
+  if (b.role === 'agent') {
+    const sid = U.toInt(b.studio_id);
+    if (!sid || !db.prepare('SELECT 1 FROM studios WHERE id=?').get(sid)) throw new HttpError(400, 'Escolha o estúdio do agente.');
+    return { role: 'staff', studio_id: sid };
+  }
+  return { role: 'staff', studio_id: null };
+}
+
+// O que o painel mostra: 'agent' quando está preso a um estúdio.
+const shownRole = (u) => (u.studio_id ? 'agent' : u.role);
+
 router.get('/users', auth.requireOwner, (_req, res) => {
-  res.json({ users: db.prepare('SELECT id,name,email,role,active,created_at FROM users ORDER BY id').all() });
+  const rows = db.prepare(
+    `SELECT u.id, u.name, u.email, u.role, u.active, u.created_at, u.studio_id, s.name AS studio_name
+       FROM users u LEFT JOIN studios s ON s.id = u.studio_id ORDER BY u.id`
+  ).all();
+  res.json({ users: rows.map((u) => ({ ...u, role: shownRole(u) })) });
 });
 
 router.post('/users', auth.requireOwner, (req, res) => {
@@ -430,13 +512,13 @@ router.post('/users', auth.requireOwner, (req, res) => {
   const name = U.clean(b.name, 80);
   const email = U.clean(b.email, 120).toLowerCase();
   const password = String(b.password || '');
-  const role = b.role === 'owner' ? 'owner' : 'staff';
+  const { role, studio_id } = roleAndStudio(b);
   if (!name) throw new HttpError(400, 'Indique o nome.');
   if (!U.isEmail(email)) throw new HttpError(400, 'Indique um email válido.');
   if (password.length < 8) throw new HttpError(400, 'A palavra-passe deve ter pelo menos 8 caracteres.');
   if (db.prepare('SELECT 1 FROM users WHERE email=?').get(email)) throw new HttpError(409, 'Já existe um utilizador com esse email.');
-  const id = db.prepare('INSERT INTO users(name,email,password_hash,role,created_at) VALUES(?,?,?,?,?)')
-    .run(name, email, auth.hashPassword(password), role, new Date().toISOString()).lastInsertRowid;
+  const id = db.prepare('INSERT INTO users(name,email,password_hash,role,studio_id,created_at) VALUES(?,?,?,?,?,?)')
+    .run(name, email, auth.hashPassword(password), role, studio_id, new Date().toISOString()).lastInsertRowid;
   res.status(201).json({ id });
 });
 
@@ -445,13 +527,13 @@ router.put('/users/:id', auth.requireOwner, (req, res) => {
   const b = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
   if (!user) throw new HttpError(404, 'Utilizador não encontrado.');
-  const role = b.role === 'owner' ? 'owner' : 'staff';
+  const { role, studio_id } = roleAndStudio(b);
   const active = flag(b.active);
   const losesOwner = user.role === 'owner' && user.active && (role !== 'owner' || !active);
   if (losesOwner && activeOwners() <= 1) throw new HttpError(400, 'Tem de existir pelo menos um proprietário ativo.');
   if (id === req.user.id && !active) throw new HttpError(400, 'Não pode desativar a sua própria conta.');
   const name = U.clean(b.name, 80) || user.name;
-  db.prepare('UPDATE users SET name=?, role=?, active=? WHERE id=?').run(name, role, active, id);
+  db.prepare('UPDATE users SET name=?, role=?, studio_id=?, active=? WHERE id=?').run(name, role, studio_id, active, id);
   if (b.password) {
     if (String(b.password).length < 8) throw new HttpError(400, 'A palavra-passe deve ter pelo menos 8 caracteres.');
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(auth.hashPassword(String(b.password)), id);
@@ -488,7 +570,7 @@ router.delete('/users/:id', auth.requireOwner, (req, res) => {
 const GEOCODER = process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org/search';
 let ultimaProcura = 0;
 
-router.post('/geocode', async (req, res) => {
+router.post('/geocode', auth.requireManager, async (req, res) => {
   if (process.env.GEOCODER === 'off') {
     throw new HttpError(503, 'A procura automática está desligada. Escreva as coordenadas ou cole o link do Google Maps.');
   }

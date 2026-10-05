@@ -8,7 +8,9 @@
 //     decrescente, e passa sozinho a "disponível" quando o dia chega.
 //   - Se já passou, mostra a data e o botão para ouvir.
 // texto e botao são opcionais. Sem link, o slide não tem botão. Sem botao,
-// o rótulo segue o link (Spotify, Instagram ou YouTube).
+// o rótulo segue o link (Spotify, Instagram ou YouTube), já traduzido.
+// texto e botao podem levar as três línguas: { pt: '...', en: '...', fr: '...' }.
+// Uma frase só (entre aspas, sem chavetas) aparece igual em todas as línguas.
 // formato: 'video' para imagens de vídeo (miniatura de um clipe ou reel), que
 // aparecem na proporção original; sem ele, a imagem é uma capa quadrada.
 // Com mais de um slide, passam sozinhos; a secção desaparece se a lista ficar
@@ -18,7 +20,11 @@ window.NOVIDADES = [
   {
     titulo: 'Fidju Di Téra',
     artista: 'Daski FNG',
-    texto: 'Primeiro single do EP FDT. Produção: Many Make.',
+    texto: {
+      pt: 'Primeiro single do EP FDT. Produção: Many Make.',
+      en: 'First single from the FDT EP. Produced by Many Make.',
+      fr: 'Premier single de l’EP FDT. Production : Many Make.',
+    },
     capa: '/img/capas/fidju-di-tera.jpg',
     data: '2026-09-18',
     link: 'https://open.spotify.com/intl-pt/track/44tQnYrjd7ubuLEaUJEist',
@@ -34,7 +40,11 @@ window.NOVIDADES = [
     // Videoclipe publicado no canal de YouTube da Suavita Records.
     titulo: 'Sem bo',
     artista: 'Djelox',
-    texto: 'Videoclipe no canal da Suavita Records.',
+    texto: {
+      pt: 'Videoclipe no canal da Suavita Records.',
+      en: 'Music video on the Suavita Records channel.',
+      fr: 'Clip sur la chaîne de Suavita Records.',
+    },
     capa: '/img/capas/sem-bo.jpg',
     formato: 'video',
     data: '2026-02-06',
@@ -46,6 +56,5 @@ window.NOVIDADES = [
     capa: '/img/capas/ex.jpg',
     data: '2026-01-16',
     link: 'https://open.spotify.com/intl-pt/track/2E8RplvSm7WRjGMxLezSDP',
-    botao: 'Ouvir no Spotify',
   },
 ];

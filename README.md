@@ -9,6 +9,8 @@ Site público onde os clientes veem a disponibilidade de cada sala e pedem uma s
 
 O site fala **português, inglês e francês**, e tem **tema escuro e claro**. As duas escolhas estão no cabeçalho e ficam guardadas num cookie. O painel é interno e fica sempre em português.
 
+O que se escreve no painel — nomes e descrições dos estúdios, salas e serviços, a frase de apresentação e o texto antes de enviar o pedido — tem um bloco **Traduções** logo abaixo, com o inglês e o francês. Um campo deixado vazio mostra o português no site.
+
 O sistema **nunca aceita duas marcações sobrepostas na mesma sala**, nem sobre um horário bloqueado. A verificação é feita no servidor, dentro de uma transação, por isso vale para o site e para o painel.
 
 ## Correr no seu computador
@@ -107,14 +109,15 @@ Pagamentos online com o **Stripe** e ligação à **plataforma da gravadora**: o
 
 ## Personalizar
 
-- Textos do site: `publico/assets/js/dicionario.js` — as três línguas lado a lado, com a mesma chave. O português é o original: se faltar uma tradução, é ele que aparece.
+- Textos do site: `comum/assets/js/dicionario.js` — as três línguas lado a lado, com a mesma chave. O português é o original: se faltar uma tradução, é ele que aparece.
+- Novidades e singles: `publico/assets/js/novidades.js` e `singles.js`. O `texto` e o `botao` de uma novidade (e a `descricao` de um single) podem levar as três línguas: `{ pt: '...', en: '...', fr: '...' }`.
 - Onde fica cada estúdio: **Estúdios**, no painel, no campo *Onde fica*. Cole aí o link do Google Maps (as coordenadas vêm dentro do próprio link — não é preciso chave nem se fala com a Google) ou escreva a morada e carregue em *Procurar*, que pergunta ao OpenStreetMap.
 - Trechos de música dos estilos: `marcacoes/assets/js/sons.js` — ver abaixo.
 - Estilos de música do formulário: `marcacoes/assets/js/estilos.js` — uma linha por estilo. A lista não tem de ser exaustiva: quem não se revir em nenhum escolhe "Outro" e escreve. A lista vazia faz o campo desaparecer.
-- Desenho de fundo de cada serviço: sai do nome que lhe deu (microfone para "Gravação", mesa para "Mistura"...). A lista de palavras está em `DESENHOS_SERVICO`, em `publico/assets/js/common.js`; um serviço que não encaixe em nenhuma fica com as barras de som.
+- Desenho de fundo de cada serviço: sai do nome que lhe deu (microfone para "Gravação", mesa para "Mistura"...). A lista de palavras está em `DESENHOS_SERVICO`, em `comum/assets/js/common.js`; um serviço que não encaixe em nenhuma fica com as barras de som.
 - Estrutura das páginas: `publico/views/index.html`, `marcacoes/views/marcar.html`, `marcacoes/views/consultar.html`.
 - Fotografia de fundo das páginas de marcar e consultar: `publico/assets/img/many.jpg` (trocar o ficheiro chega; o enquadramento e o véu estão em `.page-inner::before`, em `site.css`).
-- Cores e tipos de letra: variáveis no topo de `publico/assets/css/base.css` — o primeiro bloco é o tema escuro, o segundo (`:root[data-tema="claro"]`) é o claro.
+- Cores e tipos de letra: variáveis no topo de `comum/assets/css/base.css` — o primeiro bloco é o tema escuro, o segundo (`:root[data-tema="claro"]`) é o claro.
 - Regras (duração mínima e máxima, antecedência, bloco de tempo): **Definições**, no painel.
 
 ### Línguas e tema, por dentro
@@ -147,9 +150,9 @@ Está fora do fluxo, por isso o conteúdo por baixo precisa de saber a altura de
 ## Testes
 
 ```bash
-npm test                              # API (124) e integrações (48)
+npm test                              # API (133) e integrações (48)
 npm install --no-save jsdom           # só uma vez
-npm run test:frontend                 # site e painel: 146 verificações
+npm run test:frontend                 # site e painel: 153 verificações
 ```
 
 ## Estrutura
@@ -162,10 +165,15 @@ backend/             tudo o que corre no servidor
   data/                a base de dados (estudio.db) e as cópias de segurança
   scripts/backup.js    cópia de segurança
 
+comum/               o que é partilhado pelo público, pelas marcações e pelo painel
+  assets/css/base.css  cores, tipos de letra e os blocos de base (tema escuro e claro)
+  assets/js/common.js  utilitários do lado do navegador, usados por todas as páginas
+  assets/js/dicionario.js  os textos em português, inglês e francês
+  assets/js/carregamento.js  o ecrã de carregamento com o logótipo (ao abrir e ao mudar de página)
+
 publico/             o site aberto a toda a gente
   views/               página inicial
   assets/              CSS, JavaScript e imagens do site (partilhados com marcacoes/)
-    js/dicionario.js     os textos em português, inglês e francês
     js/prefs.js          os botões de idioma e tema, no cabeçalho
     js/rodape.js         o rodapé, partilhado pelas três páginas
     js/cabecalho.js      a barra presa ao topo (mede-se para o conteúdo lhe dar lugar)
@@ -181,7 +189,7 @@ marcacoes/           o fluxo de marcação do cliente
 
 integracoes/         serviços de fora (Stripe, plataforma da gravadora) — ver o README lá dentro
 
-booking/             a área de gestão
+booking/             a área de gestão (painel), sem ligações à pasta do público
   views/               painel de administração
   assets/              CSS e JavaScript do painel
 

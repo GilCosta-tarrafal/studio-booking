@@ -13,6 +13,25 @@
 
   const api = (url, opts = {}) => S.api(url, { ...opts, onUnauthorized: showLogin });
 
+  // ---------------------------------------------------------- Preferências (tema e idioma)
+  // Guardadas no navegador de quem usa o painel. O tema vale para todo o painel;
+  // o idioma fica guardado e acompanha o link "Ver o site".
+  const LINGUAS = [['pt', 'PT'], ['en', 'EN'], ['fr', 'FR']];
+  const prefs = {
+    tema() { try { return localStorage.getItem('admin-tema') === 'claro' ? 'claro' : 'escuro'; } catch (_) { return 'escuro'; } },
+    setTema(t) {
+      document.documentElement.setAttribute('data-tema', t);
+      try { localStorage.setItem('admin-tema', t); } catch (_) { /* navegação privada */ }
+    },
+    lingua() { try { return LINGUAS.some(([c]) => c === localStorage.getItem('admin-lingua')) ? localStorage.getItem('admin-lingua') : 'pt'; } catch (_) { return 'pt'; } },
+    setLingua(l) {
+      try { localStorage.setItem('admin-lingua', l); } catch (_) { /* navegação privada */ }
+      document.cookie = 'lingua=' + l + ';path=/;max-age=31536000;samesite=lax';
+    },
+  };
+  // Aplica o tema guardado logo no arranque, antes de desenhar fosse o que for.
+  prefs.setTema(prefs.tema());
+
   // ---------------------------------------------------------- Pequenos componentes
   function toast(msg, error = false) {
     const t = h('div', { class: 'toast' + (error ? ' error' : ''), role: error ? 'alert' : 'status' }, msg);
@@ -68,6 +87,9 @@
   function showLogin() {
     stopPolling();
     app.user = null;
+    // O ecrã de entrada é sempre escuro (fotografia + cartão escuro); o tema
+    // guardado volta a aplicar-se ao entrar (ver boot).
+    document.documentElement.setAttribute('data-tema', 'escuro');
     const email = h('input', { type: 'email', autocomplete: 'username', required: true });
     const pass = h('input', { type: 'password', autocomplete: 'current-password', required: true });
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
@@ -88,10 +110,18 @@
         }
       },
     }, field('Email', email), field('Palavra-passe', pass), err, h('p', { class: 'submit-row' }, btn));
+    // Nome do estúdio em destaque: da sessão que ainda está em memória (ao sair)
+    // ou, numa entrada fria, do título da página que o servidor já preencheu.
+    const bizName = (app.settings && app.settings.business_name)
+      || (document.title.split('|').pop() || '').trim()
+      || 'Painel de gestão';
     root.replaceChildren(h('div', { class: 'login-page' }, h('div', { class: 'login-card' },
+      h('div', { class: 'login-brand' },
+        h('img', { class: 'login-mark', src: '/img/logo.png', alt: '', width: 46, height: 46 }),
+        h('span', { class: 'login-name' }, bizName)),
       S.renderStrip({ open: 540, close: 1260, busy: [[600, 720], [780, 900], [1020, 1140]] }),
-      h('h1', {}, 'Painel'),
-      h('p', { class: 'sub' }, 'Entre para gerir marcações e estúdios.'),
+      h('h1', {}, 'Área de gestão'),
+      h('p', { class: 'sub' }, 'Entre para gerir as marcações, os estúdios e a sua equipa.'),
       form)));
     email.focus();
   }
@@ -127,23 +157,88 @@
   function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
 
   // ---------------------------------------------------------- Estrutura e navegação
+  // A terceira coluna é quem vê a secção: '' = todos; 'manager' = proprietário
+  // ou equipa sem estúdio (um agente não mexe na configuração geral); 'owner' =
+  // só o proprietário. Ver os guardas do backend (requireManager/requireOwner).
   const NAV = [
-    ['painel', 'Painel'], ['calendario', 'Calendário'], ['marcacoes', 'Marcações'], ['clientes', 'Clientes'],
-    ['estudios', 'Estúdios'], ['servicos', 'Serviços'], ['integracoes', 'Integrações'], ['definicoes', 'Definições'],
+    ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''],
+    ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'], ['integracoes', 'Integrações', 'manager'],
+    ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', ''],
   ];
 
+  function canSee(perm) {
+    if (perm === 'owner') return app.user.role === 'owner';
+    if (perm === 'manager') return !app.user.studio_id;   // agente está preso a um estúdio
+    return true;
+  }
+
+  // Como se descreve o utilizador no rodapé do menu.
+  function roleLabel() {
+    if (app.user.role === 'owner') return 'proprietário';
+    if (app.user.studio_id) {
+      const st = app.studios.find((s) => s.id === app.user.studio_id);
+      return st ? 'agente · ' + st.name : 'agente de estúdio';
+    }
+    return 'equipa';
+  }
+
+  // Botão de tema (claro/escuro). Vale para todo o painel; fica guardado.
+  function themeControl() {
+    const btn = h('button', { class: 'tb-btn', type: 'button', 'aria-label': 'Mudar entre claro e escuro' });
+    const paint = () => {
+      const claro = prefs.tema() === 'claro';
+      btn.replaceChildren(h('span', { class: 'tb-ico', 'aria-hidden': 'true' }, claro ? '☀' : '☾'), h('span', {}, claro ? 'Claro' : 'Escuro'));
+    };
+    btn.onclick = () => { prefs.setTema(prefs.tema() === 'claro' ? 'escuro' : 'claro'); paint(); };
+    paint();
+    return btn;
+  }
+
+  // Seletor de idioma. Guarda a escolha e acompanha o link "Ver o site".
+  function langControl() {
+    const sel = h('select', { class: 'tb-sel', 'aria-label': 'Idioma', value: prefs.lingua() },
+      LINGUAS.map(([c, label]) => h('option', { value: c }, label)));
+    sel.addEventListener('change', () => { prefs.setLingua(sel.value); toast('Idioma guardado: ' + sel.value.toUpperCase() + '.'); });
+    return sel;
+  }
+
+  // Barra de topo da vista de agente: nome do estúdio, idioma, tema e quem está.
+  function agentTopBar() {
+    const st = app.studios.find((s) => s.id === app.user.studio_id);
+    const iniciais = (app.user.name || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
+    return h('header', { class: 'topbar on-dark' },
+      h('div', { class: 'tb-studio' },
+        h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
+        h('span', { class: 'tb-studio-name' }, st ? st.name : 'Estúdio')),
+      h('div', { class: 'tb-right' },
+        langControl(),
+        themeControl(),
+        h('div', { class: 'tb-user' },
+          h('span', { class: 'tb-avatar' }, iniciais),
+          h('span', { class: 'tb-user-txt' }, h('strong', {}, app.user.name), h('span', {}, 'Agente')))));
+  }
+
   function renderShell() {
+    // O logo leva à área de entrada: pergunta primeiro, para não sair por engano.
+    const goToLogin = (e) => {
+      e.preventDefault();
+      if (window.confirm('Terminar sessão e voltar ao ecrã de entrada?')) logout();
+    };
     const side = h('aside', { class: 'side on-dark' },
-      h('a', { class: 'brand', href: '#/painel' },
+      h('a', { class: 'brand', href: '#/painel', title: 'Terminar sessão e voltar à entrada', onclick: goToLogin },
         h('img', { class: 'brand-mark', src: '/img/logo.png', alt: '', width: 34, height: 34 }),
         h('span', { class: 'brand-name' }, app.settings.business_name)),
-      h('nav', { 'aria-label': 'Secções do painel' }, NAV.map(([k, label]) => h('a', { class: 'nav', href: '#/' + k, 'data-k': k },
+      h('nav', { 'aria-label': 'Secções do painel' }, NAV.filter(([, , perm]) => canSee(perm)).map(([k, label]) => h('a', { class: 'nav', href: '#/' + k, 'data-k': k },
         label, k === 'marcacoes' && h('span', { class: 'badge', id: 'pending-badge', hidden: !app.pending, 'aria-label': 'pedidos por confirmar' }, app.pending)))),
       h('div', { class: 'side-foot' },
-        h('p', { class: 'who' }, `${app.user.name} (${app.user.role === 'owner' ? 'proprietário' : 'equipa'})`),
+        h('p', { class: 'who' }, `${app.user.name} (${roleLabel()})`),
         h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
         h('button', { type: 'button', onclick: logout }, 'Sair')));
-    root.replaceChildren(h('div', { class: 'app' }, side, h('main', { class: 'main', id: 'view', tabindex: '-1' })));
+    // O agente, dentro do seu estúdio, ganha uma barra de topo (nome do estúdio,
+    // idioma, tema e identidade). Os outros perfis ficam como estavam.
+    const viewEl = h('main', { class: 'main', id: 'view', tabindex: '-1' });
+    const col = app.user.studio_id ? h('div', { class: 'main-col' }, agentTopBar(), viewEl) : viewEl;
+    root.replaceChildren(h('div', { class: 'app' }, side, col));
   }
 
   function parseHash() {
@@ -155,6 +250,9 @@
   async function route() {
     if (!app.user) return;
     const { name, params } = parseHash();
+    // Secção que o perfil não vê (ex.: um agente a tentar #/estudios): volta ao painel.
+    const navItem = NAV.find(([k]) => k === name);
+    if (navItem && !canSee(navItem[2])) { location.hash = '#/painel'; return; }
     const view = views[name];
     const seq = ++routeSeq;
     for (const a of document.querySelectorAll('.nav')) {
@@ -194,6 +292,7 @@
       root.replaceChildren(h('div', { class: 'notice error', role: 'alert' }, e.message));
       return;
     }
+    prefs.setTema(prefs.tema());   // restaura o tema guardado (o login força escuro)
     renderShell();
     startPolling();
     route();

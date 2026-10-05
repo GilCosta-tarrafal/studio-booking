@@ -1,11 +1,30 @@
 .boot { padding: 40px; text-align: center; color: var(--muted); }
 
 /* ---------- Início de sessão ---------- */
-.login-page { min-height: 100vh; min-height: 100dvh;display: grid; place-items: center; padding: 24px; }
-.login-card { width: min(420px, 100%); background: var(--surface); border-radius: 14px; padding: 32px 28px; border: 1px solid var(--line); }
+/* A fotografia do estúdio enche o fundo; um véu escuro por cima mantém o cartão
+   de entrada legível. O cartão é um vidro fosco pousado sobre a imagem. */
+.login-page {
+  min-height: 100vh; min-height: 100dvh;
+  display: grid; place-items: center; padding: 24px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, .06), transparent 55%),
+    linear-gradient(180deg, rgba(0, 0, 0, .82), rgba(0, 0, 0, .66) 42%, rgba(0, 0, 0, .88)),
+    url("/img/many.jpg") center / cover no-repeat;
+}
+.login-card {
+  width: min(430px, 100%);
+  background: rgba(13, 13, 13, .72);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1); backdrop-filter: blur(16px) saturate(1.1);
+  border-radius: 16px; padding: 34px 30px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .55);
+}
+/* Marca em destaque: logótipo + nome do estúdio, para dar as boas-vindas. */
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 20px; font: 800 1.2rem/1.1 var(--display); letter-spacing: -.01em; }
+.login-mark { width: 46px; height: 46px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .22); }
 .login-card .strip { margin-bottom: 22px; }
 .login-card h1 { font: 800 1.9rem/1.1 var(--display); letter-spacing: -.02em; margin: 0 0 6px; }
-.login-card p.sub { margin: 0 0 22px; color: var(--muted); }
+.login-card p.sub { margin: 0 0 24px; color: rgba(255, 255, 255, .74); }
 
 /* ---------- Estrutura ---------- */
 .app { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
@@ -31,7 +50,22 @@
 .side-foot .who { margin: 0 0 8px; color: rgba(255, 255, 255, .8); }
 .side-foot a, .side-foot button { color: #fff; background: none; border: 0; padding: 0; min-height: 40px; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; display: flex; align-items: center; }
 
-.main { padding: 28px 32px 96px; min-width: 0; }
+/* ---------- Fundo com a fotografia do estúdio ---------- */
+/* A imagem do estúdio enche o fundo de todas as secções, esbatida por um véu.
+   A barra lateral e os cartões ficam em vidro fosco, para a imagem respirar
+   sem tirar legibilidade. As tabelas, os campos e o calendário mantêm-se
+   opacos, por serem densos de informação. */
+body.admin {
+  background:
+    linear-gradient(rgba(0, 0, 0, .74), rgba(0, 0, 0, .8)),
+    url("/img/many.jpg") center / cover no-repeat fixed;
+}
+body.admin .side { background: rgba(10, 10, 10, .58); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: blur(14px) saturate(1.05); backdrop-filter: blur(14px) saturate(1.05); }
+
+/* O conteúdo de todas as secções fica centrado e com uma largura máxima
+   confortável — não se estica de ponta a ponta num ecrã largo. */
+.main { padding: 28px 32px 96px; min-width: 0; max-width: 1040px; margin-inline: auto; }
 .main:focus { outline: none; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .page-head h1 { font: 800 2rem/1.1 var(--display); letter-spacing: -.02em; margin: 0; }
@@ -131,6 +165,10 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
 .modal-sub { color: var(--muted); margin: 0 0 18px; font-size: .92rem; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 16px; }
+/* Na página de Definições os campos ficam empilhados, todos à mesma largura e
+   um debaixo do outro — mais fáceis de ler. As janelas de marcação mantêm as
+   colunas (ficam fora, em dialog.modal, sem esta classe). */
+.panel-stack .grid-2, .panel-stack .grid-3 { grid-template-columns: 1fr; }
 .modal-foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
 .modal-foot .spacer { margin-right: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .field-inline { display: flex; gap: 8px; align-items: center; }
@@ -147,6 +185,14 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
 .row-form .check { min-height: 44px; }
 .row-actions { display: flex; gap: 8px; }
 
+/* Traduções (inglês e francês) de um estúdio, sala, serviço ou das definições.
+   Fechadas por omissão; numa linha de sala ou serviço ocupam a largura toda. */
+details.traducoes { grid-column: 1 / -1; margin: 4px 0 12px; }
+details.traducoes > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+details.traducoes > summary .meta { font-weight: 400; font-size: .88rem; color: var(--muted); margin-left: 6px; }
+.traducao-lingua { border: 1px solid var(--line); border-radius: 10px; padding: 4px 14px 2px; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; }
+.traducao-lingua > legend { padding: 0 6px; font-size: .88rem; color: var(--muted); }
+
 details.studio-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; }
 details.studio-panel > summary { list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 700 1.2rem/1.2 var(--display); border-radius: 12px; }
 details.studio-panel > summary::-webkit-details-marker { display: none; }
@@ -162,16 +208,30 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 /* ---------- Complementos ---------- */
 .submit-row { margin: 16px 0 0; }
 .side nav { display: flex; flex-direction: column; gap: 4px; }
-.row-form.user { grid-template-columns: minmax(140px, 1fr) minmax(170px, 1.2fr) 130px minmax(150px, 1fr) auto auto; }
-/* Estas linhas só cabem inteiras em ecrãs largos. O limite é bem acima de 960
-   porque a barra lateral fica com 240px da largura antes de sobrar alguma. */
+/* Gestão de acesso: cada conta é um cartão, com os campos em duas colunas e as
+   ações no fundo. Mais folgado e legível do que uma linha espremida. */
+.user-card { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-top: 14px; background: rgba(255, 255, 255, .025); }
+.user-card.is-new { border-style: dashed; }
+.user-card-title { font: 700 1.05rem/1.2 var(--display); margin: 0 0 12px; }
+.user-card-id { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.user-card-id strong { font: 700 1.05rem/1.2 var(--display); }
+.user-card .grid-2 { margin-bottom: 4px; }
+.user-card .field { margin: 0 0 10px; }
+.user-card-foot { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-top: 2px; }
+.user-card-foot .field { flex: 1 1 240px; margin: 0; }
+.user-card-foot .check { flex: none; min-height: 44px; }
+.user-card-foot .row-actions { margin-left: auto; }
+.tag.off { background: rgba(255, 255, 255, .08); color: var(--muted); }
+.tag.off::before { background: var(--muted); }
+/* As linhas de serviços/estúdios só cabem inteiras em ecrãs largos. */
 @media (max-width: 1140px) {
-  .row-form, .row-form.service, .row-form.user { grid-template-columns: 1fr 1fr; }
+  .row-form, .row-form.service { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 560px) {
-  .row-form, .row-form.service, .row-form.user { grid-template-columns: 1fr; }
+  .row-form, .row-form.service { grid-template-columns: 1fr; }
   .row-form .row-actions { display: flex; gap: 8px; }
   .row-form .row-actions .btn { flex: 1; }
+  .user-card-foot .row-actions { margin-left: 0; width: 100%; }
 }
 .tools .tools { gap: 6px; }
 
@@ -314,6 +374,75 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .data .acts:empty { display: none; }
   .data .acts .btn { flex: 1; }
   .data .acts .btn + .btn { margin-left: 0; }
+}
+
+/* ---------- Barra de topo (vista de agente) ---------- */
+/* Dentro do seu estúdio, o agente tem um cabeçalho com o nome do estúdio, o
+   idioma, o tema e a sua identidade. A coluna de conteúdo passa a empilhar a
+   barra por cima da vista. */
+.main-col { display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: wrap;
+  padding: 12px 24px; border-bottom: 1px solid var(--line);
+  background: rgba(10, 10, 10, .5); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  position: sticky; top: 0; z-index: 10;
+}
+.tb-studio {
+  display: flex; align-items: center; gap: 9px;
+  background: rgba(255, 255, 255, .08); border: 1px solid var(--line);
+  border-radius: 999px; padding: 7px 15px 7px 9px; font: 700 1rem/1.1 var(--display);
+}
+.tb-studio-ico { border-radius: 50%; flex: none; }
+/* Idioma, tema e identidade ficam sempre na mesma linha, nunca um por baixo do
+   outro. Se faltar espaço, é o chip do estúdio que passa para cima (a barra é
+   que quebra, não este grupo). */
+.tb-right { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; white-space: nowrap; }
+.tb-btn, .tb-sel, .tb-user, .tb-avatar { flex: none; }
+.tb-btn, .tb-sel {
+  min-height: 38px; border-radius: 999px; border: 1px solid var(--edge);
+  background: var(--surface); color: var(--ink); padding: 0 14px; font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.tb-btn:hover { background: var(--mist); }
+.tb-ico { font-size: 1rem; line-height: 1; }
+.tb-user { display: flex; align-items: center; gap: 9px; padding-left: 4px; }
+.tb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--amber); color: #1A1204; display: grid; place-items: center; font: 800 .85rem/1 var(--display); flex: none; }
+.tb-user-txt { display: flex; flex-direction: column; line-height: 1.15; }
+.tb-user-txt span { color: var(--muted); font-size: .82rem; }
+@media (max-width: 700px) {
+  .topbar { padding: 10px 16px; }
+  .tb-user-txt { display: none; }
+}
+
+/* ---------- Tema claro do painel ---------- */
+/* A maioria das cores vem de variáveis que o base.css já troca no tema claro.
+   Aqui ficam só os retoques do que estava fixo em escuro (barra lateral, cartões,
+   barra de topo, faixas do calendário). */
+:root[data-tema="claro"] body.admin {
+  background:
+    linear-gradient(rgba(255, 255, 255, .74), rgba(255, 255, 255, .84)),
+    url("/img/many.jpg") center / cover no-repeat fixed;
+}
+:root[data-tema="claro"] body.admin .side { background: rgba(255, 255, 255, .74); color: var(--ink); }
+:root[data-tema="claro"] body.admin .panel { background: rgba(255, 255, 255, .82); }
+:root[data-tema="claro"] .side .brand, :root[data-tema="claro"] .side-foot a, :root[data-tema="claro"] .side-foot button { color: var(--ink); }
+:root[data-tema="claro"] .nav { color: rgba(0, 0, 0, .72); }
+:root[data-tema="claro"] .nav:hover { background: rgba(0, 0, 0, .06); color: var(--ink); }
+:root[data-tema="claro"] .nav[aria-current="page"] { background: rgba(0, 0, 0, .07); color: var(--ink); }
+:root[data-tema="claro"] .side-foot { border-top-color: rgba(0, 0, 0, .12); }
+:root[data-tema="claro"] .side-foot .who { color: rgba(0, 0, 0, .7); }
+:root[data-tema="claro"] .topbar { background: rgba(255, 255, 255, .72); border-bottom-color: var(--line); }
+:root[data-tema="claro"] .tb-studio { background: rgba(0, 0, 0, .05); }
+:root[data-tema="claro"] .user-card { background: rgba(0, 0, 0, .02); }
+:root[data-tema="claro"] .tag.off { background: rgba(0, 0, 0, .06); }
+:root[data-tema="claro"] .cal-closed { background: repeating-linear-gradient(135deg, #E6E8EA 0 2px, #F2F3F4 2px 7px); opacity: .85; }
+:root[data-tema="claro"] .cal-block { background: repeating-linear-gradient(135deg, #E4E6E8 0 2px, #F4F5F6 2px 6px); }
+:root[data-tema="claro"] .side nav {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+@media (max-width: 860px) {
+  :root[data-tema="claro"] .side { border-bottom-color: rgba(0, 0, 0, .12); }
 }
 
 @media (max-width: 560px) {

@@ -8,16 +8,20 @@ const { db, getSettings } = require('./lib/db');
 const auth = require('./lib/auth');
 const { HttpError } = require('./lib/util');
 const prefs = require('./lib/prefs');
-const D = require('../publico/assets/js/dicionario.js');
+const TR = require('./lib/traducoes');
+const D = require('../comum/assets/js/dicionario.js');
 const integracoes = require('../integracoes');
 
 const app = express();
-// Quatro pastas: o backend (aqui), o site público, o fluxo de marcação (marcar
-// e consultar) e a área de gestão/painel.
+// Cinco pastas: o backend (aqui), o site público, o fluxo de marcação (marcar
+// e consultar), a área de gestão/painel e o que é comum a todos (dicionário,
+// common.js e base.css) — assim nenhuma destas três áreas vai buscar ficheiros
+// à pasta de outra.
 const RAIZ = path.join(__dirname, '..');
 const PUBLICO = path.join(RAIZ, 'publico');
 const MARCACOES = path.join(RAIZ, 'marcacoes');
 const BOOKING = path.join(RAIZ, 'booking');
+const COMUM = path.join(RAIZ, 'comum');
 
 app.disable('x-powered-by');
 // Atrás de um proxy (Render, Railway, Nginx...), defina TRUST_PROXY=1 para o limitador ver o IP real.
@@ -125,7 +129,7 @@ function page(pasta, file, { traduzida = true } = {}) {
     const tema = traduzida ? prefs.lerTema(req) : 'escuro';
     let html = fs.readFileSync(path.join(pasta, 'views', file), 'utf8')
       .replaceAll('{{NAME}}', esc(s.business_name))
-      .replaceAll('{{TAGLINE}}', esc(s.tagline))
+      .replaceAll('{{TAGLINE}}', esc(TR.local(s.tagline, s.traducoes, lingua, 'tagline')))
       .replaceAll('{{YEAR}}', String(new Date().getFullYear()))
       .replaceAll('{{LANG}}', lingua)
       .replaceAll('{{TEMA}}', tema)
@@ -141,9 +145,12 @@ app.get('/marcar', page(MARCACOES, 'marcar.html'));
 app.get('/consultar', page(MARCACOES, 'consultar.html'));
 app.get('/admin', page(BOOKING, 'admin.html', { traduzida: false }));
 
-// Os três conjuntos de ficheiros servem-se na mesma raiz, para os endereços
-// (/css/site.css, /js/admin.js) continuarem a ser os mesmos de sempre.
+// Os conjuntos de ficheiros servem-se todos na mesma raiz, para os endereços
+// (/css/site.css, /js/admin.js, /js/common.js) continuarem a ser os mesmos de
+// sempre, venha o ficheiro da pasta que vier. Os nomes não se repetem entre
+// pastas, por isso a ordem não importa.
 const estaticos = { index: false, setHeaders: (res) => res.set('Cache-Control', 'no-cache') };
+app.use(express.static(path.join(COMUM, 'assets'), estaticos));
 app.use(express.static(path.join(PUBLICO, 'assets'), estaticos));
 app.use(express.static(path.join(MARCACOES, 'assets'), estaticos));
 app.use(express.static(path.join(BOOKING, 'assets'), estaticos));

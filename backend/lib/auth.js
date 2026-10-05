@@ -66,12 +66,12 @@ function loadUser(req, _res, next) {
   req.user = null;
   if (token) {
     const row = db.prepare(
-      `SELECT u.id, u.name, u.email, u.role, u.active, s.expires_at
+      `SELECT u.id, u.name, u.email, u.role, u.active, u.studio_id, s.expires_at
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`
     ).get(sha(token));
     if (row && row.expires_at > Date.now() && row.active) {
-      req.user = { id: row.id, name: row.name, email: row.email, role: row.role };
+      req.user = { id: row.id, name: row.name, email: row.email, role: row.role, studio_id: row.studio_id || null };
     }
   }
   next();
@@ -85,6 +85,15 @@ function requireAuth(req, _res, next) {
 function requireOwner(req, _res, next) {
   if (!req.user) return next(new HttpError(401, 'Sessão expirada. Inicie sessão novamente.'));
   if (req.user.role !== 'owner') return next(new HttpError(403, 'Só o proprietário pode fazer isto.'));
+  next();
+}
+
+// Gestor = proprietário ou equipa sem estúdio atribuído. Um agente (equipa
+// presa a um estúdio) não mexe na configuração global — estúdios, salas,
+// serviços nem na procura de coordenadas.
+function requireManager(req, _res, next) {
+  if (!req.user) return next(new HttpError(401, 'Sessão expirada. Inicie sessão novamente.'));
+  if (req.user.studio_id) return next(new HttpError(403, 'Um agente de estúdio não pode alterar a configuração geral.'));
   next();
 }
 
@@ -110,5 +119,5 @@ function ensureFirstUser() {
 
 module.exports = {
   hashPassword, verifyPassword, DUMMY_HASH, createSession, destroySession,
-  loadUser, requireAuth, requireOwner, purgeSessions, ensureFirstUser,
+  loadUser, requireAuth, requireOwner, requireManager, purgeSessions, ensureFirstUser,
 };

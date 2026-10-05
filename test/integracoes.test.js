@@ -17,6 +17,16 @@ process.env.STRIPE_WEBHOOK_SECRET = 'whsec_teste';
 process.env.GRAVADORA_WEBHOOK_SECRET = 'segredo-gravadora';
 process.env.GRAVADORA_TOKEN = 'token-feed';
 process.env.SITE_URL = 'https://estudio.exemplo';
+// A chave do YouTube só se liga mais à frente (sem ela, a integração fica
+// desligada e não há sincronização automática no arranque a estragar a conta).
+// A lista de músicas é uma à parte, só para o teste (ver YOUTUBE_MUSICAS_FILE).
+const musicasFile = path.join(tmp, 'youtube-musicas.js');
+fs.writeFileSync(musicasFile, `module.exports = [
+  { id: 'yt-berdiana', titulo: 'Berdiana', artista: 'Alex Aks, Marcia Cruz', youtube: 'https://youtu.be/BERDIANA111', link: 'https://open.spotify.com/intl-pt/track/3VP13toJkdl4BesVltNGm1', data: '2026' },
+  { id: 'yt-so-youtube', titulo: 'Só no YouTube', artista: 'Djelox', youtube: 'SOYOUTUBE11', data: '2024' },
+  { id: 'yt-privado', titulo: 'Privado', youtube: 'https://www.youtube.com/watch?v=PRIVADO1234', data: '2024' },
+];`);
+process.env.YOUTUBE_MUSICAS_FILE = musicasFile;
 
 // PNG de 1×1, para as capas.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -24,6 +34,10 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const pedidosStripe = [];
 let feed = [];
 let feedAutorizacao = null;
+// Views que o "YouTube" de mentira devolve. O vídeo privado não está aqui, por
+// isso não vem na resposta — como um vídeo mesmo privado ou apagado.
+const VIEWS = { BERDIANA111: 967000, SOYOUTUBE11: 250000 };
+const youtubePedidos = [];
 const fora = http.createServer((req, res) => {
   let corpo = '';
   req.on('data', (c) => { corpo += c; });
@@ -37,6 +51,12 @@ const fora = http.createServer((req, res) => {
     } else if (req.url === '/feed') {
       feedAutorizacao = req.headers.authorization;
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ lancamentos: feed }));
+    } else if (req.url.startsWith('/youtube/v3/videos')) {
+      const q = new URLSearchParams(req.url.split('?')[1] || '');
+      youtubePedidos.push({ key: q.get('key'), ids: q.get('id') });
+      const items = (q.get('id') || '').split(',').filter((id) => VIEWS[id] !== undefined)
+        .map((id) => ({ id, statistics: { viewCount: String(VIEWS[id]) } }));
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ items }));
     } else if (req.url.startsWith('/capa')) {
       res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG);
     } else if (req.url === '/texto') {
@@ -50,6 +70,7 @@ fora.listen(0);
 const FORA = 'http://127.0.0.1:' + fora.address().port;
 process.env.STRIPE_API_URL = FORA;
 process.env.GRAVADORA_FEED_URL = FORA + '/feed';
+process.env.YOUTUBE_API_URL = FORA + '/youtube/v3';
 
 const { start } = require('../backend/server');
 const U = require('../backend/lib/util');
@@ -239,7 +260,31 @@ function futureWeekday(offset = 3) {
   r = await call('GET', '/api/admin/integracoes');
   ok(r.status === 401, 'painel das integrações exige sessão');
   r = await call('GET', '/api/admin/integracoes', { cookie });
-  ok(r.json.fornecedores.length === 2 && r.json.lancamentos.length === 3, 'o painel vê os fornecedores e os lançamentos');
+  ok(r.json.fornecedores.length === 3 && r.json.lancamentos.length === 3, 'o painel vê os fornecedores e os lançamentos');
+
+  // ------------------------------------------------------------ YouTube
+  console.log('\nYouTube (views)');
+  const yt = r.json.fornecedores.find((f) => f.id === 'youtube');
+  ok(yt && yt.ativo === false, 'sem chave, o YouTube aparece desligado no painel');
+  r = await call('POST', '/api/admin/integracoes/youtube/sincronizar', { cookie });
+  ok(r.status === 400 && /YOUTUBE_API_KEY/.test(r.json.error), 'sincronizar sem chave: recusado com explicação');
+
+  process.env.YOUTUBE_API_KEY = 'chave-yt-teste';
+  r = await call('POST', '/api/admin/integracoes/youtube/sincronizar', { cookie });
+  ok(r.status === 200 && r.json.guardados === 2 && r.json.erros.length === 1, 'com chave: duas views guardadas; o vídeo privado fica com erro e não trava as outras');
+  ok(youtubePedidos.length >= 1 && youtubePedidos.at(-1).key === 'chave-yt-teste', 'o YouTube é chamado com a chave');
+
+  r = await call('GET', '/api/integracoes/lancamentos');
+  let porTitulo = Object.fromEntries(r.json.sucessos.map((s) => [s.titulo, s]));
+  ok(porTitulo['Berdiana'] && porTitulo['Berdiana'].streams === 967000, 'as views do YouTube entram como número do cartão');
+  ok(porTitulo['Berdiana'].link === 'https://open.spotify.com/intl-pt/track/3VP13toJkdl4BesVltNGm1', 'com o link do Spotify, para casar com o single escrito à mão');
+  ok(porTitulo['Só no YouTube'] && porTitulo['Só no YouTube'].streams === 250000, 'uma música só do YouTube também aparece');
+
+  VIEWS.BERDIANA111 = 1050000;
+  r = await call('POST', '/api/admin/integracoes/youtube/sincronizar', { cookie });
+  r = await call('GET', '/api/integracoes/lancamentos');
+  porTitulo = Object.fromEntries(r.json.sucessos.map((s) => [s.titulo, s]));
+  ok(porTitulo['Berdiana'].streams === 1050000, 'na sincronização seguinte, o número acompanha as views novas');
 
   r = await fetch(base + '/integracoes/webhooks/nao-existe', { method: 'POST', body: '{}' });
   ok(r.status === 404, 'webhook de integração desconhecida: 404');

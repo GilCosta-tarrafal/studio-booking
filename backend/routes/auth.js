@@ -20,7 +20,7 @@ router.post('/login', loginLimiter, (req, res) => {
   const ok = auth.verifyPassword(password, user ? user.password_hash : auth.DUMMY_HASH);
   if (!user || !ok || !user.active) throw new HttpError(401, 'Email ou palavra-passe incorretos.');
   auth.createSession(res, user.id);
-  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, studio_id: user.studio_id || null } });
 });
 
 router.post('/logout', (req, res) => {

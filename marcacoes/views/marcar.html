@@ -12,8 +12,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/site.css">
+<script src="/js/carregamento.js" defer></script>
 </head>
-<body class="page-inner">
+<body class="page-inner page-faixa">
+<div id="carregar" class="carregar" hidden role="status" aria-label="A carregar">
+  <div class="carregar-cartao">
+    <span class="carregar-logo"><img src="/img/logo.png" alt="" width="52" height="52"><span class="carregar-anel" aria-hidden="true"></span></span>
+    <span class="carregar-marca">{{NAME}}</span>
+  </div>
+</div>
 <a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
 <header class="cabecalho">
   <div class="container">
@@ -28,11 +35,22 @@
   </div>
 </header>
 
-<main id="conteudo" class="container book">
-  <div id="book-wrap">
+<!-- Faixa de abertura: as mesmas fotografias em slides da entrada, agora só
+     atrás do cabeçalho e do título. O formulário, por baixo, fica em fundo limpo. -->
+<div class="hero hero-curto on-dark">
+  <div class="hero-slides" aria-hidden="true">
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+  </div>
+  <div class="container">
     <h1 data-i18n="marcar.titulo">Marcar sessão</h1>
     <p class="lead" data-i18n="marcar.lead">Diga o que precisa, escolha o estúdio, o dia e a hora. O estúdio recebe o pedido e responde para confirmar.</p>
+  </div>
+</div>
 
+<main id="conteudo" class="container book">
+  <div id="book-wrap">
     <div id="load-error" class="notice error" role="alert" hidden></div>
 
     <!-- Em dois passos: primeiro o que se quer e em que dia, depois onde, a que
@@ -169,7 +187,7 @@
   <div class="container footer-grid">
     <div class="footer-sobre">
       <h2>{{NAME}}</h2>
-      <p class="fine">{{TAGLINE}}</p>
+      <p class="fine" data-tagline>{{TAGLINE}}</p>
       <ul class="social" id="social" hidden></ul>
     </div>
 

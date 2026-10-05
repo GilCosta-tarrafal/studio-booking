@@ -4,7 +4,6 @@ const express = require('express');
 const { db, lerDefinicoes, gravarDefinicoes } = require('../lib/base');
 const auth = require('../../backend/lib/auth');
 const U = require('../../backend/lib/util');
-const gravadora = require('../fornecedores/gravadora');
 
 const NOMES = {
   sucesso_plays: 'O limite de reproduções',
@@ -14,6 +13,7 @@ const NOMES = {
 
 module.exports = (fornecedores) => {
   const router = express.Router();
+  const porId = Object.fromEntries(fornecedores.map((f) => [f.id, f]));
 
   router.get('/', (_req, res) => {
     res.json({
@@ -45,9 +45,12 @@ module.exports = (fornecedores) => {
     res.json({ ok: true, visivel: !!visivel });
   });
 
-  router.post('/gravadora/sincronizar', async (_req, res) => {
+  // Ir buscar agora, à mão, a um fornecedor que o saiba fazer (gravadora, youtube).
+  router.post('/:fornecedor/sincronizar', async (req, res) => {
+    const f = porId[req.params.fornecedor];
+    if (!f || !f.sincronizar) throw new U.HttpError(404, 'Esta integração não se sincroniza.');
     try {
-      res.json(await gravadora.sincronizar());
+      res.json(await f.sincronizar());
     } catch (e) {
       throw new U.HttpError(e.status === 400 ? 400 : 502, 'A sincronização falhou: ' + e.message);
     }

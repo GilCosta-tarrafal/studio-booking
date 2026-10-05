@@ -233,6 +233,45 @@ function futureWeekday(offset = 3) {
   r = await call('DELETE', '/api/admin/users/1', { cookie });
   ok(r.status === 400, 'não se elimina a própria conta');
 
+  console.log('\nAgentes de estúdio');
+  const sts = (await call('GET', '/api/admin/studios', { cookie })).json.studios;
+  const st1 = sts[0], st2 = sts[1];
+  const sala1 = st1.rooms[0].id, sala2 = st2.rooms[0].id;
+  // Perfil agente exige estúdio válido.
+  r = await call('POST', '/api/admin/users', { cookie, body: { name: 'Agente', email: 'agente@teste.cv', password: 'agente-1234', role: 'agent' } });
+  ok(r.status === 400, 'agente sem estúdio → 400');
+  r = await call('POST', '/api/admin/users', { cookie, body: { name: 'Agente', email: 'agente@teste.cv', password: 'agente-1234', role: 'agent', studio_id: st1.id } });
+  ok(r.status === 201, 'criar agente preso ao estúdio 1');
+  // O painel vê o perfil como "agent" e o estúdio.
+  const lista = (await call('GET', '/api/admin/users', { cookie })).json.users;
+  const noPainel = lista.find((u) => u.email === 'agente@teste.cv');
+  ok(noPainel && noPainel.role === 'agent' && noPainel.studio_id === st1.id, 'a lista mostra o perfil agente e o estúdio');
+
+  const ag = await login('agente@teste.cv', 'agente-1234');
+  ok(ag.r.status === 200 && ag.r.json.user.studio_id === st1.id, 'o agente entra e a sessão traz o seu estúdio');
+  const ac = ag.cookie;
+  // Só vê o seu estúdio.
+  r = await call('GET', '/api/admin/studios', { cookie: ac });
+  ok(r.status === 200 && r.json.studios.length === 1 && r.json.studios[0].id === st1.id, 'o agente só vê o seu estúdio');
+  // Marcações: só as do seu estúdio.
+  r = await call('GET', '/api/admin/bookings', { cookie: ac });
+  ok(r.status === 200 && r.json.bookings.every((b) => b.studio_id === st1.id), 'o agente só vê marcações do seu estúdio');
+  // Não mexe na configuração geral.
+  r = await call('POST', '/api/admin/studios', { cookie: ac, body: { name: 'Pirata', hours: [null, null, null, null, null, null, null] } });
+  ok(r.status === 403, 'o agente não cria estúdios (403)');
+  r = await call('GET', '/api/admin/users', { cookie: ac });
+  ok(r.status === 403, 'o agente não vê a gestão de acesso (403)');
+  // Marcar: no seu estúdio sim, noutro não.
+  const marcar = (sala) => ({ cookie: ac, body: { room_id: sala, date: futureWeekday(24), start: '15:00', end: '16:00', client_name: 'Cliente', status: 'confirmado' } });
+  r = await call('POST', '/api/admin/bookings', marcar(sala2));
+  ok(r.status === 403, 'o agente não marca noutro estúdio (403)');
+  r = await call('POST', '/api/admin/bookings', marcar(sala1));
+  ok(r.status === 201, 'o agente marca no seu estúdio');
+  // Uma marcação do estúdio 2 não existe para ele.
+  const bk2 = (await call('GET', `/api/admin/bookings?studio_id=${st2.id}`, { cookie })).json.bookings[0];
+  r = await call('GET', `/api/admin/bookings/${bk2.id}`, { cookie: ac });
+  ok(r.status === 404, 'uma marcação de outro estúdio não existe para o agente (404)');
+
   r = await call('POST', '/api/auth/password', { cookie, body: { current: 'errada', next: 'nova-palavra-1' } });
   ok(r.status === 400, 'mudar palavra-passe exige a atual');
   r = await call('POST', '/api/auth/password', { cookie, body: { current: 'palavra-passe-teste', next: 'nova-palavra-1' } });
@@ -362,10 +401,51 @@ function futureWeekday(offset = 3) {
   res = await fetch(base + '/inexistente', { headers: { Cookie: 'lingua=fr' } });
   ok((await res.text()).includes('Page introuvable'), 'página 404 traduzida');
 
+  // O que o dono escreve no painel (serviços, salas, estúdios, frase, termos)
+  // também tem versão em inglês e francês; sem ela, fica o português.
+  console.log('\nConteúdo traduzido');
+  let cfgPub = (await call('GET', '/api/public/config')).json;
+  const gravacao = cfgPub.services.find((s) => s.name === 'Gravação');
+  ok(gravacao && gravacao.i18n.en.name === 'Recording' && gravacao.i18n.fr.name === 'Enregistrement',
+    'os serviços de exemplo já vêm traduzidos');
+  ok(cfgPub.studios[0].rooms[0].i18n.en && cfgPub.studios[0].i18n.fr.city, 'as salas e as cidades de exemplo também');
+  // Os testes de cima já mudaram a frase e os termos: as traduções de exemplo
+  // deixam de servir e não podem aparecer coladas a um texto que não é o delas.
+  ok(cfgPub.business.i18n && !cfgPub.business.i18n.en, 'frase mudada sem tradução: não fica a tradução de exemplo da antiga');
+
+  const svAntes = (await call('GET', '/api/admin/services', { cookie: ckDono })).json.services.find((s) => s.id === gravacao.id);
+  r = await call('PUT', `/api/admin/services/${gravacao.id}`, { cookie: ckDono, body: {
+    name: svAntes.name, description: svAntes.description, remote_ok: !!svAntes.remote_ok, active: true,
+    traducoes: { en: { name: '  Studio recording ', description: '' }, fr: { name: '   ', inventado: 'x' }, de: { name: 'Aufnahme' } },
+  } });
+  ok(r.status === 200, 'guardar um serviço com traduções');
+  let svDepois = (await call('GET', '/api/admin/services', { cookie: ckDono })).json.services.find((s) => s.id === gravacao.id);
+  ok(JSON.stringify(JSON.parse(svDepois.traducoes)) === '{"en":{"name":"Studio recording"}}',
+    'só ficam as línguas e os campos conhecidos, aparados e sem vazios: ' + svDepois.traducoes);
+  r = await call('PUT', `/api/admin/services/${gravacao.id}`, { cookie: ckDono, body: {
+    name: svAntes.name, description: svAntes.description, remote_ok: !!svAntes.remote_ok, active: true,
+  } });
+  svDepois = (await call('GET', '/api/admin/services', { cookie: ckDono })).json.services.find((s) => s.id === gravacao.id);
+  ok(svDepois.traducoes.includes('Studio recording'), 'um pedido sem traduções não apaga as que havia');
+  cfgPub = (await call('GET', '/api/public/config')).json;
+  const g2 = cfgPub.services.find((s) => s.id === gravacao.id);
+  ok(g2.i18n.en.name === 'Studio recording' && !g2.i18n.fr, 'o site recebe a tradução nova; o francês, vazio, cai no português');
+  await call('PUT', `/api/admin/services/${gravacao.id}`, { cookie: ckDono, body: {
+    name: svAntes.name, description: svAntes.description, remote_ok: !!svAntes.remote_ok, active: true, traducoes: svAntes.traducoes,
+  } });
+
+  const defs = (await call('GET', '/api/admin/settings', { cookie: ckDono })).json.settings;
+  r = await call('PUT', '/api/admin/settings', { cookie: ckDono, body: { ...defs, traducoes: { en: { tagline: 'Beats and vocals' }, fr: {} } } });
+  ok(r.status === 200 && r.json.settings.traducoes.en.tagline === 'Beats and vocals' && !r.json.settings.traducoes.fr,
+    'as definições guardam as traduções da frase e dos termos');
+  ok((await pagina('/', 'en')).includes('Beats and vocals') && (await pagina('/', 'fr')).includes(defs.tagline),
+    'a página em inglês usa a frase nova; a francesa, sem tradução, mostra a portuguesa');
+  await call('PUT', '/api/admin/settings', { cookie: ckDono, body: defs });
+
   // O texto português está escrito nos próprios ficheiros e é ele que a página
   // em português mostra (o servidor nem lhe toca). Se o dicionário disser outra
   // coisa, as três línguas deixam de dizer o mesmo sem ninguém dar por isso.
-  const D = require('../publico/assets/js/dicionario.js');
+  const D = require('../comum/assets/js/dicionario.js');
   const VISTAS = ['publico', 'marcacoes'].map((p) => path.join(__dirname, '..', p, 'views'));
   const TAGS = 'a|b|button|div|h1|h2|h3|h4|label|legend|li|option|output|p|small|span|strong|title';
   const reTexto = new RegExp(`<(${TAGS})\\b[^>]*\\bdata-i18n="([^"]+)"[^>]*>([^<]*)</\\1>`, 'gi');

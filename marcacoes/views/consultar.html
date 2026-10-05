@@ -12,8 +12,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/site.css">
+<script src="/js/carregamento.js" defer></script>
 </head>
-<body class="page-inner">
+<body class="page-inner page-faixa">
+<div id="carregar" class="carregar" hidden role="status" aria-label="A carregar">
+  <div class="carregar-cartao">
+    <span class="carregar-logo"><img src="/img/logo.png" alt="" width="52" height="52"><span class="carregar-anel" aria-hidden="true"></span></span>
+    <span class="carregar-marca">{{NAME}}</span>
+  </div>
+</div>
 <a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
 <header class="cabecalho">
   <div class="container">
@@ -30,10 +37,21 @@
   </div>
 </header>
 
-<main id="conteudo" class="container lookup">
-  <h1 data-i18n="consultar.titulo">Consultar marcação</h1>
-  <p class="lead" data-i18n="consultar.lead">Use o código que recebeu ao fazer o pedido e o telefone indicado na marcação.</p>
+<!-- Faixa de abertura: as mesmas fotografias em slides da entrada, agora só
+     atrás do cabeçalho e do título. O formulário, por baixo, fica em fundo limpo. -->
+<div class="hero hero-curto on-dark">
+  <div class="hero-slides" aria-hidden="true">
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+  </div>
+  <div class="container">
+    <h1 data-i18n="consultar.titulo">Consultar marcação</h1>
+    <p class="lead" data-i18n="consultar.lead">Use o código que recebeu ao fazer o pedido e o telefone indicado na marcação.</p>
+  </div>
+</div>
 
+<main id="conteudo" class="container lookup">
   <div id="pagar-msg" class="notice info" role="status" hidden></div>
 
   <form id="lookup-form" novalidate>
@@ -63,7 +81,7 @@
   <div class="container footer-grid">
     <div class="footer-sobre">
       <h2>{{NAME}}</h2>
-      <p class="fine">{{TAGLINE}}</p>
+      <p class="fine" data-tagline>{{TAGLINE}}</p>
       <ul class="social" id="social" hidden></ul>
     </div>
 

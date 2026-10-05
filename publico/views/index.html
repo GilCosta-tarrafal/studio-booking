@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- O texto visível está aqui em português; é o original. O servidor troca-o
      pela tradução antes de enviar a página (ver backend/server.js e o
-     dicionário em publico/assets/js/dicionario.js). As marcas são:
+     dicionário em comum/assets/js/dicionario.js). As marcas são:
        data-i18n="chave"                -> o texto do elemento
        data-i18n-attr="attr:chave"      -> um atributo
        data-i18n-tpl="…{chave}…"        -> texto composto, para o <title>
@@ -19,8 +19,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/css/base.css">
 <link rel="stylesheet" href="/css/site.css">
+<script src="/js/carregamento.js" defer></script>
 </head>
 <body>
+<div id="carregar" class="carregar" hidden role="status" aria-label="A carregar">
+  <div class="carregar-cartao">
+    <span class="carregar-logo"><img src="/img/logo.png" alt="" width="52" height="52"><span class="carregar-anel" aria-hidden="true"></span></span>
+    <span class="carregar-marca">{{NAME}}</span>
+  </div>
+</div>
 <a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
 
 <!-- Fora do herói de propósito: preso ao topo, tem de acompanhar a página toda
@@ -51,7 +58,7 @@
     <div class="hero-grid">
       <div>
         <h1 data-i18n="inicio.h1">Tempo de estúdio, marcado em minutos.</h1>
-        <p class="lead">{{TAGLINE}}. <span data-i18n="inicio.lead">Veja o que está livre hoje em cada estúdio, escolha a sala e a hora, e envie o pedido.</span></p>
+        <p class="lead"><span data-tagline>{{TAGLINE}}</span>. <span data-i18n="inicio.lead">Veja o que está livre hoje em cada estúdio, escolha a sala e a hora, e envie o pedido.</span></p>
       </div>
 
       <section class="board" aria-labelledby="board-title">
@@ -118,7 +125,7 @@
   <div class="container footer-grid">
     <div class="footer-sobre">
       <h2>{{NAME}}</h2>
-      <p class="fine">{{TAGLINE}}</p>
+      <p class="fine" data-tagline>{{TAGLINE}}</p>
       <ul class="social" id="social" hidden></ul>
     </div>
 
