@@ -6,9 +6,11 @@ const U = require('../../backend/lib/util');
 const { rateLimit } = require('../../backend/lib/ratelimit');
 const stripe = require('../fornecedores/stripe');
 const { paraSite } = require('./lancamentos');
+const projetos = require('./projetos');
 
 const router = express.Router();
 const pagarLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 10 });
+const interesseLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 8 });
 
 // O que está ligado, para o site saber que botões mostrar.
 router.get('/estado', (_req, res) => {
@@ -20,6 +22,19 @@ router.get('/lancamentos', (_req, res) => {
   // um lançamento novo demore a aparecer.
   res.set('Cache-Control', 'public, max-age=60');
   res.json(paraSite());
+});
+
+// Projetos colaborativos visíveis, para a secção "Participa" do site.
+router.get('/projetos', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=60');
+  res.json({ projetos: projetos.listarPublico() });
+});
+
+// Alguém, a partir do site, manifesta interesse num projeto.
+router.post('/projetos/:id/interesse', interesseLimiter, (req, res) => {
+  const id = U.toInt(req.params.id);
+  projetos.registarInteresse(id, req.body, req.ip);
+  res.json({ ok: true });
 });
 
 // A mesma prova que a consulta de marcações pede: código e telefone.

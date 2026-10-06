@@ -21,7 +21,7 @@
 }
 /* Marca em destaque: logótipo + nome do estúdio, para dar as boas-vindas. */
 .login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 20px; font: 800 1.2rem/1.1 var(--display); letter-spacing: -.01em; }
-.login-mark { width: 46px; height: 46px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .22); }
+.login-mark { width: 64px; height: 64px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .22); }
 .login-card .strip { margin-bottom: 22px; }
 .login-card h1 { font: 800 1.9rem/1.1 var(--display); letter-spacing: -.02em; margin: 0 0 6px; }
 .login-card p.sub { margin: 0 0 24px; color: rgba(255, 255, 255, .74); }
@@ -36,7 +36,7 @@
   display: flex; align-items: center; gap: 10px; padding: 4px 12px 18px;
   font: 800 1.05rem/1.1 var(--display); color: inherit; text-decoration: none; white-space: nowrap;
 }
-.side .brand-mark { width: 34px; height: 34px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .16); }
+.side .brand-mark { width: 48px; height: 48px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .16); }
 .nav {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 10px 12px; border-radius: 6px; color: rgba(255, 255, 255, .84);
@@ -65,7 +65,10 @@ body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: 
 
 /* O conteúdo de todas as secções fica centrado e com uma largura máxima
    confortável — não se estica de ponta a ponta num ecrã largo. */
-.main { padding: 28px 32px 96px; min-width: 0; max-width: 1040px; margin-inline: auto; }
+/* width:100% é essencial: sem ela, a margem automática faz a coluna
+   ajustar-se à largura da tabela (que rola dentro da sua caixa) e empurrar a
+   página toda para o lado. Com ela, a coluna nunca passa do contentor. */
+.main { padding: 28px 32px 96px; width: 100%; min-width: 0; max-width: 1040px; margin-inline: auto; container: painel / inline-size; }
 .main:focus { outline: none; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .page-head h1 { font: 800 2rem/1.1 var(--display); letter-spacing: -.02em; margin: 0; }
@@ -86,13 +89,54 @@ body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: 
 .figures dd { margin: 2px 0 0; font: 800 1.9rem/1.1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .figures dd.small { font-size: 1.5rem; }
 
+/* ---------- Relatórios ---------- */
+.rep-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 16px; align-items: end; }
+.rep-filtros .field { margin-bottom: 12px; }
+.rep-presets { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.rep-presets-l { color: var(--muted); font-size: .9rem; margin-right: 2px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.kpi-l { display: block; color: var(--muted); font-size: .9rem; }
+.kpi-v { display: block; margin-top: 4px; font: 800 1.6rem/1.1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.rep-sec { margin-bottom: 8px; }
+.rep-h { font: 700 1.15rem/1.2 var(--display); margin: 2px 0 12px; letter-spacing: -.01em; }
+.rep-export { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ---------- Dashboard: gráficos circulares ---------- */
+.donuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; margin-top: 20px; }
+.donut-card h3 { margin: 0 0 14px; }
+.donut-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.donut { width: 140px; height: 140px; flex: none; }
+.donut-num { fill: var(--ink); font: 800 1.5rem/1 var(--display); }
+.donut-sub { fill: var(--muted); font: 400 .72rem var(--body); }
+.donut-leg { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; flex: 1 1 130px; min-width: 0; }
+.donut-leg li { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+.donut-dot { width: 11px; height: 11px; border-radius: 3px; flex: none; background: var(--dc, var(--muted)); }
+.donut-leg-l { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.donut-leg-v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.donut-seg { stroke: var(--dc, var(--muted)); }
+/* Cores: estados a condizer com as etiquetas; receita em verde/âmbar; serviços
+   na paleta categórica validada (um tom por tema — ver tema claro em baixo). */
+.s-pedido { --dc: #E0A63A; } .s-confirmado { --dc: #5A9BE0; } .s-em_curso { --dc: #46B87C; }
+.s-concluido { --dc: #8A8A8A; } .s-cancelado { --dc: #C85A4E; }
+.rec { --dc: #46B87C; } .owe { --dc: #E0A63A; }
+.c1 { --dc: #3987e5; } .c2 { --dc: #d95926; } .c3 { --dc: #199e70; }
+.c4 { --dc: #c98500; } .c5 { --dc: #d55181; } .c6 { --dc: #9085e9; }
+:root[data-tema="claro"] .c1 { --dc: #2a78d6; } :root[data-tema="claro"] .c2 { --dc: #eb6834; }
+:root[data-tema="claro"] .c3 { --dc: #1baf7a; } :root[data-tema="claro"] .c4 { --dc: #eda100; }
+:root[data-tema="claro"] .c5 { --dc: #e87ba4; } :root[data-tema="claro"] .c6 { --dc: #4a3aa7; }
+
 /* ---------- Lista de marcações ---------- */
 .bk-list { list-style: none; margin: 0; padding: 0; }
-.bk { display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+/* Cada marcação é uma linha flexível: hora + resumo lado a lado, e os botões
+   à direita. Quando não cabem os três, os botões descem para a linha de baixo
+   em vez de espremer o nome — o resumo nunca encolhe abaixo de 150px. */
+.bk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 14px 0; border-top: 1px solid var(--line); }
 .bk:first-child { border-top: 0; padding-top: 4px; }
+.bk-time { flex: none; width: 112px; }
 .bk-time strong { display: block; font-variant-numeric: tabular-nums; }
 .bk-time span { color: var(--muted); font-size: .88rem; }
-.bk-main { min-width: 0; }
+.bk-main { flex: 1 1 200px; min-width: 150px; }
 .bk-main strong { display: block; overflow-wrap: anywhere; }
 .bk-main span { display: block; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
 .modo {
@@ -102,7 +146,7 @@ body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: 
 }
 /* .bk-main span põe tudo em bloco; o rótulo tem de continuar do tamanho do texto. */
 .bk-main .modo { display: inline-block; width: fit-content; }
-.bk-side { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.bk-side { flex: 0 1 auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
 table.data { width: 100%; border-collapse: collapse; min-width: 820px; }
@@ -157,7 +201,7 @@ table.data { width: 100%; border-collapse: collapse; min-width: 820px; }
 .cal-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; font-size: .88rem; color: var(--muted); }
 
 /* ---------- Modal e formulários ---------- */
-dialog.modal { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(760px, 94vw); max-height: 92vh; background: var(--surface); color: var(--ink); }
+dialog.modal { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(760px, 94vw); max-height: 92vh; overflow: hidden auto; background: var(--surface); color: var(--ink); }
 dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
 .modal-in { padding: 22px 24px 20px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -169,6 +213,18 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
    um debaixo do outro — mais fáceis de ler. As janelas de marcação mantêm as
    colunas (ficam fora, em dialog.modal, sem esta classe). */
 .panel-stack .grid-2, .panel-stack .grid-3 { grid-template-columns: 1fr; }
+/* Os campos empilhados ficam estreitos e centrados, em vez de ocuparem toda a
+   largura do painel (que é larga e faz as caixas parecerem exageradas). */
+.panel-stack > .grid-2,
+.panel-stack > .grid-3,
+.panel-stack > .field,
+.panel-stack > details.traducoes,
+.panel-stack > .check,
+.panel-stack > .hint,
+.panel-stack > h2,
+.panel-stack > h3,
+.panel-stack > .notice,
+.panel-stack > .modal-foot { max-width: 560px; margin-inline: auto; }
 .modal-foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
 .modal-foot .spacer { margin-right: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .field-inline { display: flex; gap: 8px; align-items: center; }
@@ -190,8 +246,16 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
 details.traducoes { grid-column: 1 / -1; margin: 4px 0 12px; }
 details.traducoes > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 details.traducoes > summary .meta { font-weight: 400; font-size: .88rem; color: var(--muted); margin-left: 6px; }
-.traducao-lingua { border: 1px solid var(--line); border-radius: 10px; padding: 4px 14px 2px; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; }
+/* Abertas, as línguas ficam lado a lado (inglês | francês), cada uma com os
+   campos empilhados: ocupa metade da altura e cabe na janela sem rolar para
+   o lado. Em ecrãs estreitos passam a uma coluna. */
+details.traducoes[open] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; align-items: start; }
+details.traducoes[open] > summary { grid-column: 1 / -1; }
+.traducao-lingua { border: 1px solid var(--line); border-radius: 10px; padding: 2px 12px 6px; margin: 8px 0 0; min-width: 0; }
 .traducao-lingua > legend { padding: 0 6px; font-size: .88rem; color: var(--muted); }
+.traducao-lingua .field { margin-bottom: 8px; }
+.traducao-lingua textarea { min-height: 52px; }
+@media (max-width: 620px) { details.traducoes[open] { grid-template-columns: 1fr; } }
 
 details.studio-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; }
 details.studio-panel > summary { list-style: none; cursor: pointer; padding: 16px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 700 1.2rem/1.2 var(--display); border-radius: 12px; }
@@ -317,8 +381,8 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .side-foot a, .side-foot button { min-height: 44px; }
 
   .main { padding: 20px 16px 96px; }
-  .bk { grid-template-columns: 96px minmax(0, 1fr); }
-  .bk-side { grid-column: 1 / -1; justify-content: flex-start; }
+  .bk-time { width: 96px; }
+  .bk-side { flex: 1 1 100%; justify-content: flex-start; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 
   /* A grelha continua a rolar dentro da caixa, para os nomes das salas
@@ -347,10 +411,14 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .tab { flex: none; white-space: nowrap; min-height: 44px; }
 
   .panel { padding: 16px; }
+}
 
-  /* Tabelas em cartões: uma marcação (ou cliente) por cartão, cada valor com
-     o nome da coluna ao lado. O nome vem de data-label, que o admin.js copia
-     do cabeçalho da tabela. */
+/* Tabelas em cartões: uma marcação (ou cliente) por cartão, cada valor com o
+   nome da coluna ao lado (de data-label, que o admin.js copia do cabeçalho).
+   Decidido pela largura REAL da coluna de conteúdo (container query), não da
+   janela: assim os cartões aparecem sempre que a tabela não caberia — no
+   telemóvel e também no portátil, onde a barra lateral deixa pouca largura. */
+@container painel (max-width: 840px) {
   .table-wrap { overflow: visible; background: none; border: 0; border-radius: 0; }
   table.data { min-width: 0; }
   table.data thead {
@@ -380,7 +448,29 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 /* Dentro do seu estúdio, o agente tem um cabeçalho com o nome do estúdio, o
    idioma, o tema e a sua identidade. A coluna de conteúdo passa a empilhar a
    barra por cima da vista. */
-.main-col { display: flex; flex-direction: column; min-width: 0; }
+/* A coluna centra o conteúdo. A .main deixa aqui a margem automática: num flex,
+   margens automáticas no eixo transversal desligam o stretch e a .main passava
+   a ajustar-se à largura da tabela, empurrando a página para o lado. */
+.main-col { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.main-col > .main { margin-inline: 0; }
+/* A barra de topo e o rodapé ocupam a largura toda da coluna (o align-items:
+   center acima vale só para a .main); assim o space-between encosta o nome do
+   estúdio a um lado e os controlos ao outro. */
+.main-col > .topbar, .main-col > .main-foot { align-self: stretch; }
+
+/* Rodapé da coluna de conteúdo: encostado ao fundo (margin-top:auto), a
+   condizer com a barra de topo. */
+.main-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap;
+  margin-top: auto; padding: 16px 24px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: .9rem;
+  background: rgba(10, 10, 10, .5); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.main-foot-brand { color: var(--ink); font-weight: 600; }
+.main-foot-studio, .main-foot-sep { color: var(--muted); font-weight: 400; }
+.main-foot-meta { display: inline-flex; align-items: center; gap: 6px; }
+.main-foot a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.main-foot a:hover { color: var(--ink); }
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: wrap;
   padding: 12px 24px; border-bottom: 1px solid var(--line);
@@ -399,16 +489,38 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .tb-right { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; white-space: nowrap; }
 .tb-btn, .tb-sel, .tb-user, .tb-avatar { flex: none; }
 .tb-btn, .tb-sel {
-  min-height: 38px; border-radius: 999px; border: 1px solid var(--edge);
+  width: auto; min-height: 38px; border-radius: 999px; border: 1px solid var(--edge);
   background: var(--surface); color: var(--ink); padding: 0 14px; font: inherit; cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px;
 }
+.tb-sel { max-width: 40vw; }
 .tb-btn:hover { background: var(--mist); }
 .tb-ico { font-size: 1rem; line-height: 1; }
-.tb-user { display: flex; align-items: center; gap: 9px; padding-left: 4px; }
+.tb-usermenu { position: relative; flex: none; }
+.tb-user { display: flex; align-items: center; gap: 9px; padding: 4px 8px 4px 4px; background: none; border: 0; border-radius: 999px; color: inherit; font: inherit; cursor: pointer; }
+.tb-user:hover { background: var(--mist); }
 .tb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--amber); color: #1A1204; display: grid; place-items: center; font: 800 .85rem/1 var(--display); flex: none; }
-.tb-user-txt { display: flex; flex-direction: column; line-height: 1.15; }
+.tb-user-txt { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.tb-user-txt strong { font-weight: 700; }
 .tb-user-txt span { color: var(--muted); font-size: .82rem; }
+.tb-caret { font-size: .7rem; color: var(--muted); }
+/* Menu que abre por baixo do chip (alterar palavra-passe, sair). */
+.tb-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 220px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .5); padding: 6px; display: grid; gap: 2px;
+}
+.tb-menu[hidden] { display: none; }
+.tb-menu-item { text-align: left; background: none; border: 0; border-radius: 7px; padding: 10px 12px; min-height: 42px; font: inherit; color: var(--ink); cursor: pointer; }
+.tb-menu-item:hover { background: var(--mist); }
+.tb-menu-item.danger { color: var(--danger); }
+
+/* ---------- Pesquisa compacta (botão com lupa que abre a caixa) ---------- */
+.btn-icon { width: 44px; min-width: 44px; padding: 0; }
+.search { display: inline-flex; align-items: center; gap: 8px; }
+.search input { min-width: 0; }
+.search input[hidden] { display: none; }
+.search .ico { display: inline-flex; }
 @media (max-width: 700px) {
   .topbar { padding: 10px 16px; }
   .tb-user-txt { display: none; }
@@ -432,6 +544,7 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 :root[data-tema="claro"] .side-foot { border-top-color: rgba(0, 0, 0, .12); }
 :root[data-tema="claro"] .side-foot .who { color: rgba(0, 0, 0, .7); }
 :root[data-tema="claro"] .topbar { background: rgba(255, 255, 255, .72); border-bottom-color: var(--line); }
+:root[data-tema="claro"] .main-foot { background: rgba(255, 255, 255, .72); border-top-color: var(--line); }
 :root[data-tema="claro"] .tb-studio { background: rgba(0, 0, 0, .05); }
 :root[data-tema="claro"] .user-card { background: rgba(0, 0, 0, .02); }
 :root[data-tema="claro"] .tag.off { background: rgba(0, 0, 0, .06); }
@@ -469,3 +582,23 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   details.studio-panel > summary { padding: 14px 16px; }
   .studio-body { padding: 4px 16px 16px; }
 }
+
+/* ---------- Projetos colaborativos e inscrições ---------- */
+.projeto-card { display: flex; gap: 16px; align-items: flex-start; }
+.projeto-capa { border-radius: 10px; object-fit: cover; flex: none; }
+.projeto-corpo { flex: 1 1 auto; min-width: 0; }
+.projeto-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.projeto-card h2 { margin: 0 0 4px; }
+.projeto-resumo { color: var(--muted); margin: 0 0 6px; }
+.projeto-corpo .row-actions { margin-top: 12px; flex-wrap: wrap; }
+
+.insc-lista { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 12px; }
+.insc { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: rgba(255, 255, 255, .025); }
+.insc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.insc-head strong { font: 700 1.02rem/1.2 var(--display); }
+.insc-data { color: var(--muted); font-size: .86rem; }
+.insc-contactos { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0; font-size: .92rem; }
+.insc-msg { margin: 6px 0 0; white-space: pre-wrap; }
+.insc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+@media (max-width: 560px) { .projeto-card { flex-direction: column; } }
+

@@ -8,35 +8,126 @@
   const cur = () => app.settings.currency;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-  // ============================================================ Painel
-  const fig = (label, value, small) => h('div', {}, h('dt', {}, label), h('dd', { class: small ? 'small' : '' }, value));
+  // Cartão de indicador (número em destaque com rótulo), usado no Dashboard e
+  // nos Relatórios.
+  const kpiCard = (label, valor) => h('div', { class: 'kpi' },
+    h('span', { class: 'kpi-l' }, label), h('strong', { class: 'kpi-v' }, valor));
 
+  // Pequeno ícone SVG (herda a cor e o tamanho do texto à volta).
+  function svgIcon(inner, size = 20) {
+    const span = h('span', { class: 'ico', 'aria-hidden': 'true' });
+    span.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+    return span;
+  }
+
+  // Pesquisa compacta: só um botão com lupa. Ao clicar, abre a caixa de texto
+  // (e volta a fechar quando fica vazia). Poupa a largura toda da barra, que
+  // antes empurrava os botões para fora do ecrã.
+  function searchField({ placeholder, value = '', debounce = 0, onSearch }) {
+    const input = h('input', { type: 'search', placeholder, 'aria-label': placeholder, value, hidden: !value });
+    const btn = h('button', {
+      type: 'button', class: 'btn btn-outline btn-icon search-btn',
+      'aria-label': placeholder, title: placeholder, 'aria-expanded': value ? 'true' : 'false',
+    }, svgIcon('<circle cx="11" cy="11" r="7"/><line x1="16.65" y1="16.65" x2="21" y2="21"/>'));
+    const abrir = (sim) => { input.hidden = !sim; btn.setAttribute('aria-expanded', sim ? 'true' : 'false'); if (sim) input.focus(); };
+    btn.onclick = () => abrir(input.hidden);
+    let timer = null;
+    input.addEventListener('input', () => {
+      if (!debounce) return onSearch(input.value.trim());
+      clearTimeout(timer); timer = setTimeout(() => onSearch(input.value.trim()), debounce);
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { input.value = ''; onSearch(''); abrir(false); btn.focus(); } });
+    input.addEventListener('blur', () => { if (!input.value.trim()) abrir(false); });
+    return h('div', { class: 'search' }, btn, input);
+  }
+
+  // ============================================================ Painel e Dashboard
+
+  // Painel: o trabalho do dia — pedidos por confirmar e as sessões de hoje.
+  // (O resumo de números mudou-se para a secção Dashboard.)
   views.painel = {
     title: 'Painel',
     async render(box) {
       const d = await api('/api/admin/dashboard' + (ui.studio ? '?studio_id=' + ui.studio : ''));
       box.append(pageHead('Painel', studioFilter(A.refresh),
         h('button', { class: 'btn', type: 'button', onclick: () => openBooking({ onSaved: A.refresh }) }, 'Nova marcação')));
-      box.append(h('div', { class: 'dash' },
-        h('div', {},
-          h('section', { class: 'panel', 'aria-labelledby': 'h-pend' },
-            h('h2', { id: 'h-pend' }, 'Pedidos por confirmar'),
-            d.pending.length
-              ? h('ul', { class: 'bk-list' }, d.pending.map((b) => bookingItem(b, A.refresh)))
-              : h('p', { class: 'empty' }, 'Não há pedidos à espera.')),
-          h('section', { class: 'panel', 'aria-labelledby': 'h-today' },
-            h('h2', { id: 'h-today' }, 'Hoje, ' + fmtDate(d.today)),
-            d.todayList.length
-              ? h('ul', { class: 'bk-list' }, d.todayList.map((b) => bookingItem(b, A.refresh)))
-              : h('p', { class: 'empty' }, 'Nenhuma sessão marcada para hoje.'))),
-        h('aside', { class: 'panel', 'aria-labelledby': 'h-sum' },
-          h('h2', { id: 'h-sum' }, 'Resumo'),
-          h('dl', { class: 'figures' },
-            fig('Pedidos por confirmar', d.counts.pending),
-            fig('Sessões hoje', d.counts.today),
-            fig('Próximos 7 dias', d.counts.next7),
-            fig('Recebido este mês', money(d.money.received_month, cur()), true),
-            fig('Por receber', money(d.money.outstanding, cur()), true)))));
+      box.append(
+        h('section', { class: 'panel', 'aria-labelledby': 'h-pend' },
+          h('h2', { id: 'h-pend' }, 'Pedidos por confirmar'),
+          d.pending.length
+            ? h('ul', { class: 'bk-list' }, d.pending.map((b) => bookingItem(b, A.refresh)))
+            : h('p', { class: 'empty' }, 'Não há pedidos à espera.')),
+        h('section', { class: 'panel', 'aria-labelledby': 'h-today' },
+          h('h2', { id: 'h-today' }, 'Hoje, ' + fmtDate(d.today)),
+          d.todayList.length
+            ? h('ul', { class: 'bk-list' }, d.todayList.map((b) => bookingItem(b, A.refresh)))
+            : h('p', { class: 'empty' }, 'Nenhuma sessão marcada para hoje.')));
+    },
+  };
+
+  // Gráfico circular (donut) em SVG: um anel com um segmento por categoria, um
+  // número no centro e uma legenda com os valores (a legenda e os rótulos são a
+  // "codificação secundária" — a identidade nunca depende só da cor).
+  function donutChart(titulo, segmentos, centro) {
+    const total = segmentos.reduce((s, x) => s + x.value, 0);
+    const size = 150, thick = 20, r = (size - thick) / 2, cx = size / 2, C = 2 * Math.PI * r;
+    const esc = (v) => String(v).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+    let off = 0, arcs = '';
+    for (const s of segmentos) {
+      if (!s.value) continue;
+      const len = (s.value / total) * C;
+      const dash = Math.max(len - 2, 0.01); // 2px de folga entre segmentos
+      arcs += `<circle class="donut-seg ${s.cls}" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke-width="${thick}"`
+        + ` stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"`
+        + ` transform="rotate(-90 ${cx} ${cx})"><title>${esc(s.label)}: ${esc(s.vLabel)}</title></circle>`;
+      off += len;
+    }
+    const svg = `<svg viewBox="0 0 ${size} ${size}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(titulo)}">`
+      + `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${thick}"/>${arcs}`
+      + `<text x="${cx}" y="${cx - 3}" text-anchor="middle" dominant-baseline="central" class="donut-num">${esc(centro.num)}</text>`
+      + `<text x="${cx}" y="${cx + 16}" text-anchor="middle" dominant-baseline="central" class="donut-sub">${esc(centro.sub)}</text></svg>`;
+    const graf = h('div', { class: 'donut' });
+    graf.innerHTML = svg;
+    const leg = h('ul', { class: 'donut-leg' }, segmentos.map((s) => h('li', {},
+      h('span', { class: 'donut-dot ' + s.cls }),
+      h('span', { class: 'donut-leg-l' }, s.label),
+      h('span', { class: 'donut-leg-v' }, s.vLabel))));
+    return h('section', { class: 'panel donut-card' }, h('h3', {}, titulo), h('div', { class: 'donut-wrap' }, graf, leg));
+  }
+
+  // Dashboard: os números de resumo em cartões e, por baixo, o resumo de tudo em
+  // gráficos circulares (estado das marcações, receita e serviços).
+  views.dashboard = {
+    title: 'Dashboard',
+    async render(box) {
+      const qs = ui.studio ? '?studio_id=' + ui.studio : '';
+      const [d, rep] = await Promise.all([api('/api/admin/dashboard' + qs), api('/api/admin/reports' + qs)]);
+      box.append(pageHead('Dashboard', studioFilter(A.refresh),
+        h('button', { class: 'btn', type: 'button', onclick: () => openBooking({ onSaved: A.refresh }) }, 'Nova marcação')));
+      box.append(h('div', { class: 'kpis' },
+        kpiCard('Pedidos por confirmar', String(d.counts.pending)),
+        kpiCard('Sessões hoje', String(d.counts.today)),
+        kpiCard('Próximos 7 dias', String(d.counts.next7)),
+        kpiCard('Recebido este mês', money(d.money.received_month, cur())),
+        kpiCard('Por receber', money(d.money.outstanding, cur()))));
+
+      const t = rep.totals;
+      if (!t.sessions) {
+        box.append(h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Ainda não há marcações para resumir em gráficos.')));
+        return;
+      }
+      const estado = rep.byStatus.map((s) => ({ label: STATUS[s.status] || s.status, value: s.sessions, vLabel: String(s.sessions), cls: 's-' + s.status }));
+      const soma = t.received + t.outstanding;
+      const receita = [
+        { label: 'Recebido', value: t.received, vLabel: money(t.received, cur()), cls: 'rec' },
+        { label: 'Por receber', value: t.outstanding, vLabel: money(t.outstanding, cur()), cls: 'owe' },
+      ];
+      const servico = rep.byService.map((s, i) => ({ label: s.name, value: s.sessions, vLabel: String(s.sessions), cls: 'c' + (i % 6 + 1) }));
+
+      box.append(h('div', { class: 'donuts' },
+        donutChart('Marcações por estado', estado, { num: String(t.sessions), sub: 'marcações' }),
+        donutChart('Receita', receita, { num: soma ? Math.round(t.received / soma * 100) + '%' : '—', sub: 'recebido' }),
+        donutChart('Marcações por serviço', servico, { num: String(t.sessions), sub: 'sessões' })));
     },
   };
 
@@ -164,9 +255,10 @@
         onclick: () => { ui.tab = k; drawTabs(); load(); },
       }, label, k === 'pending' && app.pending ? ` (${app.pending})` : '')));
 
-      let timer = null;
-      const search = h('input', { type: 'search', placeholder: 'Nome, telefone, projeto ou código', 'aria-label': 'Pesquisar', value: ui.q });
-      search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { ui.q = search.value.trim(); load(); }, 300); });
+      const search = searchField({
+        placeholder: 'Nome, telefone, projeto ou código', value: ui.q, debounce: 300,
+        onSearch: (v) => { ui.q = v; load(); },
+      });
 
       const onChange = async () => { await load(); await A.refreshPending(); drawTabs(); };
 
@@ -238,8 +330,7 @@
         }) : [h('tr', {}, h('td', { colspan: 5 }, 'Nenhum cliente encontrado.'))]));
         if (table) labelCells(table);
       };
-      const search = h('input', { type: 'search', placeholder: 'Pesquisar cliente', 'aria-label': 'Pesquisar cliente' });
-      search.addEventListener('input', () => draw(search.value.trim()));
+      const search = searchField({ placeholder: 'Pesquisar cliente', onSearch: (v) => draw(v) });
       box.append(pageHead('Clientes', search));
       box.append(h('p', { class: 'hint', style: { marginBottom: '12px' } }, 'Construída a partir do histórico de marcações. Clique no telefone para abrir o WhatsApp.'));
       table = h('table', { class: 'data' },
@@ -247,6 +338,166 @@
         body);
       box.append(h('div', { class: 'table-wrap' }, table));
       draw('');
+    },
+  };
+
+  // ============================================================ Relatórios
+  views.relatorios = {
+    title: 'Relatórios',
+    async render(box) {
+      const hoje = app.today;
+      const pad = (n) => String(n).padStart(2, '0');
+      const fmt = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+      const Y = +hoje.slice(0, 4), M = +hoje.slice(5, 7);
+      const esteMes = fmt(Y, M, 1);
+      const lp = new Date(Y, M - 1, 0); // último dia do mês anterior
+      const mesPassadoIni = fmt(lp.getFullYear(), lp.getMonth() + 1, 1);
+      const mesPassadoFim = fmt(lp.getFullYear(), lp.getMonth() + 1, lp.getDate());
+      const esteAno = fmt(Y, 1, 1);
+
+      const fDe = h('input', { type: 'date', value: esteMes, 'aria-label': 'De' });
+      const fAte = h('input', { type: 'date', value: hoje, 'aria-label': 'Até' });
+      const fEstado = h('select', { 'aria-label': 'Estado' },
+        h('option', { value: '' }, 'Todos os estados'),
+        Object.entries(STATUS).map(([k, v]) => h('option', { value: k }, v)));
+      const fServico = h('select', { 'aria-label': 'Serviço' },
+        h('option', { value: '' }, 'Todos os serviços'),
+        app.services.map((s) => h('option', { value: s.id }, s.name)));
+      const fModo = h('select', { 'aria-label': 'Modo' },
+        h('option', { value: '' }, 'Presencial e à distância'),
+        h('option', { value: '0' }, 'Só presencial'),
+        h('option', { value: '1' }, 'Só à distância'));
+
+      const resultados = h('div');
+      let dados = null;
+
+      const horas = (min) => { const v = min / 60; return (Number.isInteger(v) ? v : v.toFixed(1)) + ' h'; };
+      const kpi = (label, valor) => h('div', { class: 'kpi' }, h('span', { class: 'kpi-l' }, label), h('strong', { class: 'kpi-v' }, valor));
+      const mesLabel = (m) => m.slice(5) + '/' + m.slice(0, 4);
+
+      function tabela(titulo, colLabel, linhas, rotulo) {
+        if (!linhas.length) return null;
+        const corpo = h('tbody', {}, linhas.map((r) => h('tr', {},
+          h('td', {}, rotulo(r)),
+          h('td', { class: 'num' }, String(r.sessions)),
+          h('td', { class: 'num' }, money(r.billed, cur())),
+          h('td', { class: 'num' }, money(r.received, cur())))));
+        const t = labelCells(h('table', { class: 'data' },
+          h('thead', {}, h('tr', {}, [colLabel, 'Sessões', 'Faturado', 'Recebido'].map((x, i) =>
+            h('th', { scope: 'col', class: i ? 'num' : '' }, x)))),
+          corpo));
+        return h('section', { class: 'panel' }, h('h2', {}, titulo), h('div', { class: 'table-wrap' }, t));
+      }
+
+      // Monta a query dos filtros atuais (igual à de load), para o CSV e o PDF.
+      function querystring() {
+        const qs = new URLSearchParams();
+        if (fDe.value) qs.set('from', fDe.value);
+        if (fAte.value) qs.set('to', fAte.value);
+        if (fEstado.value) qs.set('status', fEstado.value);
+        if (fServico.value) qs.set('service_id', fServico.value);
+        if (fModo.value) qs.set('remote', fModo.value);
+        if (ui.studio) qs.set('studio_id', ui.studio);
+        return qs.toString();
+      }
+
+      // Descarrega o PDF diretamente (o servidor devolve-o como anexo), sem
+      // passar pela janela de impressão.
+      function baixarPDF() {
+        const a = h('a', { href: '/api/admin/reports.pdf?' + querystring() });
+        document.body.append(a); a.click(); a.remove();
+      }
+
+      function exportarCSV() {
+        if (!dados || !dados.rows.length) return;
+        const cabec = ['Código', 'Data', 'Início', 'Fim', 'Estúdio', 'Sala', 'Cliente', 'Telefone', 'Serviço', 'Trabalho', 'Estado', 'Preço', 'Pago'];
+        const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const linhas = [cabec.map(esc).join(',')];
+        for (const b of dados.rows) {
+          linhas.push([b.code, b.date, b.start, b.end, b.studio_name, b.room_name, b.client_name,
+            b.client_phone, b.service_name || '', b.title || '', STATUS[b.status] || b.status, b.price, b.paid].map(esc).join(','));
+        }
+        const blob = new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = h('a', { href: url, download: `relatorio-${fDe.value || 'inicio'}_a_${fAte.value || 'hoje'}.csv` });
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function draw() {
+        const t = dados.totals;
+        if (!t.sessions) {
+          resultados.replaceChildren(h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Sem marcações no período e filtros escolhidos.')));
+          return;
+        }
+        const canc = dados.byStatus.find((s) => s.status === 'cancelado');
+        const perdido = canc ? canc.billed : 0;
+
+        const financas = h('section', { class: 'rep-sec' },
+          h('h2', { class: 'rep-h' }, 'Finanças'),
+          h('div', { class: 'kpis' },
+            kpi('Faturado', money(t.billed, cur())),
+            kpi('Recebido', money(t.received, cur())),
+            kpi('Por receber', money(t.outstanding, cur())),
+            kpi('Perdido em cancelamentos', money(perdido, cur()))));
+
+        const fluxo = h('section', { class: 'rep-sec' },
+          h('h2', { class: 'rep-h' }, 'Fluxo de marcações'),
+          h('div', { class: 'kpis' },
+            kpi('Sessões', String(t.sessions)),
+            kpi('Horas reservadas', horas(t.minutes)),
+            kpi('Clientes', String(t.clients))));
+
+        const botoes = h('div', { class: 'rep-export' },
+          h('button', { class: 'btn', type: 'button', onclick: baixarPDF }, 'Baixar PDF'),
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: exportarCSV }, 'Exportar CSV'),
+          dados.limited && h('span', { class: 'hint' }, 'A exportação e o PDF incluem as primeiras 500 marcações.'));
+
+        // filter(Boolean): replaceChildren é nativo e, ao contrário do h(), não
+        // ignora valores falsos — sem isto, um `&&` falso escrevia "false".
+        resultados.replaceChildren(...[
+          financas,
+          fluxo,
+          tabela('Por estado', 'Estado', dados.byStatus, (r) => STATUS[r.status] || r.status),
+          dados.byStudio.length > 1 && tabela('Por estúdio', 'Estúdio', dados.byStudio, (r) => r.name),
+          tabela('Por serviço', 'Serviço', dados.byService, (r) => r.name),
+          dados.byMonth.length > 1 && tabela('Por mês', 'Mês', dados.byMonth, (r) => mesLabel(r.month)),
+          botoes,
+        ].filter(Boolean));
+      }
+
+      async function load() {
+        const qs = new URLSearchParams();
+        if (fDe.value) qs.set('from', fDe.value);
+        if (fAte.value) qs.set('to', fAte.value);
+        if (fEstado.value) qs.set('status', fEstado.value);
+        if (fServico.value) qs.set('service_id', fServico.value);
+        if (fModo.value) qs.set('remote', fModo.value);
+        if (ui.studio) qs.set('studio_id', ui.studio);
+        resultados.replaceChildren(h('p', { class: 'boot' }, 'A calcular…'));
+        try {
+          dados = await api('/api/admin/reports?' + qs);
+          draw();
+        } catch (e) {
+          resultados.replaceChildren(h('div', { class: 'notice error', role: 'alert' }, e.message));
+        }
+      }
+
+      const preset = (de, ate) => () => { fDe.value = de; fAte.value = ate; load(); };
+      for (const el of [fDe, fAte, fEstado, fServico, fModo]) el.addEventListener('change', load);
+
+      box.append(pageHead('Relatórios', studioFilter(load)));
+      box.append(h('section', { class: 'panel rep-filtros' },
+        field('De', fDe), field('Até', fAte), field('Estado', fEstado),
+        field('Serviço', fServico), field('Modo', fModo),
+        h('div', { class: 'rep-presets' },
+          h('span', { class: 'rep-presets-l' }, 'Atalhos:'),
+          h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: preset(esteMes, hoje) }, 'Este mês'),
+          h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: preset(mesPassadoIni, mesPassadoFim) }, 'Mês passado'),
+          h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: preset(esteAno, hoje) }, 'Este ano'),
+          h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: preset('', '') }, 'Tudo'))));
+      box.append(resultados);
+      await load();
     },
   };
 
@@ -592,8 +843,14 @@
       try {
         const r = await api('/api/admin/settings', { method: 'PUT', body });
         app.settings = r.settings;
-        const brand = document.querySelector('.side .brand .brand-name');
-        if (brand) brand.textContent = r.settings.business_name;
+        // A marca do menu é só o emblema (sem texto); o nome vive no rótulo
+        // acessível e no alt da imagem, e é isso que se atualiza ao guardar.
+        const brand = document.querySelector('.side .brand');
+        if (brand) {
+          brand.setAttribute('aria-label', r.settings.business_name);
+          const img = brand.querySelector('.brand-mark');
+          if (img) img.alt = r.settings.business_name;
+        }
         toast('Definições guardadas.');
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     };

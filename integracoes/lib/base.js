@@ -66,6 +66,41 @@ CREATE TABLE IF NOT EXISTS int_lancamentos (
   atualizado_em TEXT NOT NULL,
   UNIQUE (fonte, externo_id)
 );
+
+-- Projetos colaborativos e convocatórias: uma campanha para novos talentos,
+-- um álbum coletivo, ou qualquer outra divulgação. Aparecem no site (visivel=1)
+-- e, enquanto "aberto", o público pode manifestar interesse (int_inscricoes).
+CREATE TABLE IF NOT EXISTS int_projetos (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  tipo          TEXT NOT NULL DEFAULT 'outro' CHECK (tipo IN ('talentos','album','outro')),
+  titulo        TEXT NOT NULL,
+  resumo        TEXT NOT NULL DEFAULT '',
+  descricao     TEXT NOT NULL DEFAULT '',
+  -- capa: cópia local servida pelo site; capa_origem: de onde veio.
+  capa          TEXT NOT NULL DEFAULT '',
+  capa_origem   TEXT NOT NULL DEFAULT '',
+  prazo         TEXT NOT NULL DEFAULT '',
+  aberto        INTEGER NOT NULL DEFAULT 1,
+  visivel       INTEGER NOT NULL DEFAULT 1,
+  ordem         INTEGER NOT NULL DEFAULT 0,
+  criado_em     TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL
+);
+
+-- Quem, a partir do site, manifestou interesse num projeto.
+CREATE TABLE IF NOT EXISTS int_inscricoes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  projeto_id  INTEGER NOT NULL REFERENCES int_projetos(id) ON DELETE CASCADE,
+  nome        TEXT NOT NULL,
+  contacto    TEXT NOT NULL DEFAULT '',
+  email       TEXT NOT NULL DEFAULT '',
+  link        TEXT NOT NULL DEFAULT '',
+  mensagem    TEXT NOT NULL DEFAULT '',
+  estado      TEXT NOT NULL DEFAULT 'novo' CHECK (estado IN ('novo','contactado','aceite','arquivado')),
+  criado_em   TEXT NOT NULL,
+  ip          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_int_inscricoes_projeto ON int_inscricoes(projeto_id);
 `);
 
 // ---------------------------------------------------------------- Definições

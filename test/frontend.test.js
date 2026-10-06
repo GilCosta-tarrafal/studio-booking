@@ -239,8 +239,8 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   dom = await open('/admin', jar); w = dom.window; d = w.document;
   await waitFor(() => d.querySelector('.login-card'), 'ecrã de login');
   ok(!!d.querySelector('.login-card .strip'), 'login com a régua do dia');
-  // Entrada introdutória: marca do estúdio em destaque (nome vindo do título da página).
-  ok(!!d.querySelector('.login-brand .login-mark') && d.querySelector('.login-brand .login-name').textContent.trim().length > 0, 'o login dá as boas-vindas com a marca do estúdio');
+  // Entrada introdutória: só o emblema do estúdio (o nome vive no alt da imagem).
+  ok(!!d.querySelector('.login-brand .login-mark') && d.querySelector('.login-brand .login-mark').alt.trim().length > 0, 'o login dá as boas-vindas com a marca do estúdio');
   setVal(w, d.querySelector('input[type=email]'), 'dono@teste.cv');
   setVal(w, d.querySelector('input[type=password]'), 'errada');
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
@@ -249,15 +249,25 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, d.querySelector('input[type=password]'), 'palavra-passe-teste');
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side'), 'painel');
-  ok(d.querySelectorAll('.side .nav').length === 9, 'menu com 9 secções (inclui Gestão de acesso)');
-  await waitFor(() => d.querySelector('.dash'), 'dashboard');
-  ok(d.querySelectorAll('.dash .panel')[0].querySelectorAll('.bk').length === 2, 'painel: 2 pedidos por confirmar (Ana cancelou)');
+  ok(d.querySelectorAll('.side .nav').length === 11, 'menu com 11 secções (inclui Dashboard, Relatórios e Gestão de acesso)');
+  // O Painel mostra agora só os pedidos por confirmar e as sessões de hoje
+  // (o resumo de números passou para a secção Dashboard).
+  await waitFor(() => d.querySelector('[aria-labelledby=h-pend]'), 'painel');
+  ok(d.querySelector('[aria-labelledby=h-pend]').querySelectorAll('.bk').length === 2, 'painel: 2 pedidos por confirmar (Ana cancelou)');
   ok(d.getElementById('pending-badge').textContent === '2' && !d.getElementById('pending-badge').hidden, 'selo de pedidos: 2');
   ok(d.querySelector('.nav[aria-current=page]').dataset.k === 'painel', 'Painel ativo no menu');
 
+  // Dashboard: os cartões de resumo, com o número de pedidos por confirmar.
+  w.location.hash = '#/dashboard';
+  await waitFor(() => d.querySelector('.kpis .kpi'), 'dashboard');
+  const cartaoPend = [...d.querySelectorAll('.kpis .kpi')].find((k) => /Pedidos por confirmar/.test(k.querySelector('.kpi-l').textContent));
+  ok(cartaoPend && cartaoPend.querySelector('.kpi-v').textContent === '2', 'dashboard: cartão "Pedidos por confirmar" com 2');
+  w.location.hash = '#/painel';
+  await waitFor(() => d.querySelector('[aria-labelledby=h-pend]'), 'volta ao painel');
+
   // confirmar 1.º pedido
-  d.querySelector('.dash .bk .btn:not(.btn-outline)').click();
-  await waitFor(() => d.querySelectorAll('.dash .panel')[0].querySelectorAll('.bk').length === 1, 'pedido confirmado');
+  d.querySelector('[aria-labelledby=h-pend] .bk .btn:not(.btn-outline)').click();
+  await waitFor(() => d.querySelector('[aria-labelledby=h-pend]').querySelectorAll('.bk').length === 1, 'pedido confirmado');
   ok(true, 'Confirmar retira o pedido da lista');
   ok(d.getElementById('pending-badge').textContent === '1', 'selo desce para 1');
 
@@ -404,8 +414,8 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   const nameField = sf.querySelector('input[type=text]');
   nameField.value = 'Produções Teste';
   sf.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
-  await waitFor(() => d.querySelector('.side .brand').textContent === 'Produções Teste', 'nome atualizado');
-  ok(true, 'guardar definições atualiza o nome no menu');
+  await waitFor(() => d.querySelector('.side .brand').getAttribute('aria-label') === 'Produções Teste', 'nome atualizado');
+  ok(true, 'guardar definições atualiza o nome da marca no menu');
 
   // Gestão de acesso: a lista de utilizadores, com o novo perfil de agente.
   w.location.hash = '#/acesso';

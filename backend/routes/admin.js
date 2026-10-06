@@ -212,6 +212,87 @@ router.get('/dashboard', (req, res) => {
   res.json({ today: now.date, counts, money, pending, todayList: today });
 });
 
+// ------------------------------------------------------------ Relatórios
+// Totais e repartições das marcações segundo os filtros escolhidos (período,
+// estúdio, estado, serviço, modo). O agente fica sempre preso ao seu estúdio.
+function computeReport(req) {
+  const q = req.query;
+  const where = ['1=1'];
+  const args = [];
+  const scope = scopeStudio(req);
+  if (scope) { where.push('r.studio_id=?'); args.push(scope); }
+  else if (q.studio_id) { where.push('r.studio_id=?'); args.push(U.toInt(q.studio_id)); }
+  if (q.from && U.isValidDate(String(q.from))) { where.push('b.date>=?'); args.push(String(q.from)); }
+  if (q.to && U.isValidDate(String(q.to))) { where.push('b.date<=?'); args.push(String(q.to)); }
+  if (q.service_id) { where.push('b.service_id=?'); args.push(U.toInt(q.service_id)); }
+  if (q.remote === '1' || q.remote === '0') { where.push('b.remote=?'); args.push(U.toInt(q.remote)); }
+  if (q.status) {
+    const list = String(q.status).split(',').filter((s) => STATUSES.includes(s));
+    if (list.length) { where.push(`b.status IN (${list.map(() => '?').join(',')})`); args.push(...list); }
+  }
+  const W = where.join(' AND ');
+  const FROM = `FROM bookings b JOIN rooms r ON r.id=b.room_id JOIN studios s ON s.id=r.studio_id
+                LEFT JOIN services sv ON sv.id=b.service_id WHERE ${W}`;
+  // O dinheiro ignora as canceladas: não são receita nem dívida reais.
+  const vivo = "CASE WHEN b.status!='cancelado' THEN";
+  const one = (sql) => db.prepare(sql).get(...args);
+  const many = (sql) => db.prepare(sql).all(...args);
+
+  const totals = one(`SELECT
+      COUNT(*) sessions,
+      COALESCE(SUM(b.end_min-b.start_min),0) minutes,
+      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received,
+      COALESCE(SUM(CASE WHEN b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid THEN b.price-b.paid ELSE 0 END),0) outstanding,
+      COUNT(DISTINCT b.client_name) clients
+    ${FROM}`);
+  const byStatus = many(`SELECT b.status, COUNT(*) sessions,
+      COALESCE(SUM(b.price),0) billed, COALESCE(SUM(b.paid),0) received ${FROM} GROUP BY b.status`);
+  const byService = many(`SELECT COALESCE(sv.name,'—') name, COUNT(*) sessions,
+      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY b.service_id ORDER BY sessions DESC`);
+  const byStudio = scope ? [] : many(`SELECT s.name name, COUNT(*) sessions,
+      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY r.studio_id ORDER BY billed DESC`);
+  const byMonth = many(`SELECT substr(b.date,1,7) month, COUNT(*) sessions,
+      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY month ORDER BY month`);
+  const rows = db.prepare(`${BOOKING_SELECT} WHERE ${W} ORDER BY b.date DESC, b.start_min DESC LIMIT 500`).all(...args).map(withTimes);
+
+  return { totals, byStatus, byService, byStudio, byMonth, rows, limited: rows.length >= 500, scope };
+}
+
+router.get('/reports', (req, res) => {
+  const r = computeReport(req);
+  res.json({ totals: r.totals, byStatus: r.byStatus, byService: r.byService, byStudio: r.byStudio, byMonth: r.byMonth, rows: r.rows, limited: r.limited });
+});
+
+// O mesmo relatório em PDF, descarregado diretamente (sem passar pela impressão).
+router.get('/reports.pdf', (req, res) => {
+  const r = computeReport(req);
+  const settings = getSettings();
+  const sid = r.scope || U.toInt(req.query.studio_id);
+  const sede = sid
+    ? db.prepare('SELECT name, city, address FROM studios WHERE id=?').get(sid)
+    : db.prepare('SELECT name, city, address FROM studios ORDER BY sort, id LIMIT 1').get();
+  const morada = sede ? [sede.address, sede.city].filter(Boolean).join(' · ') : '';
+  const contactos = [settings.phone && 'Tel: ' + settings.phone, settings.email, morada].filter(Boolean);
+  const fmtD = (iso, curto) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${curto ? y.slice(2) : y}`; };
+  const from = U.isValidDate(String(req.query.from || '')) ? String(req.query.from) : null;
+  const to = U.isValidDate(String(req.query.to || '')) ? String(req.query.to) : null;
+  const periodo = (!from && !to) ? 'Todo o período'
+    : (from && to) ? `De ${fmtD(from)} a ${fmtD(to)}` : from ? `Desde ${fmtD(from)}` : `Até ${fmtD(to)}`;
+  const geradoEm = new Intl.DateTimeFormat('pt-PT', {
+    timeZone: U.TZ, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date());
+  const dominio = settings.email && settings.email.includes('@') ? settings.email.split('@')[1] : '';
+  res.setHeader('Content-Disposition', `attachment; filename="relatorio-${from || 'inicio'}_a_${to || 'hoje'}.pdf"`);
+  res.setHeader('Content-Type', 'application/pdf');
+  require('../lib/pdf-relatorio').gerar(res, r, {
+    business: settings, contactos, periodo, geradoEm, dominio, cur: settings.currency,
+  });
+});
+
 // ------------------------------------------------------------ Calendário
 
 router.get('/calendar', (req, res) => {

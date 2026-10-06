@@ -67,6 +67,7 @@ main:has(#destaques[hidden]) .faixa-foto { --de: #101010; }
 #novidades { --de: #101010; --ate: #121212; }
 #destaques { --de: #121212; --ate: #2A2A2A; }
 .faixa-foto { --de: #2A2A2A; --ate: #2E2E2E; }
+#projetos { --de: #2A2A2A; --ate: #2A2A2A; }
 #servicos { --de: #2E2E2E; --ate: #3C3C3C; }
 .section-fim { --de: #3C3C3C; --ate: #505050; }
 /* Se não houver serviços, a secção fica escondida e a faixa da fotografia
@@ -81,6 +82,7 @@ main:has(#servicos[hidden]) .faixa-foto { --ate: #3C3C3C; }
 :root[data-tema="claro"] .faixa-foto { --de: #F7F8F8; --ate: #F7F8F8; }
 :root[data-tema="claro"] main:has(#destaques[hidden]) .faixa-foto { --de: #fff; }
 :root[data-tema="claro"] main:has(#servicos[hidden]) .faixa-foto { --ate: #fff; }
+:root[data-tema="claro"] #projetos { --de: #F7F8F8; --ate: #F7F8F8; }
 :root[data-tema="claro"] #servicos { --de: #F7F8F8; --ate: #fff; }
 :root[data-tema="claro"] .section-fim { --de: #fff; --ate: #fff; }
 :root[data-tema="claro"] .site-footer { background: linear-gradient(180deg, #fff 0, #F2F3F4 100%); padding-top: 96px; }
@@ -760,3 +762,54 @@ body { padding-top: var(--altura-cabecalho); }
 @media (max-width: 500px) {
   .cabecalho .brand span { display: none; }
 }
+
+/* ---------- Projetos colaborativos ("Participa") ---------- */
+.projetos-sub { color: var(--muted); margin: -6px 0 22px; max-width: 60ch; }
+.projetos-grelha {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px; margin: 0; padding: 0 0 8px; list-style: none;
+}
+@media (max-width: 560px) { .projetos-grelha { grid-template-columns: 1fr; } }
+.proj-card {
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: rgba(255, 255, 255, .04);
+}
+:root[data-tema="claro"] .proj-card { background: rgba(0, 0, 0, .025); }
+.proj-capa { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
+.proj-capa-vazia {
+  display: grid; place-items: center; color: var(--muted);
+  background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
+}
+.proj-corpo { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 18px; flex: 1 1 auto; }
+.proj-etiqueta {
+  align-self: flex-start; font: 600 .72rem/1 var(--body); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--amber-ink); background: var(--amber-soft); border-radius: 999px; padding: 5px 10px;
+}
+.proj-corpo h3 { font: 700 1.22rem/1.2 var(--display); letter-spacing: -.01em; margin: 2px 0 0; }
+.proj-resumo { color: var(--ink); margin: 0; }
+.proj-desc { color: var(--muted); margin: 0; font-size: .92rem; line-height: 1.5; white-space: pre-wrap; }
+.proj-prazo { color: var(--muted); font-size: .86rem; margin: 2px 0 0; }
+.proj-acao { margin-top: auto; padding-top: 10px; }
+.proj-encerrado { color: var(--muted); font-size: .9rem; font-style: italic; }
+
+/* Janela de "manifestar interesse" */
+.proj-dlg {
+  width: min(520px, 94vw); max-height: 90vh; border: 1px solid var(--edge); border-radius: 14px;
+  padding: 0; background: var(--surface); color: var(--ink); overflow: auto;
+}
+.proj-dlg::backdrop { background: rgba(0, 0, 0, .64); }
+.proj-dlg-in { padding: 22px 24px 24px; }
+.proj-dlg-head { margin-bottom: 4px; }
+.proj-dlg-head h3 { font: 800 1.5rem/1.15 var(--display); letter-spacing: -.02em; margin: 8px 0 0; }
+.proj-dlg-sub { color: var(--muted); margin: 6px 0 16px; }
+.proj-form { display: grid; gap: 12px; margin-top: 10px; }
+.proj-campo { display: grid; gap: 5px; font-weight: 600; font-size: .92rem; }
+.proj-opc { color: var(--muted); font-weight: 400; }
+.proj-form-foot { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+.proj-erro { color: var(--danger); margin: 0; font-size: .92rem; }
+.proj-feito { text-align: center; padding: 18px 8px; display: grid; gap: 10px; justify-items: center; }
+.proj-feito svg { color: var(--amber); }
+.proj-feito h3 { font: 800 1.4rem/1.15 var(--display); margin: 0; }
+.proj-feito p { color: var(--muted); margin: 0; max-width: 40ch; }
+@media (max-width: 560px) { .proj-form-foot > .btn { flex: 1 1 auto; } }

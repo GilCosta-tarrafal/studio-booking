@@ -63,6 +63,9 @@
   }
 
   function studioFilter(onChange) {
+    // Um agente está preso ao seu estúdio e o backend ignora este filtro
+    // (só devolve as marcações desse estúdio). Mostrá-lo só confundia.
+    if (app.user.studio_id) return null;
     const sel = h('select', { 'aria-label': 'Filtrar por estúdio', value: ui.studio },
       h('option', { value: '' }, 'Todos os estúdios'),
       app.studios.filter((s) => s.active).map((s) => h('option', { value: s.id }, s.name)));
@@ -117,8 +120,7 @@
       || 'Painel de gestão';
     root.replaceChildren(h('div', { class: 'login-page' }, h('div', { class: 'login-card' },
       h('div', { class: 'login-brand' },
-        h('img', { class: 'login-mark', src: '/img/logo.png', alt: '', width: 46, height: 46 }),
-        h('span', { class: 'login-name' }, bizName)),
+        h('img', { class: 'login-mark', src: '/img/logo.png', alt: bizName, width: 64, height: 64 })),
       S.renderStrip({ open: 540, close: 1260, busy: [[600, 720], [780, 900], [1020, 1140]] }),
       h('h1', {}, 'Área de gestão'),
       h('p', { class: 'sub' }, 'Entre para gerir as marcações, os estúdios e a sua equipa.'),
@@ -161,9 +163,10 @@
   // ou equipa sem estúdio (um agente não mexe na configuração geral); 'owner' =
   // só o proprietário. Ver os guardas do backend (requireManager/requireOwner).
   const NAV = [
-    ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''],
-    ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'], ['integracoes', 'Integrações', 'manager'],
-    ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', ''],
+    ['dashboard', 'Dashboard', ''], ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''], ['relatorios', 'Relatórios', ''],
+    ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'],
+    ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'], ['integracoes', 'Integrações', 'manager'],
+    ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', 'manager'],
   ];
 
   function canSee(perm) {
@@ -202,10 +205,61 @@
     return sel;
   }
 
+  // Janela para a pessoa trocar a sua palavra-passe (POST /api/auth/password).
+  function changePasswordModal() {
+    openModal((close) => {
+      const current = h('input', { type: 'password', autocomplete: 'current-password', required: true });
+      const next = h('input', { type: 'password', autocomplete: 'new-password', required: true, minlength: 8 });
+      const confirmar = h('input', { type: 'password', autocomplete: 'new-password', required: true });
+      const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+      const falha = (m) => { err.textContent = m; err.hidden = false; };
+      const form = h('form', {
+        onsubmit: async (e) => {
+          e.preventDefault(); err.hidden = true;
+          if (next.value.length < 8) return falha('A nova palavra-passe deve ter pelo menos 8 caracteres.');
+          if (next.value !== confirmar.value) return falha('A confirmação não coincide com a nova palavra-passe.');
+          try {
+            await S.api('/api/auth/password', { method: 'POST', body: { current: current.value, next: next.value } });
+            toast('Palavra-passe alterada.');
+            close();
+          } catch (ex) { falha(ex.message); }
+        },
+      },
+        field('Palavra-passe atual', current),
+        field('Nova palavra-passe', next, { hint: 'Pelo menos 8 caracteres.' }),
+        field('Confirmar nova palavra-passe', confirmar),
+        err,
+        h('div', { class: 'modal-foot' },
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+          h('button', { class: 'btn', type: 'submit' }, 'Guardar')));
+      return h('div', { class: 'modal-in' },
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Alterar palavra-passe')),
+        form);
+    });
+  }
+
+  // Chip com o nome: ao clicar abre um menu com alterar palavra-passe e sair.
+  function userMenu(papel) {
+    const iniciais = (app.user.name || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
+    const menu = h('div', { class: 'tb-menu', role: 'menu', hidden: true },
+      h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); changePasswordModal(); } }, 'Alterar palavra-passe'),
+      h('button', { class: 'tb-menu-item danger', type: 'button', role: 'menuitem', onclick: () => { fechar(); logout(); } }, 'Sair'));
+    const btn = h('button', { class: 'tb-user', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' },
+      h('span', { class: 'tb-avatar' }, iniciais),
+      h('span', { class: 'tb-user-txt' }, h('strong', {}, app.user.name), h('span', {}, papel)),
+      h('span', { class: 'tb-caret', 'aria-hidden': 'true' }, '▾'));
+    const wrap = h('div', { class: 'tb-usermenu' }, btn, menu);
+    const onDoc = (e) => { if (!wrap.contains(e.target)) fechar(); };
+    const onKey = (e) => { if (e.key === 'Escape') { fechar(); btn.focus(); } };
+    function fechar() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', onDoc); document.removeEventListener('keydown', onKey); }
+    function abrir() { menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); setTimeout(() => { document.addEventListener('click', onDoc); document.addEventListener('keydown', onKey); }, 0); }
+    btn.onclick = () => (menu.hidden ? abrir() : fechar());
+    return wrap;
+  }
+
   // Barra de topo da vista de agente: nome do estúdio, idioma, tema e quem está.
   function agentTopBar() {
     const st = app.studios.find((s) => s.id === app.user.studio_id);
-    const iniciais = (app.user.name || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
     return h('header', { class: 'topbar on-dark' },
       h('div', { class: 'tb-studio' },
         h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
@@ -213,9 +267,21 @@
       h('div', { class: 'tb-right' },
         langControl(),
         themeControl(),
-        h('div', { class: 'tb-user' },
-          h('span', { class: 'tb-avatar' }, iniciais),
-          h('span', { class: 'tb-user-txt' }, h('strong', {}, app.user.name), h('span', {}, 'Agente')))));
+        userMenu('Agente')));
+  }
+
+  // Rodapé da vista de agente: fecha a coluna por baixo, a condizer com a barra
+  // de topo — nome do negócio de um lado, atalho para o site e o ano do outro.
+  function agentFooter() {
+    const st = app.studios.find((s) => s.id === app.user.studio_id);
+    return h('footer', { class: 'main-foot on-dark' },
+      h('span', { class: 'main-foot-brand' },
+        app.settings.business_name,
+        st && h('span', { class: 'main-foot-sep' }, ' · '),
+        st && h('span', { class: 'main-foot-studio' }, st.name)),
+      h('span', { class: 'main-foot-meta' },
+        h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
+        ' · © ' + new Date().getFullYear()));
   }
 
   function renderShell() {
@@ -225,19 +291,21 @@
       if (window.confirm('Terminar sessão e voltar ao ecrã de entrada?')) logout();
     };
     const side = h('aside', { class: 'side on-dark' },
-      h('a', { class: 'brand', href: '#/painel', title: 'Terminar sessão e voltar à entrada', onclick: goToLogin },
-        h('img', { class: 'brand-mark', src: '/img/logo.png', alt: '', width: 34, height: 34 }),
-        h('span', { class: 'brand-name' }, app.settings.business_name)),
+      h('a', { class: 'brand', href: '#/painel', title: 'Terminar sessão e voltar à entrada', 'aria-label': app.settings.business_name, onclick: goToLogin },
+        h('img', { class: 'brand-mark', src: '/img/logo.png', alt: app.settings.business_name, width: 48, height: 48 })),
       h('nav', { 'aria-label': 'Secções do painel' }, NAV.filter(([, , perm]) => canSee(perm)).map(([k, label]) => h('a', { class: 'nav', href: '#/' + k, 'data-k': k },
         label, k === 'marcacoes' && h('span', { class: 'badge', id: 'pending-badge', hidden: !app.pending, 'aria-label': 'pedidos por confirmar' }, app.pending)))),
       h('div', { class: 'side-foot' },
         h('p', { class: 'who' }, `${app.user.name} (${roleLabel()})`),
         h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
+        // O agente troca a palavra-passe pelo chip da barra de topo; os outros
+        // perfis (sem barra de topo) fazem-no aqui.
+        !app.user.studio_id && h('button', { type: 'button', onclick: changePasswordModal }, 'Alterar palavra-passe'),
         h('button', { type: 'button', onclick: logout }, 'Sair')));
     // O agente, dentro do seu estúdio, ganha uma barra de topo (nome do estúdio,
     // idioma, tema e identidade). Os outros perfis ficam como estavam.
     const viewEl = h('main', { class: 'main', id: 'view', tabindex: '-1' });
-    const col = app.user.studio_id ? h('div', { class: 'main-col' }, agentTopBar(), viewEl) : viewEl;
+    const col = app.user.studio_id ? h('div', { class: 'main-col' }, agentTopBar(), viewEl, agentFooter()) : viewEl;
     root.replaceChildren(h('div', { class: 'app' }, side, col));
   }
 
