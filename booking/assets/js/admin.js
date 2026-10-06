@@ -257,22 +257,31 @@
     return wrap;
   }
 
-  // Barra de topo da vista de agente: nome do estúdio, idioma, tema e quem está.
-  function agentTopBar() {
-    const st = app.studios.find((s) => s.id === app.user.studio_id);
+  // Como se descreve o utilizador no chip da barra de topo.
+  function chipRole() {
+    if (app.user.role === 'owner') return 'Administrador';
+    if (app.user.studio_id) return 'Agente';
+    return 'Responsável';
+  }
+
+  // Barra de topo do painel: identidade à esquerda, idioma, tema e quem está à
+  // direita. O agente vê o nome do seu estúdio; os outros perfis (administrador,
+  // responsável) veem o nome do negócio.
+  function topBar() {
+    const st = app.user.studio_id && app.studios.find((s) => s.id === app.user.studio_id);
     return h('header', { class: 'topbar on-dark' },
       h('div', { class: 'tb-studio' },
         h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
-        h('span', { class: 'tb-studio-name' }, st ? st.name : 'Estúdio')),
+        h('span', { class: 'tb-studio-name' }, st ? st.name : app.settings.business_name)),
       h('div', { class: 'tb-right' },
         langControl(),
         themeControl(),
-        userMenu('Agente')));
+        userMenu(chipRole())));
   }
 
-  // Rodapé da vista de agente: fecha a coluna por baixo, a condizer com a barra
-  // de topo — nome do negócio de um lado, atalho para o site e o ano do outro.
-  function agentFooter() {
+  // Rodapé do painel: fecha a coluna por baixo, a condizer com a barra de topo —
+  // nome do negócio de um lado, atalho para o site e o ano do outro.
+  function mainFooter() {
     const st = app.studios.find((s) => s.id === app.user.studio_id);
     return h('footer', { class: 'main-foot on-dark' },
       h('span', { class: 'main-foot-brand' },
@@ -298,14 +307,12 @@
       h('div', { class: 'side-foot' },
         h('p', { class: 'who' }, `${app.user.name} (${roleLabel()})`),
         h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
-        // O agente troca a palavra-passe pelo chip da barra de topo; os outros
-        // perfis (sem barra de topo) fazem-no aqui.
-        !app.user.studio_id && h('button', { type: 'button', onclick: changePasswordModal }, 'Alterar palavra-passe'),
+        // A palavra-passe troca-se pelo chip da barra de topo, igual para todos.
         h('button', { type: 'button', onclick: logout }, 'Sair')));
-    // O agente, dentro do seu estúdio, ganha uma barra de topo (nome do estúdio,
-    // idioma, tema e identidade). Os outros perfis ficam como estavam.
+    // Todos os perfis (agente, administrador, responsável) ganham a mesma barra
+    // de topo — nome/estúdio, idioma, tema e identidade — e o rodapé a condizer.
     const viewEl = h('main', { class: 'main', id: 'view', tabindex: '-1' });
-    const col = app.user.studio_id ? h('div', { class: 'main-col' }, agentTopBar(), viewEl, agentFooter()) : viewEl;
+    const col = h('div', { class: 'main-col' }, topBar(), viewEl, mainFooter());
     root.replaceChildren(h('div', { class: 'app' }, side, col));
   }
 
