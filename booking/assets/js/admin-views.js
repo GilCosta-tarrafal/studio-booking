@@ -4,7 +4,7 @@
   const S = window.Studio;
   const A = window.Admin;
   const { h, fmtMin, parseHM, fmtDate, addDays, money, waLink, statusTag, STATUS, DAY_SHORT, DAY_LONG } = S;
-  const { app, ui, views, api, toast, field, pageHead, labelCells, studioFilter, openBooking, openBlock, bookingItem } = A;
+  const { app, ui, views, api, toast, field, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock, bookingItem } = A;
   const cur = () => app.settings.currency;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -968,18 +968,210 @@
     },
   };
 
-  // ============================================================ Gestão de acesso (só proprietário)
-  views.acesso = {
-    title: 'Gestão de acesso',
+  // ============================================================ Utilizadores (só proprietário)
+  // A gestão das contas de equipa: criar, editar e remover proprietário, equipa
+  // e agentes. (O que estes perfis podem fazer vê-se em "Gestão de acesso".)
+  views.utilizadores = {
+    title: 'Utilizadores',
     async render(box) {
       const { users } = await api('/api/admin/users');
-      box.append(pageHead('Gestão de acesso'));
+      box.append(pageHead('Utilizadores'));
       box.append(h('section', { class: 'panel' },
         h('h2', {}, 'Contas de acesso'),
         h('p', { class: 'hint' }, 'O proprietário vê e faz tudo. A equipa gere marcações, clientes e estúdios. '
           + 'Um agente de estúdio só vê e gere o seu estúdio — para quem trabalha num dos estúdios espalhados pelo mundo.'),
         users.map((u) => userRow(u, app.user.id)),
         userRow(null, app.user.id)));
+    },
+  };
+
+  // ============================================================ Gestão de acesso — RBAC (só proprietário)
+  // Gestão do controlo de acesso: criar perfis (roles), permissões e atribuir
+  // perfis a utilizadores. Os dados vêm de /api/admin/rbac. (A aplicação dos
+  // acessos no painel continua a usar o modelo proprietário/gestor/agente.)
+  function rbacBadge(texto, extra) { return h('span', { class: 'rbac-badge' + (extra ? ' ' + extra : '') }, texto); }
+
+  async function rbacApagar(url, pergunta, depois) {
+    if (!window.confirm(pergunta)) return;
+    try { await api(url, { method: 'DELETE' }); toast('Removido.'); depois(); }
+    catch (e) { toast(e.message, true); }
+  }
+
+  views.acesso = {
+    title: 'Gestão de acesso',
+    async render(box) {
+      let data = await api('/api/admin/rbac');
+      const users = (await api('/api/admin/users')).users;
+
+      let aba = 'roles';
+      const novo = h('button', { class: 'btn btn-sm', type: 'button' });
+      const corpo = h('div', { class: 'rbac-body' });
+      const tabs = h('div', { class: 'tabs', role: 'tablist' });
+
+      async function recarregar() { data = await api('/api/admin/rbac'); desenhar(); }
+
+      function desenhar() {
+        const defs = [
+          ['roles', 'Roles (' + data.roles.length + ')'],
+          ['permissoes', 'Permissões (' + data.permissions.length + ')'],
+          ['atribuicoes', 'Atribuições (' + data.assignments.length + ')'],
+        ];
+        tabs.replaceChildren(...defs.map(([k, label]) => h('button', {
+          class: 'tab', type: 'button', role: 'tab', 'aria-selected': aba === k ? 'true' : 'false',
+          onclick: () => { aba = k; desenhar(); },
+        }, label)));
+        novo.textContent = aba === 'roles' ? 'Novo Role' : aba === 'permissoes' ? 'Nova Permissão' : 'Atribuir Role';
+        novo.onclick = aba === 'roles' ? modalRole : aba === 'permissoes' ? modalPermissao : modalAtribuir;
+        if (aba === 'roles') corpo.replaceChildren(...data.roles.map(roleCard));
+        else if (aba === 'permissoes') corpo.replaceChildren(permCard(data.permissions));
+        else corpo.replaceChildren(assignTable(data.assignments));
+      }
+
+      // ---- cartões e listas ----
+      function roleCard(r) {
+        return h('section', { class: 'rbac-card' },
+          h('div', { class: 'rbac-card-head' },
+            h('h3', {}, r.name),
+            rbacBadge(r.code, 'slug'),
+            r.is_system ? rbacBadge('Sistema', 'sistema') : null,
+            r.is_system ? null : h('button', {
+              class: 'btn btn-outline btn-sm rbac-card-del', type: 'button',
+              onclick: () => rbacApagar('/api/admin/rbac/roles/' + r.id, 'Eliminar o perfil "' + r.name + '"?', recarregar),
+            }, 'Eliminar')),
+          r.description ? h('p', { class: 'rbac-desc' }, r.description) : null,
+          h('p', { class: 'rbac-meta' },
+            h('span', {}, 'Prioridade: ' + r.priority),
+            h('span', {}, 'Categoria: ' + (r.category || '—')),
+            h('span', {}, 'Permissões: ' + r.permCount)));
+      }
+
+      function permCard(perms) {
+        const porRecurso = {};
+        for (const p of perms) (porRecurso[p.resource] = porRecurso[p.resource] || []).push(p);
+        return h('div', { class: 'rbac-body' }, Object.entries(porRecurso).map(([recurso, itens]) => h('section', { class: 'rbac-card' },
+          h('h3', {}, recurso),
+          h('ul', { class: 'rbac-perms' }, itens.map((p) => h('li', {},
+            h('span', { class: 'rbac-perm-nome' }, p.label),
+            h('code', { class: 'rbac-perm-slug' }, p.code),
+            h('button', {
+              class: 'btn btn-outline btn-sm rbac-perm-del', type: 'button', 'aria-label': 'Eliminar ' + p.code,
+              onclick: () => rbacApagar('/api/admin/rbac/permissions/' + p.id, 'Eliminar a permissão "' + p.label + '"?', recarregar),
+            }, '×')))))));
+      }
+
+      function assignTable(asgs) {
+        if (!asgs.length) return h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Sem atribuições. Use "Atribuir Role".'));
+        return h('div', { class: 'table-wrap' }, labelCells(h('table', { class: 'data' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'Utilizador'), h('th', {}, 'Perfil'), h('th', {}, 'Expira'), h('th', {}, ''))),
+          h('tbody', {}, asgs.map((a) => h('tr', {},
+            h('td', {}, a.user_name),
+            h('td', {}, rbacBadge(a.role_name)),
+            h('td', {}, a.expires_at || '—'),
+            h('td', { class: 'num' }, h('button', {
+              class: 'btn btn-outline btn-sm', type: 'button',
+              onclick: () => rbacApagar('/api/admin/rbac/assignments/' + a.id, 'Remover esta atribuição?', recarregar),
+            }, 'Remover'))))))));
+      }
+
+      // ---- modais ----
+      function modalPermissao() {
+        openModal((close) => {
+          const label = h('input', { type: 'text', required: true, placeholder: 'ex.: Reservas – Criar' });
+          const resource = h('input', { type: 'text', required: true, placeholder: 'ex.: bookings' });
+          const action = h('input', { type: 'text', required: true, placeholder: 'ex.: create' });
+          const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+          return h('div', { class: 'modal-in' },
+            h('div', { class: 'modal-head' }, h('h2', {}, 'Nova permissão')),
+            h('form', { onsubmit: async (e) => {
+              e.preventDefault(); err.hidden = true;
+              try { await api('/api/admin/rbac/permissions', { method: 'POST', body: { label: label.value, resource: resource.value, action: action.value } }); close(); toast('Permissão criada.'); recarregar(); }
+              catch (ex) { err.textContent = ex.message; err.hidden = false; }
+            } },
+            field('Label', label),
+            h('div', { class: 'grid-2' }, field('Recurso', resource), field('Ação', action)),
+            err,
+            h('div', { class: 'modal-foot' },
+              h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+              h('button', { class: 'btn', type: 'submit' }, 'Criar'))));
+        });
+      }
+
+      function modalRole() {
+        openModal((close) => {
+          const name = h('input', { type: 'text', required: true, placeholder: 'ex.: Administrador' });
+          const code = h('input', { type: 'text', placeholder: 'ex.: admin' });
+          const desc = h('input', { type: 'text', placeholder: 'ex.: Acesso total ao sistema' });
+          const prio = h('input', { type: 'number', value: '0' });
+          const cat = h('input', { type: 'text', placeholder: 'ex.: system' });
+          const sys = h('select', {}, h('option', { value: '0' }, 'Não sistema'), h('option', { value: '1' }, 'Sistema'));
+          const checks = data.permissions.map((p) => {
+            const cb = h('input', { type: 'checkbox', value: p.id });
+            return { cb, el: h('label', { class: 'rbac-check' }, cb, h('span', { class: 'rbac-check-l' }, p.code), h('span', { class: 'rbac-check-r' }, p.resource)) };
+          });
+          const conta = h('span', {}, '0');
+          const atualizar = () => { conta.textContent = String(checks.filter((c) => c.cb.checked).length); };
+          checks.forEach((c) => c.cb.addEventListener('change', atualizar));
+          const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+          return h('div', { class: 'modal-in rbac-modal' },
+            h('div', { class: 'modal-head' }, h('h2', {}, 'Novo Role')),
+            h('form', { onsubmit: async (e) => {
+              e.preventDefault(); err.hidden = true;
+              const permissions = checks.filter((c) => c.cb.checked).map((c) => +c.cb.value);
+              try { await api('/api/admin/rbac/roles', { method: 'POST', body: { name: name.value, code: code.value, description: desc.value, priority: +prio.value || 0, category: cat.value, is_system: sys.value === '1', permissions } }); close(); toast('Perfil criado.'); recarregar(); }
+              catch (ex) { err.textContent = ex.message; err.hidden = false; }
+            } },
+            h('div', { class: 'grid-2' }, field('Nome', name), field('Código', code)),
+            field('Descrição', desc),
+            h('div', { class: 'grid-3' }, field('Prioridade', prio), field('Categoria', cat), field('Sistema', sys)),
+            h('div', { class: 'field' },
+              h('label', {}, 'Permissões (', conta, ' selecionadas)'),
+              h('div', { class: 'rbac-check-list' }, checks.map((c) => c.el)),
+              h('p', { class: 'rbac-check-acoes' },
+                h('button', { type: 'button', class: 'link-acao', onclick: () => { checks.forEach((c) => { c.cb.checked = true; }); atualizar(); } }, 'Selecionar todas'),
+                ' · ',
+                h('button', { type: 'button', class: 'link-acao', onclick: () => { checks.forEach((c) => { c.cb.checked = false; }); atualizar(); } }, 'Limpar'))),
+            err,
+            h('div', { class: 'modal-foot' },
+              h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+              h('button', { class: 'btn', type: 'submit' }, 'Criar Role'))));
+        });
+      }
+
+      function modalAtribuir() {
+        openModal((close) => {
+          const userSel = h('select', { required: true }, h('option', { value: '' }, 'Selecionar…'), users.map((u) => h('option', { value: u.id }, u.name + ' (' + u.email + ')')));
+          const escolhidos = new Set();
+          const chips = data.roles.map((r) => {
+            const chip = h('button', { type: 'button', class: 'rbac-chip', 'aria-pressed': 'false' }, r.name);
+            chip.addEventListener('click', () => {
+              if (escolhidos.has(r.id)) { escolhidos.delete(r.id); chip.classList.remove('on'); chip.setAttribute('aria-pressed', 'false'); }
+              else { escolhidos.add(r.id); chip.classList.add('on'); chip.setAttribute('aria-pressed', 'true'); }
+            });
+            return chip;
+          });
+          const expira = h('input', { type: 'date' });
+          const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+          return h('div', { class: 'modal-in' },
+            h('div', { class: 'modal-head' }, h('h2', {}, 'Atribuir Role')),
+            h('form', { onsubmit: async (e) => {
+              e.preventDefault(); err.hidden = true;
+              try { await api('/api/admin/rbac/assignments', { method: 'POST', body: { user_id: +userSel.value, role_ids: [...escolhidos], expires_at: expira.value || null } }); close(); toast('Perfil atribuído.'); recarregar(); }
+              catch (ex) { err.textContent = ex.message; err.hidden = false; }
+            } },
+            field('Utilizador', userSel),
+            h('div', { class: 'field' }, h('label', {}, 'Roles a atribuir'), h('div', { class: 'rbac-chips' }, chips)),
+            field('Data de expiração (opcional)', expira, { hint: 'Deixe em branco para atribuição permanente.' }),
+            err,
+            h('div', { class: 'modal-foot' },
+              h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+              h('button', { class: 'btn', type: 'submit' }, 'Atribuir'))));
+        });
+      }
+
+      box.append(pageHead('Controlo de Acesso (RBAC)', novo));
+      box.append(h('p', { class: 'hint rbac-sub' }, 'Funções, permissões e atribuições a utilizadores.'));
+      box.append(tabs, corpo);
+      desenhar();
     },
   };
 

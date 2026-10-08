@@ -813,3 +813,35 @@ body { padding-top: var(--altura-cabecalho); }
 .proj-feito h3 { font: 800 1.4rem/1.15 var(--display); margin: 0; }
 .proj-feito p { color: var(--muted); margin: 0; max-width: 40ch; }
 @media (max-width: 560px) { .proj-form-foot > .btn { flex: 1 1 auto; } }
+
+/* Ícone de conta no cabeçalho (ver /js/conta-nav.js). */
+.conta-link { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: inherit; background: none; border: 0; font: inherit; cursor: pointer; }
+.conta-link:hover { color: var(--amber); }
+.conta-link .conta-nome { font-weight: 500; white-space: nowrap; }
+@media (max-width: 560px) { .conta-link .conta-nome { display: none; } }
+
+/* Menu da conta (com sessão iniciada): Sair, Alterar palavra-passe... */
+.conta-nav { position: relative; display: inline-flex; }
+.conta-menu {
+  --menu-fundo: #16181A; --menu-linha: #34383C; --menu-ink: #ECECEC; --menu-realce: #23262A;
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  min-width: 210px; padding: 6px; display: flex; flex-direction: column;
+  background: var(--menu-fundo); color: var(--menu-ink);
+  border: 1px solid var(--menu-linha); border-radius: 12px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .45);
+}
+:root[data-tema="claro"] .conta-menu {
+  --menu-fundo: #fff; --menu-linha: #DEE1E4; --menu-ink: #16181A; --menu-realce: #F1F2F3;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .16);
+}
+.conta-menu-item {
+  display: block; width: 100%; min-height: 42px; padding: 0 12px;
+  line-height: 42px; text-align: left; text-decoration: none;
+  border: 0; border-radius: 8px; background: transparent; color: inherit;
+  font: 500 .95rem/42px var(--body); cursor: pointer;
+}
+.conta-menu-item:hover { background: var(--menu-realce); color: inherit; }
+
+/* Chamada para a marcação, no herói da página inicial. */
+.hero-cta { margin: 22px 0 0; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.hero-cta-info { max-width: 46ch; font-size: 1.05rem; line-height: 1.5; color: var(--muted); }

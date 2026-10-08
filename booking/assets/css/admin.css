@@ -602,3 +602,42 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .insc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 @media (max-width: 560px) { .projeto-card { flex-direction: column; } }
 
+
+/* Gestão de acesso (RBAC): cartões de roles, permissões e atribuições. */
+.rbac-sub { margin: -8px 0 16px; }
+.rbac-body { display: grid; gap: 14px; }
+.rbac-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.rbac-card > h3 { margin: 0 0 4px; font: 800 1.05rem/1.2 var(--display); }
+.rbac-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rbac-card-head h3 { margin: 0; font: 800 1.1rem/1.2 var(--display); }
+.rbac-desc { color: var(--muted); margin: 6px 0 10px; }
+.rbac-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--muted); font-size: .88rem; }
+.rbac-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--ink); }
+.rbac-badge.slug { background: color-mix(in srgb, #7c5cff 22%, transparent); color: color-mix(in srgb, #7c5cff 72%, var(--ink)); font-family: ui-monospace, Menlo, Consolas, monospace; }
+.rbac-badge.sistema { background: color-mix(in srgb, var(--amber) 28%, transparent); color: color-mix(in srgb, var(--amber) 55%, var(--ink)); }
+.rbac-badge.role-owner { background: color-mix(in srgb, var(--amber) 26%, transparent); }
+.rbac-badge.role-manager { background: color-mix(in srgb, #4f93ff 24%, transparent); }
+.rbac-badge.role-agent { background: color-mix(in srgb, #35c08b 24%, transparent); }
+.rbac-perms { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.rbac-perms li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); }
+.rbac-perms li:first-child { border-top: 0; padding-top: 0; }
+.rbac-perm-nome { font-weight: 600; }
+.rbac-perm-slug { color: var(--muted); font-size: .82rem; }
+.rbac-perm-roles { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* RBAC: eliminar, lista de permissões (criar role), chips (atribuir). */
+.rbac-card-del { margin-left: auto; }
+.rbac-perm-del { margin-left: auto; min-width: 34px; padding: 2px 8px; line-height: 1.2; }
+.rbac-check-list { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: grid; gap: 2px; }
+.rbac-check { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+.rbac-check:hover { background: var(--surface-2); }
+.rbac-check input { flex: none; width: 16px; height: 16px; }
+.rbac-check-l { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .88rem; }
+.rbac-check-r { margin-left: auto; color: var(--muted); font-size: .8rem; }
+.rbac-check-acoes { margin: 8px 0 0; }
+.link-acao { background: none; border: 0; padding: 0; color: var(--amber); font: inherit; cursor: pointer; }
+.link-acao:hover { text-decoration: underline; }
+.rbac-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rbac-chip { padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px; background: none; color: inherit; font: 600 .9rem var(--body); cursor: pointer; }
+.rbac-chip:hover { border-color: var(--edge); }
+.rbac-chip.on { background: var(--amber); color: #1a1304; border-color: transparent; }

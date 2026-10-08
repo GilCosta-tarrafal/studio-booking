@@ -4,7 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-  const state = { cfg: null, studio: null, room: null, date: '', avail: null, cellMap: new Map(), start: null, duration: 0, seq: 0, feito: null, passo: 1 };
+  const state = { cfg: null, client: null, studio: null, room: null, date: '', avail: null, cellMap: new Map(), start: null, duration: 0, seq: 0, feito: null, passo: 1 };
   const PASSOS = 3;
 
   const rules = () => state.cfg.rules;
@@ -346,9 +346,28 @@
     else box.scrollIntoView({ block: 'center' });
   }
 
+  // Marcar exige conta. Com sessão, os dados de contacto vêm da conta (campos
+  // preenchidos e bloqueados); sem ela, o passo dos dados dá lugar a um convite
+  // a entrar ou criar conta, com o regresso já apontado para esta página.
+  function aplicarConta() {
+    const c = state.client;
+    $('conta-gate').hidden = !!c;
+    $('conta-nota').hidden = !c;
+    $('dados-fieldset').hidden = !c;
+    $('passo3-acoes').hidden = !c;
+    if (c) {
+      $('name').value = c.name;
+      $('phone').value = c.phone;
+      $('email').value = c.email || '';
+      $('name').readOnly = $('phone').readOnly = $('email').readOnly = true;
+      $('conta-nota').textContent = t('conta.marcarComo', { nome: c.name });
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!state.cfg) return;
+    if (!state.client) { location.assign('/conta?next=/marcar'); return; }
     $('form-error').hidden = true;
     // Não devia acontecer (o passo 2 não deixa passar sem isto), mas se
     // acontecer, o erro aparece onde se resolve.
@@ -433,6 +452,7 @@
     if (!state.cfg) return;
     if (state.feito) { showDone(state.feito, false); return; }
     window.Studio.renderRodape(state.cfg);
+    aplicarConta();
     contarPasso();
     renderStudios();
     renderRooms();
@@ -461,6 +481,8 @@
     }
     const cfg = state.cfg;
     window.Studio.renderRodape(cfg);
+    try { state.client = (await api('/api/conta/me')).client; } catch (_) { state.client = null; }
+    aplicarConta();
     if (!cfg.studios.length) {
       $('load-error').textContent = t('marcar.semEstudios');
       $('load-error').hidden = false;

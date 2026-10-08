@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="{{LANG}}" data-tema="{{TEMA}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n-tpl="{conta.titulo} | {{NAME}}">{{t:conta.titulo}} | {{NAME}}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/conta.css">
+<script src="/js/carregamento.js" defer></script>
+</head>
+<body class="page-inner">
+<div id="carregar" class="carregar" hidden role="status" aria-label="A carregar">
+  <div class="carregar-cartao">
+    <span class="carregar-logo"><img src="/img/logo.png" alt="" width="52" height="52"><span class="carregar-anel" aria-hidden="true"></span></span>
+    <span class="carregar-marca">{{NAME}}</span>
+  </div>
+</div>
+<a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
+<header class="cabecalho">
+  <div class="container">
+    <nav class="topbar" aria-label="Principal" data-i18n-attr="aria-label:nav.principal">
+      <a class="brand" href="/"><img class="brand-mark" src="/img/logo.png" alt="" width="34" height="34"><span>{{NAME}}</span></a>
+      <div class="topnav">
+        <a href="/" data-i18n="nav.inicio">Início</a>
+        <a href="/marcar" data-i18n="nav.marcar">Marcar sessão</a>
+      </div>
+      <div class="topacoes">{{PREFS}}</div>
+    </nav>
+  </div>
+</header>
+
+<main id="conteudo" class="container conta-main">
+  <h1 data-i18n="conta.titulo">A sua conta</h1>
+  <p class="lead" data-i18n="conta.lead">Entre na sua conta para marcar e ver as suas sessões.</p>
+
+  <div id="erro" class="notice error" role="alert" hidden></div>
+
+  <!-- Quem já tem sessão iniciada vê isto em vez dos formulários. -->
+  <section id="sessao" class="conta-cartao" hidden aria-live="polite">
+    <p id="sessao-ola"></p>
+    <div class="actions">
+      <a class="btn btn-amber" href="/marcar" data-i18n="nav.marcar">Marcar sessão</a>
+      <a class="btn btn-outline" href="/consultar" data-i18n="conta.minhasMarcacoes">As minhas marcações</a>
+      <button type="button" class="btn btn-outline" id="btn-sair" data-i18n="conta.sair">Sair</button>
+    </div>
+
+    <form id="form-senha" class="conta-form conta-senha" novalidate>
+      <h2 id="senha" data-i18n="conta.alterarSenha">Alterar palavra-passe</h2>
+      <div class="field">
+        <label for="senha-atual" data-i18n="conta.senhaAtual">Palavra-passe atual</label>
+        <input id="senha-atual" type="password" autocomplete="current-password" maxlength="200" required>
+      </div>
+      <div class="field">
+        <label for="senha-nova" data-i18n="conta.novaPalavraPasse">Nova palavra-passe</label>
+        <input id="senha-nova" type="password" autocomplete="new-password" maxlength="200" required>
+      </div>
+      <p class="submit-row"><button class="btn" type="submit" data-i18n="conta.alterarSenha">Alterar palavra-passe</button></p>
+      <p class="notice ok" id="senha-ok" hidden data-i18n="conta.senhaAlterada">Palavra-passe alterada.</p>
+    </form>
+  </section>
+
+  <section id="formularios" class="conta-cartao" hidden>
+    <div class="conta-abas" role="tablist" aria-label="Entrar ou criar conta">
+      <button type="button" class="conta-aba" id="aba-entrar" role="tab" aria-selected="true" data-i18n="conta.jaTenho">Já tenho conta</button>
+      <button type="button" class="conta-aba" id="aba-criar" role="tab" aria-selected="false" data-i18n="conta.naoTenho">Ainda não tenho conta</button>
+    </div>
+
+    <!-- Entrar -->
+    <form id="form-entrar" class="conta-form" novalidate>
+      <div class="field">
+        <label for="entrar-id" data-i18n="conta.identificador">Email ou telefone</label>
+        <input id="entrar-id" type="text" autocomplete="username" maxlength="120" required>
+      </div>
+      <div class="field">
+        <label for="entrar-pw" data-i18n="conta.palavraPasse">Palavra-passe</label>
+        <input id="entrar-pw" type="password" autocomplete="current-password" maxlength="200" required>
+      </div>
+      <p class="submit-row">
+        <button class="btn btn-lg" type="submit" data-i18n="conta.entrar">Entrar</button>
+      </p>
+      <p><button type="button" class="link-botao" id="ir-recuperar" data-i18n="conta.esqueci">Esqueci-me da palavra-passe</button></p>
+    </form>
+
+    <!-- Criar conta -->
+    <form id="form-criar" class="conta-form" hidden novalidate>
+      <div class="field">
+        <label for="criar-nome" data-i18n="conta.nome">Nome</label>
+        <input id="criar-nome" type="text" autocomplete="name" maxlength="80" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="criar-email" data-i18n="conta.email">Email</label>
+          <input id="criar-email" type="email" autocomplete="email" maxlength="120" required>
+        </div>
+        <div class="field">
+          <label for="criar-tel" data-i18n="conta.telefone">Telefone</label>
+          <input id="criar-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="30" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="criar-pw" data-i18n="conta.palavraPasse">Palavra-passe</label>
+        <input id="criar-pw" type="password" autocomplete="new-password" maxlength="200" required>
+      </div>
+      <p class="submit-row">
+        <button class="btn btn-lg" type="submit" data-i18n="conta.criarConta">Criar conta</button>
+      </p>
+    </form>
+
+    <!-- Recuperar palavra-passe -->
+    <form id="form-recuperar" class="conta-form" hidden novalidate>
+      <h2 data-i18n="conta.recuperarTitulo">Recuperar a palavra-passe</h2>
+      <p class="hint" data-i18n="conta.recuperarLead">Indique o email ou o telefone da conta e escolha por onde receber o código.</p>
+      <div class="field">
+        <label for="rec-id" data-i18n="conta.identificador">Email ou telefone</label>
+        <input id="rec-id" type="text" autocomplete="username" maxlength="120" required>
+      </div>
+      <div class="choices choices-2" role="radiogroup" aria-label="Canal">
+        <label class="choice"><input type="radio" name="canal" value="email" checked><span class="choice-body"><strong data-i18n="conta.canalEmail">Receber por email</strong></span></label>
+        <label class="choice"><input type="radio" name="canal" value="sms"><span class="choice-body"><strong data-i18n="conta.canalSms">Receber por SMS</strong></span></label>
+      </div>
+      <p class="submit-row">
+        <button class="btn" type="button" id="btn-enviar-codigo" data-i18n="conta.enviarCodigo">Enviar código</button>
+      </p>
+
+      <div id="rec-passo2" hidden>
+        <p class="notice" id="rec-info" data-i18n="conta.codigoEnviado">Se existir uma conta, enviámos um código. Escreva-o abaixo e defina a nova palavra-passe.</p>
+        <div class="field">
+          <label for="rec-codigo" data-i18n="conta.codigo">Código</label>
+          <input id="rec-codigo" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+        </div>
+        <div class="field">
+          <label for="rec-pw" data-i18n="conta.novaPalavraPasse">Nova palavra-passe</label>
+          <input id="rec-pw" type="password" autocomplete="new-password" maxlength="200" required>
+        </div>
+        <p class="submit-row">
+          <button class="btn btn-lg" type="submit" data-i18n="conta.redefinir">Redefinir palavra-passe</button>
+        </p>
+      </div>
+      <p><button type="button" class="link-botao" id="ir-entrar" data-i18n="conta.voltar">Voltar</button></p>
+    </form>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-fim">
+    <img class="footer-mark" src="/img/logo.png" alt="{{NAME}}" width="34" height="34">
+    <p class="fine">© {{YEAR}} {{NAME}}. <span data-i18n="rodape.direitos">Todos os direitos reservados.</span></p>
+  </div>
+</footer>
+
+<script src="/js/dicionario.js"></script>
+<script src="/js/prefs.js"></script>
+<script src="/js/cabecalho.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/conta.js"></script>
+</body>
+</html>

@@ -25,14 +25,22 @@ process.env.GEOCODER_URL = 'http://127.0.0.1:' + mapas.address().port + '/search
 
 const { start } = require('../backend/server');
 const U = require('../backend/lib/util');
+const contaAuth = require('../backend/lib/conta-auth');
+const { db } = require('../backend/lib/db');
 
 let server, base, passed = 0, failed = 0;
+// Marcar passou a exigir sessão de cliente. Guarda-se aqui o cookie da conta de
+// teste e, para não o repetir em cada marcação, o call() liga-o sozinho aos
+// pedidos de marcação do site. Quem quiser testar sem conta passa anon: true.
+let clientCookie = null;
 const ok = (cond, msg) => { if (cond) { passed++; console.log('  ✓', msg); } else { failed++; console.log('  ✗ FALHOU:', msg); } };
 
-async function call(method, url, { body, cookie, headers = {} } = {}) {
+async function call(method, url, { body, cookie, headers = {}, anon = false } = {}) {
   const h = { 'X-Requested-With': 'studio', ...headers };
   if (body !== undefined) h['Content-Type'] = 'application/json';
-  if (cookie) h.Cookie = cookie;
+  const autoConta = !anon && method === 'POST' && url.startsWith('/api/public/bookings') ? clientCookie : null;
+  const usar = cookie || autoConta;
+  if (usar) h.Cookie = usar;
   const res = await fetch(base + url, { method, headers: h, body: body !== undefined ? JSON.stringify(body) : undefined });
   let json = null;
   try { json = await res.json(); } catch (_) { /* sem corpo */ }
@@ -71,7 +79,18 @@ function futureWeekday(offset = 3) {
   r = await call('GET', `/api/public/availability?room_id=${room1}&date=${U.addDays(U.nowLocal().date, 400)}`);
   ok(r.json.closed && r.json.reason === 'too_far', 'datas demasiado longe aparecem fechadas');
 
-  const payload = (o = {}) => ({ room_id: room1, date: day, start: '10:00', duration_minutes: 120, name: 'Ana Silva', phone: '991 23 45', title: 'Single novo', ...o });
+  // Conta de cliente usada em todas as marcações do site (marcar exige login).
+  // Os dados de contacto da marcação passam a vir daqui, não do formulário.
+  const signup = async (body) => {
+    const resp = await call('POST', '/api/conta/signup', { body });
+    const c = resp.res.headers.get('set-cookie');
+    return { r: resp, cookie: c ? c.split(';')[0] : null };
+  };
+  const conta = await signup({ name: 'Ana Silva', email: 'ana@teste.cv', phone: '991 23 45', password: 'cliente-1234' });
+  ok(conta.r.status === 201 && conta.cookie, 'criar conta de cliente devolve cookie de sessão');
+  clientCookie = conta.cookie;
+
+  const payload = (o = {}) => ({ room_id: room1, date: day, start: '10:00', duration_minutes: 120, title: 'Single novo', ...o });
   r = await call('POST', '/api/public/bookings', { body: payload() });
   ok(r.status === 201 && r.json.booking.status === 'pedido' && /^[A-Z2-9]{6}$/.test(r.json.booking.code), 'cria pedido (estado "pedido", código de 6 letras)');
   ok(r.json.booking.price === 5000, 'preço = 2500 × 2 h');
@@ -94,10 +113,10 @@ function futureWeekday(offset = 3) {
   ok(r.status === 400, 'duração fora do bloco → 400');
   r = await call('POST', '/api/public/bookings', { body: payload({ start: '14:00', duration_minutes: 60 * 9 }) });
   ok(r.status === 400, 'duração acima do máximo → 400');
-  r = await call('POST', '/api/public/bookings', { body: payload({ start: '14:00', phone: '12' }) });
-  ok(r.status === 400, 'telefone inválido → 400');
-  r = await call('POST', '/api/public/bookings', { body: payload({ start: '14:00', name: '' }) });
-  ok(r.status === 400, 'nome vazio → 400');
+  r = await call('POST', '/api/public/bookings', { body: payload({ start: '14:00' }), anon: true });
+  ok(r.status === 401, 'marcar sem conta → 401 (login obrigatório)');
+  r = await call('GET', '/api/public/my-bookings', { anon: true });
+  ok(r.status === 401, 'ver as minhas marcações sem conta → 401');
   r = await call('POST', '/api/public/bookings', { body: payload({ date: U.addDays(U.nowLocal().date, -2) }) });
   ok(r.status === 400, 'data passada → 400');
   const sunday = (() => { let d = U.addDays(U.nowLocal().date, 3); while (U.weekday(d) !== 0) d = U.addDays(d, 1); return d; })();
@@ -121,6 +140,58 @@ function futureWeekday(offset = 3) {
   ok(r.status === 404, 'telefone errado → 404');
   r = await call('POST', '/api/public/lookup', { body: { code: code.toLowerCase(), phone: '+238 991 23 45' } });
   ok(r.status === 200, 'código em minúsculas e telefone com indicativo funcionam');
+
+  console.log('\nContas de cliente');
+  r = await call('POST', '/api/conta/signup', { body: { name: 'Outro', email: 'ana@teste.cv', phone: '9900001', password: 'cliente-1234' } });
+  ok(r.status === 409, 'email já usado → 409');
+  r = await call('POST', '/api/conta/signup', { body: { name: 'Outro', email: 'outro@teste.cv', phone: '9912345', password: 'cliente-1234' } });
+  ok(r.status === 409, 'telefone já usado → 409');
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'ana@teste.cv', password: 'errada' } });
+  ok(r.status === 401, 'login de cliente com senha errada → 401');
+  let cl = await call('POST', '/api/conta/login', { body: { identifier: '991 23 45', password: 'cliente-1234' } });
+  ok(cl.status === 200 && cl.json.client.email === 'ana@teste.cv', 'login de cliente pelo telefone funciona');
+  const cc = cl.res.headers.get('set-cookie').split(';')[0];
+  r = await call('GET', '/api/conta/me', { cookie: cc });
+  ok(r.status === 200 && r.json.client.name === 'Ana Silva', 'me devolve a conta com sessão');
+  r = await call('GET', '/api/public/my-bookings', { cookie: cc });
+  ok(r.status === 200 && r.json.bookings.length >= 1, 'as minhas marcações lista as da conta');
+  // Recuperação: pedir código (responde ok mesmo sem fornecedor de envio) e,
+  // com o código, redefinir a palavra-passe. O código em claro vem do helper.
+  r = await call('POST', '/api/conta/forgot', { body: { identifier: 'ana@teste.cv', channel: 'email' } });
+  ok(r.status === 200 && r.json.ok, 'pedir código de recuperação responde ok');
+  r = await call('POST', '/api/conta/forgot', { body: { identifier: 'ana@teste.cv' } });
+  ok(r.status === 400, 'pedir código sem escolher canal → 400');
+  const clientId = db.prepare('SELECT id FROM clients WHERE email=?').get('ana@teste.cv').id;
+  r = await call('POST', '/api/conta/reset', { body: { identifier: 'ana@teste.cv', code: '000000', password: 'nova-senha-1' } });
+  ok(r.status === 400, 'código errado → 400');
+  const codigo = contaAuth.issueCode(clientId, 'reset', 'email');
+  r = await call('POST', '/api/conta/reset', { body: { identifier: 'ana@teste.cv', code: codigo, password: 'nova-senha-1' } });
+  ok(r.status === 200, 'código certo redefine a palavra-passe');
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'ana@teste.cv', password: 'nova-senha-1' } });
+  ok(r.status === 200, 'entra com a palavra-passe nova');
+  clientCookie = r.res.headers.get('set-cookie').split(';')[0];
+
+  // Alterar a palavra-passe com sessão iniciada.
+  r = await call('POST', '/api/conta/password', { cookie: clientCookie, body: { current: 'errada', next: 'outra-senha-9' } });
+  ok(r.status === 400, 'alterar senha com a atual errada → 400');
+  r = await call('POST', '/api/conta/password', { cookie: clientCookie, body: { current: 'nova-senha-1', next: 'curta' } });
+  ok(r.status === 400, 'nova senha curta → 400');
+  r = await call('POST', '/api/conta/password', { cookie: clientCookie, body: { current: 'nova-senha-1', next: 'outra-senha-9' } });
+  ok(r.status === 200, 'alterar a palavra-passe com sessão');
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'ana@teste.cv', password: 'outra-senha-9' } });
+  ok(r.status === 200, 'entra com a palavra-passe alterada');
+  r = await call('POST', '/api/conta/password', { body: { current: 'x', next: 'yyyyyyyy' } });
+  ok(r.status === 401, 'alterar senha sem sessão → 401');
+
+  // Login único: uma conta da equipa entra pelo mesmo login do site e é levada
+  // ao painel, com sessão de painel válida (cookie sid, não csid).
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'dono@teste.cv', password: 'palavra-passe-teste' } });
+  ok(r.status === 200 && r.json.redirect === '/admin' && !r.json.client, 'conta de equipa entra pelo /conta e é mandada para /admin');
+  const sidEquipa = r.res.headers.get('set-cookie').split(';')[0];
+  r = await call('GET', '/api/auth/me', { cookie: sidEquipa });
+  ok(r.status === 200 && r.json.user.email === 'dono@teste.cv', 'e fica com sessão de painel válida');
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'dono@teste.cv', password: 'errada' } });
+  ok(r.status === 401, 'equipa com senha errada no /conta → 401');
 
   console.log('\nAdministração');
   r = await call('GET', '/api/admin/dashboard');
@@ -272,6 +343,33 @@ function futureWeekday(offset = 3) {
   r = await call('GET', `/api/admin/bookings/${bk2.id}`, { cookie: ac });
   ok(r.status === 404, 'uma marcação de outro estúdio não existe para o agente (404)');
 
+  console.log('\nControlo de acesso (RBAC)');
+  r = await call('GET', '/api/admin/rbac', { cookie });
+  ok(r.status === 200 && r.json.roles.length === 3 && r.json.permissions.length === 15, 'RBAC: 3 perfis e 15 permissões de origem');
+  ok(r.json.assignments.some((a) => a.role_name === 'Proprietário'), 'RBAC: o proprietário já tem o perfil atribuído');
+  r = await call('GET', '/api/admin/rbac', { cookie: staff.cookie });
+  ok(r.status === 403, 'RBAC: a equipa não acede (só proprietário)');
+  r = await call('POST', '/api/admin/rbac/permissions', { cookie, body: { label: 'Reservas – Criar', resource: 'reservas', action: 'criar' } });
+  ok(r.status === 201 && r.json.code === 'reservas.criar', 'RBAC: cria permissão');
+  r = await call('POST', '/api/admin/rbac/permissions', { cookie, body: { label: 'Dup', resource: 'reservas', action: 'criar' } });
+  ok(r.status === 409, 'RBAC: permissão duplicada → 409');
+  let rb = (await call('GET', '/api/admin/rbac', { cookie })).json;
+  r = await call('POST', '/api/admin/rbac/roles', { cookie, body: { name: 'Comercial', code: 'comercial', priority: 50, category: 'comercial', permissions: [rb.permissions[0].id] } });
+  ok(r.status === 201, 'RBAC: cria perfil');
+  const novoRoleId = r.json.id;
+  r = await call('POST', '/api/admin/rbac/roles', { cookie, body: { name: 'Outro', code: 'comercial' } });
+  ok(r.status === 409, 'RBAC: código de perfil repetido → 409');
+  rb = (await call('GET', '/api/admin/rbac', { cookie })).json;
+  ok(rb.roles.some((x) => x.code === 'comercial' && x.permCount === 1), 'RBAC: o novo perfil aparece com 1 permissão');
+  const tec = (await call('GET', '/api/admin/users', { cookie })).json.users.find((u) => u.email === 'tecnico@teste.cv');
+  r = await call('POST', '/api/admin/rbac/assignments', { cookie, body: { user_id: tec.id, role_ids: [novoRoleId] } });
+  ok(r.status === 201 && r.json.atribuidos === 1, 'RBAC: atribui perfil a um utilizador');
+  const sistemaRole = rb.roles.find((x) => x.is_system);
+  r = await call('DELETE', '/api/admin/rbac/roles/' + sistemaRole.id, { cookie });
+  ok(r.status === 400, 'RBAC: não elimina perfil de sistema');
+  r = await call('DELETE', '/api/admin/rbac/roles/' + novoRoleId, { cookie });
+  ok(r.status === 200, 'RBAC: elimina perfil personalizado (e as suas atribuições)');
+
   r = await call('POST', '/api/auth/password', { cookie, body: { current: 'errada', next: 'nova-palavra-1' } });
   ok(r.status === 400, 'mudar palavra-passe exige a atual');
   r = await call('POST', '/api/auth/password', { cookie, body: { current: 'palavra-passe-teste', next: 'nova-palavra-1' } });
@@ -353,7 +451,7 @@ function futureWeekday(offset = 3) {
   r = await call('POST', '/api/public/bookings', { body: comEstilo({ style: 'Drill' }) });
   ok(r.status === 201 && r.json.booking.style === 'Drill', 'o estilo é guardado com a marcação');
   const codEstilo = r.json.booking.code;
-  r = await call('POST', '/api/public/lookup', { body: { code: codEstilo, phone: '9998887' } });
+  r = await call('POST', '/api/public/lookup', { body: { code: codEstilo, phone: '9912345' } });
   ok(r.json.booking.style === 'Drill', 'e volta na consulta');
 
   r = await call('POST', '/api/public/bookings', { body: comEstilo({ start: '10:00', style: '  Amapiano  ' }) });
@@ -364,7 +462,7 @@ function futureWeekday(offset = 3) {
   ok(r.json.booking.style.length === 60, 'um estilo demasiado longo é cortado, não recusado');
 
   console.log('\nPáginas');
-  for (const p of ['/', '/marcar', '/consultar', '/admin']) {
+  for (const p of ['/', '/marcar', '/consultar', '/conta', '/admin']) {
     const res = await fetch(base + p);
     const html = await res.text();
     ok(res.status === 200 && !html.includes('{{'), `página ${p} carrega e não tem marcadores por substituir`);

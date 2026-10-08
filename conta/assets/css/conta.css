@@ -1,0 +1,79 @@
+/* Página da conta do cliente. Reaproveita as cores e os campos do site
+   (base.css / site.css); aqui fica só o que é próprio desta página. */
+
+.conta-main {
+  max-width: 34rem;
+  padding-top: calc(var(--altura-cabecalho, 5rem) + 2rem);
+  padding-bottom: 4rem;
+}
+
+.conta-cartao {
+  background: var(--superficie, #15161b);
+  border: 1px solid var(--linha, rgba(255, 255, 255, .12));
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.conta-abas {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: 1.25rem;
+}
+
+.conta-aba {
+  flex: 1;
+  padding: .6rem .5rem;
+  border: 1px solid var(--linha, rgba(255, 255, 255, .12));
+  border-radius: .6rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.conta-aba[aria-selected="true"] {
+  background: var(--acento, #e8b64a);
+  color: #1a1304;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.conta-form .field,
+.conta-form .field-row { margin-bottom: 1rem; }
+.conta-form .submit-row { margin-top: 1.25rem; }
+
+.link-botao {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--acento, #e8b64a);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Campo de palavra-passe com botão de olho para a ver enquanto se escreve. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; padding-right: 46px; }
+.pw-olho {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: inherit;
+  opacity: .65; cursor: pointer;
+}
+.pw-olho:hover { opacity: 1; }
+.pw-olho .ic-off { display: none; }
+.pw-olho.mostrar .ic-on { display: none; }
+.pw-olho.mostrar .ic-off { display: inline; }
+
+/* Ícone de conta no cabeçalho, usado em todas as páginas do site. */
+.conta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  text-decoration: none;
+  color: inherit;
+}
+.conta-link .conta-nome { font-weight: 500; }

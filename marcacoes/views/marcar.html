@@ -30,7 +30,10 @@
         <a href="/" data-i18n="nav.inicio">Início</a>
         <a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a>
       </div>
-      <div class="topacoes">{{PREFS}}</div>
+      <div class="topacoes">
+        {{PREFS}}
+        <a class="conta-link" id="conta-link" href="/conta" aria-label="A minha conta" data-i18n-attr="aria-label:conta.minhaConta"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12.4a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6z"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="conta-nome" data-i18n="conta.entrar">Entrar</span></a>
+      </div>
     </nav>
   </div>
 </header>
@@ -137,7 +140,12 @@
       </div>
 
       <div class="passo" id="passo-3" tabindex="-1" hidden>
-        <fieldset class="step">
+        <div class="notice" id="conta-gate" hidden>
+          <p data-i18n="conta.gateMarcar">Para enviar o pedido de marcação, entre na sua conta ou crie uma — é rápido.</p>
+          <p><a class="btn btn-amber" id="conta-gate-link" href="/conta?next=/marcar" data-i18n="conta.entrarCriar">Entrar ou criar conta</a></p>
+        </div>
+        <p class="hint conta-nota" id="conta-nota" hidden></p>
+        <fieldset class="step" id="dados-fieldset">
           <legend data-i18n="passo.dados">Os seus dados</legend>
           <div class="field-row">
             <div class="field">
@@ -165,7 +173,7 @@
         </div>
         <p class="terms" id="terms"></p>
         <div id="form-error" class="notice error" role="alert" hidden></div>
-        <p class="submit-row">
+        <p class="submit-row" id="passo3-acoes">
           <button class="btn btn-outline" type="button" id="btn-voltar" data-i18n="botao.voltar">Voltar</button>
           <button class="btn btn-lg" type="submit" id="submit" data-i18n="botao.enviar">Enviar pedido de marcação</button>
         </p>
@@ -221,6 +229,7 @@
 <script src="/js/prefs.js"></script>
 <script src="/js/cabecalho.js"></script>
 <script src="/js/common.js"></script>
+<script src="/js/conta-nav.js"></script>
 <script src="/js/rodape.js"></script>
 <script src="/js/estilos.js"></script>
 <script src="/js/sons.js"></script>

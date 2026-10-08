@@ -123,6 +123,17 @@
       'M9.6 9.4a2.4 2.4 0 0 1 4.8.4c0 1.6-2.4 1.9-2.4 3.6',
       'M12 16.6h.01',
     ],
+    // Ver / ocultar a palavra-passe.
+    olho: [
+      'M2.8 12S6 6.2 12 6.2 21.2 12 21.2 12 18 17.8 12 17.8 2.8 12 2.8 12z',
+      'M12 9.3a2.7 2.7 0 1 1 0 5.4 2.7 2.7 0 0 1 0-5.4z',
+    ],
+    olhoRiscado: [
+      'M4.8 5.4A12.7 12.7 0 0 0 2.8 12S6 17.8 12 17.8a9.8 9.8 0 0 0 4-.8',
+      'M9.6 6.5A9.6 9.6 0 0 1 12 6.2C18 6.2 21.2 12 21.2 12a13 13 0 0 1-2.9 3.3',
+      'M9.9 9.9a2.7 2.7 0 0 0 3.8 3.8',
+      'M4 4l16 16',
+    ],
   };
   // O Instagram identifica-se pelo degradê, que o CSS não consegue pôr num
   // traço — tem de vir dentro do SVG. As restantes redes herdam a cor do CSS.

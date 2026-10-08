@@ -118,6 +118,6 @@ function ensureFirstUser() {
 }
 
 module.exports = {
-  hashPassword, verifyPassword, DUMMY_HASH, createSession, destroySession,
+  hashPassword, verifyPassword, DUMMY_HASH, parseCookies, createSession, destroySession,
   loadUser, requireAuth, requireOwner, requireManager, purgeSessions, ensureFirstUser,
 };

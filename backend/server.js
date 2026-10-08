@@ -4,8 +4,9 @@ const express = require('express');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const { db, getSettings } = require('./lib/db');
+const { db, getSettings, ensureRbacOwners } = require('./lib/db');
 const auth = require('./lib/auth');
+const contaAuth = require('./lib/conta-auth');
 const { HttpError } = require('./lib/util');
 const prefs = require('./lib/prefs');
 const TR = require('./lib/traducoes');
@@ -21,6 +22,7 @@ const RAIZ = path.join(__dirname, '..');
 const PUBLICO = path.join(RAIZ, 'publico');
 const MARCACOES = path.join(RAIZ, 'marcacoes');
 const BOOKING = path.join(RAIZ, 'booking');
+const CONTA = path.join(RAIZ, 'conta');
 const COMUM = path.join(RAIZ, 'comum');
 
 app.disable('x-powered-by');
@@ -55,6 +57,7 @@ app.use('/integracoes/webhooks', integracoes.webhooks);
 app.use(express.json({ limit: '100kb' }));
 app.use(prefs.middleware);
 app.use(auth.loadUser);
+app.use(contaAuth.loadClient);
 
 // ---------------------------------------------------------------- API
 app.use('/api', (req, res, next) => {
@@ -68,8 +71,10 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api/public', require('./routes/public'));
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/conta', require('./routes/conta'));
 app.use('/api/integracoes', integracoes.publico);
 app.use('/api/admin/integracoes', auth.requireAuth, integracoes.admin);
+app.use('/api/admin/rbac', auth.requireAuth, auth.requireOwner, require('./routes/rbac'));
 app.use('/api/admin', auth.requireAuth, require('./routes/admin'));
 app.use('/api', (req, res) => res.status(404).json({ error: req.t('api.naoEncontrado') }));
 
@@ -143,6 +148,7 @@ function page(pasta, file, { traduzida = true } = {}) {
 app.get('/', page(PUBLICO, 'index.html'));
 app.get('/marcar', page(MARCACOES, 'marcar.html'));
 app.get('/consultar', page(MARCACOES, 'consultar.html'));
+app.get('/conta', page(CONTA, 'conta.html'));
 app.get('/admin', page(BOOKING, 'admin.html', { traduzida: false }));
 
 // Os conjuntos de ficheiros servem-se todos na mesma raiz, para os endereços
@@ -153,6 +159,7 @@ const estaticos = { index: false, setHeaders: (res) => res.set('Cache-Control', 
 app.use(express.static(path.join(COMUM, 'assets'), estaticos));
 app.use(express.static(path.join(PUBLICO, 'assets'), estaticos));
 app.use(express.static(path.join(MARCACOES, 'assets'), estaticos));
+app.use(express.static(path.join(CONTA, 'assets'), estaticos));
 app.use(express.static(path.join(BOOKING, 'assets'), estaticos));
 // Capas trazidas pelas integrações, guardadas junto à base de dados.
 app.use('/capas-integracao', express.static(integracoes.PASTA_CAPAS, { index: false, maxAge: '7d' }));
@@ -187,6 +194,7 @@ function enderecosDaRede() {
 // Node/Next, e costuma estar ocupada por outro que esteja a correr.
 function start(port = process.env.PORT || 3005) {
   const first = auth.ensureFirstUser();
+  ensureRbacOwners();
   if (first) {
     console.log('\n────────────────────────────────────────────────────');
     console.log(' Conta de administrador criada');
@@ -195,7 +203,8 @@ function start(port = process.env.PORT || 3005) {
     console.log('────────────────────────────────────────────────────\n');
   }
   auth.purgeSessions();
-  setInterval(auth.purgeSessions, 60 * 60 * 1000).unref();
+  contaAuth.purgeSessions();
+  setInterval(() => { auth.purgeSessions(); contaAuth.purgeSessions(); }, 60 * 60 * 1000).unref();
   integracoes.iniciar();
   const host = process.env.HOST || '0.0.0.0';
   // Sem PORT definido, se a porta estiver ocupada por outro programa tenta-se a

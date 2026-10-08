@@ -36,6 +36,76 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at INTEGER NOT NULL
 );
 
+-- Contas de cliente: quem marca no site. Ficam à parte da equipa (users): um
+-- cliente nunca toca no painel e a equipa não se mistura na lista de clientes.
+-- O login pode ser pelo email ou pelo telefone, por isso ambos são únicos. O
+-- telefone guarda-se só com dígitos (phone), para a procura e a unicidade não
+-- dependerem de espaços nem do indicativo escrito de formas diferentes.
+CREATE TABLE IF NOT EXISTS clients (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL,
+  email          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  phone          TEXT NOT NULL UNIQUE,
+  password_hash  TEXT NOT NULL,
+  email_verified INTEGER NOT NULL DEFAULT 0,
+  phone_verified INTEGER NOT NULL DEFAULT 0,
+  active         INTEGER NOT NULL DEFAULT 1,
+  created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS client_sessions (
+  token_hash TEXT PRIMARY KEY,
+  client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL
+);
+
+-- Códigos de verificação e de recuperação de palavra-passe. Guarda-se o resumo
+-- (hash), nunca o código à vista. Validade curta e tentativas limitadas: um
+-- código de 6 dígitos só é seguro se não se puder adivinhar à vontade.
+CREATE TABLE IF NOT EXISTS client_codes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  purpose    TEXT NOT NULL CHECK (purpose IN ('reset','verify')),
+  channel    TEXT NOT NULL CHECK (channel IN ('email','sms')),
+  code_hash  TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_client_codes_client ON client_codes(client_id, purpose);
+
+-- Controlo de acesso (RBAC) do painel: perfis (roles), permissões e a atribuição
+-- de perfis a utilizadores da equipa. É gerível na secção "Gestão de acesso".
+CREATE TABLE IF NOT EXISTS rbac_permissions (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  label    TEXT NOT NULL,
+  resource TEXT NOT NULL,
+  action   TEXT NOT NULL,
+  UNIQUE(resource, action)
+);
+CREATE TABLE IF NOT EXISTS rbac_roles (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  code        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT NOT NULL DEFAULT '',
+  priority    INTEGER NOT NULL DEFAULT 0,
+  category    TEXT NOT NULL DEFAULT '',
+  is_system   INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS rbac_role_permissions (
+  role_id       INTEGER NOT NULL REFERENCES rbac_roles(id) ON DELETE CASCADE,
+  permission_id INTEGER NOT NULL REFERENCES rbac_permissions(id) ON DELETE CASCADE,
+  PRIMARY KEY (role_id, permission_id)
+);
+CREATE TABLE IF NOT EXISTS rbac_assignments (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id    INTEGER NOT NULL REFERENCES rbac_roles(id) ON DELETE CASCADE,
+  expires_at TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, role_id)
+);
+
 CREATE TABLE IF NOT EXISTS studios (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
@@ -137,6 +207,10 @@ for (const tabela of ['studios', 'rooms', 'services']) acrescentaColuna(tabela, 
 // sem estúdio atribuído). ON DELETE SET NULL: se o estúdio for eliminado, o
 // agente deixa de estar preso — não se perde a conta.
 acrescentaColuna('users', 'studio_id', 'INTEGER REFERENCES studios(id) ON DELETE SET NULL');
+// Conta de cliente que fez a marcação. Vazio (null) nas marcações antigas,
+// feitas antes de haver contas, e nas criadas pela equipa no painel. ON DELETE
+// SET NULL: apagar a conta não apaga o histórico de marcações do estúdio.
+acrescentaColuna('bookings', 'client_id', 'INTEGER REFERENCES clients(id) ON DELETE SET NULL');
 
 // As bases criadas antes de haver coordenadas ficaram com os estúdios de
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
@@ -385,7 +459,59 @@ function seedIfEmpty() {
 }
 seedIfEmpty();
 
+// ---------------------------------------------------------------- RBAC
+// Perfis e permissões iniciais, que retratam o modelo do painel. Depois são
+// geríveis em "Gestão de acesso" (criar/editar/atribuir).
+function seedRbac() {
+  if (db.prepare('SELECT 1 FROM rbac_roles LIMIT 1').get()) return;
+  const PERMS = [
+    ['Marcações – Ver', 'marcacoes', 'ver'],
+    ['Marcações – Gerir', 'marcacoes', 'gerir'],
+    ['Marcações – Cancelar', 'marcacoes', 'cancelar'],
+    ['Calendário – Gerir', 'calendario', 'gerir'],
+    ['Clientes – Ver', 'clientes', 'ver'],
+    ['Painel – Ver', 'painel', 'ver'],
+    ['Relatórios – Ver', 'relatorios', 'ver'],
+    ['Estúdios – Gerir', 'estudios', 'gerir'],
+    ['Serviços – Gerir', 'servicos', 'gerir'],
+    ['Definições – Gerir', 'definicoes', 'gerir'],
+    ['Música – Gerir', 'musica', 'gerir'],
+    ['Projetos – Gerir', 'projetos', 'gerir'],
+    ['Integrações – Gerir', 'integracoes', 'gerir'],
+    ['Utilizadores – Gerir', 'utilizadores', 'gerir'],
+    ['Acesso – Gerir', 'acesso', 'gerir'],
+  ];
+  db.transaction(() => {
+    const insP = db.prepare('INSERT INTO rbac_permissions(label,resource,action) VALUES(?,?,?)');
+    const pid = {};
+    for (const [l, r, a] of PERMS) pid[r + '.' + a] = insP.run(l, r, a).lastInsertRowid;
+    const insR = db.prepare('INSERT INTO rbac_roles(name,code,description,priority,category,is_system) VALUES(?,?,?,?,?,?)');
+    const insRP = db.prepare('INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id) VALUES(?,?)');
+    const todas = Object.keys(pid);
+    const criar = (name, code, desc, prio, cat, sys, perms) => {
+      const id = insR.run(name, code, desc, prio, cat, sys).lastInsertRowid;
+      for (const k of perms) if (pid[k]) insRP.run(id, pid[k]);
+    };
+    criar('Proprietário', 'proprietario', 'Acesso total ao sistema.', 100, 'system', 1, todas);
+    criar('Gestor', 'gestor', 'Gere marcações, clientes, estúdios, serviços, conteúdo e definições.', 60, 'gestao', 0,
+      todas.filter((k) => k !== 'utilizadores.gerir' && k !== 'acesso.gerir'));
+    criar('Agente de estúdio', 'agente', 'Vê e gere apenas o seu estúdio.', 40, 'operacao', 0,
+      ['marcacoes.ver', 'marcacoes.gerir', 'marcacoes.cancelar', 'calendario.gerir', 'clientes.ver', 'painel.ver', 'relatorios.ver']);
+  })();
+}
+seedRbac();
+
+// Garante que cada proprietário tem o perfil "Proprietário". Corre no arranque,
+// já com o primeiro utilizador criado.
+function ensureRbacOwners() {
+  const role = db.prepare("SELECT id FROM rbac_roles WHERE code='proprietario'").get();
+  if (!role) return;
+  const ins = db.prepare('INSERT OR IGNORE INTO rbac_assignments(user_id,role_id,created_at) VALUES(?,?,?)');
+  const now = new Date().toISOString();
+  for (const o of db.prepare("SELECT id FROM users WHERE role='owner'").all()) ins.run(o.id, role.id, now);
+}
+
 module.exports = {
   db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
-  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor,
+  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, ensureRbacOwners,
 };

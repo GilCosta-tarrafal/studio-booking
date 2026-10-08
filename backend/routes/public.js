@@ -9,6 +9,7 @@ const U = require('../lib/util');
 const TR = require('../lib/traducoes');
 const { HttpError } = U;
 const { rateLimit } = require('../lib/ratelimit');
+const { requireClient } = require('../lib/conta-auth');
 
 const router = express.Router();
 
@@ -118,7 +119,7 @@ router.get('/today', (_req, res) => {
   res.json({ date: now.date, now: now.minutes, rows });
 });
 
-router.post('/bookings', bookingLimiter, (req, res) => {
+router.post('/bookings', requireClient, bookingLimiter, (req, res) => {
   const b = req.body || {};
   // Campo isco: os robôs preenchem, as pessoas não veem.
   if (b.website) return res.json({ ok: true, booking: { code: 'XXXXXX', status: 'pedido' } });
@@ -153,13 +154,11 @@ router.post('/bookings', bookingLimiter, (req, res) => {
     if (!cell || !cell.free) throw new HttpError(409, req.t('api.horarioOcupado'));
   }
 
-  const name = U.clean(b.name, 80);
-  const phone = U.clean(b.phone, 30);
-  const email = U.clean(b.email, 120);
-  if (name.length < 2) throw new HttpError(400, req.t('api.nome'));
-  const pd = U.digits(phone);
-  if (pd.length < 7 || pd.length > 15) throw new HttpError(400, req.t('api.telefone'));
-  if (email && !U.isEmail(email)) throw new HttpError(400, req.t('api.email'));
+  // Os dados de contacto vêm da conta, já validados no registo: o cliente não
+  // os reescreve a cada marcação e ficam sempre certos para o estúdio.
+  const name = req.client.name;
+  const phone = req.client.phone;
+  const email = req.client.email;
 
   let serviceId = null;
   let remote = false;
@@ -185,15 +184,21 @@ router.post('/bookings', bookingLimiter, (req, res) => {
     if (findConflict(room.id, date, start, end)) throw new HttpError(409, req.t('api.horarioAcabouOcupado'));
     const code = newCode();
     const info = db.prepare(
-      `INSERT INTO bookings(code,room_id,service_id,title,style,date,start_min,end_min,client_name,client_phone,
+      `INSERT INTO bookings(code,room_id,service_id,title,style,date,start_min,end_min,client_id,client_name,client_phone,
                             client_email,notes,status,remote,price,paid,source,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'site',?,?)`
-    ).run(code, room.id, serviceId, U.clean(b.title, 120), U.clean(b.style, 60), date, start, end, name, phone, email,
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'site',?,?)`
+    ).run(code, room.id, serviceId, U.clean(b.title, 120), U.clean(b.style, 60), date, start, end, req.client.id, name, phone, email,
       U.clean(b.notes, 1000), status, remote ? 1 : 0, priceFor(room, start, end), now, now);
     return db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(info.lastInsertRowid);
   });
 
   res.status(201).json({ ok: true, booking: publicBooking(create()) });
+});
+
+// As marcações da conta com sessão iniciada, das mais recentes para as antigas.
+router.get('/my-bookings', requireClient, (req, res) => {
+  const rows = db.prepare(BOOKING_SELECT + ' WHERE b.client_id=? ORDER BY b.date DESC, b.start_min DESC').all(req.client.id);
+  res.json({ bookings: rows.map((r) => ({ ...publicBooking(r), can_cancel: canCancel(r) })) });
 });
 
 function findForClient(req) {

@@ -124,6 +124,9 @@ function futureWeekday(offset = 3) {
   base = 'http://127.0.0.1:' + server.address().port;
   const login = await call('POST', '/api/auth/login', { body: { email: 'dono@teste.cv', password: 'palavra-passe-teste' } });
   const cookie = login.res.headers.get('set-cookie').split(';')[0];
+  // Marcar exige sessão de cliente; cria-se uma conta para as marcações do site.
+  const conta = await call('POST', '/api/conta/signup', { body: { name: 'Ana Silva', email: 'ana@exemplo.cv', phone: '991 23 45', password: 'cliente-1234' } });
+  const contaCookie = conta.res.headers.get('set-cookie').split(';')[0];
 
   // ------------------------------------------------------------ Stripe
   console.log('\nPagamentos (Stripe)');
@@ -134,7 +137,8 @@ function futureWeekday(offset = 3) {
   const cfg = (await call('GET', '/api/public/config')).json;
   const room = cfg.studios[0].rooms[0].id;
   r = await call('POST', '/api/public/bookings', {
-    body: { room_id: room, date: futureWeekday(), start: '10:00', duration_minutes: 120, name: 'Ana Silva', phone: '991 23 45', email: 'ana@exemplo.cv' },
+    cookie: contaCookie,
+    body: { room_id: room, date: futureWeekday(), start: '10:00', duration_minutes: 120 },
   });
   const code = r.json.booking.code;
   ok(r.json.booking.price === 5000, 'marcação de 5000 criada');

@@ -166,7 +166,7 @@
     ['dashboard', 'Dashboard', ''], ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''], ['relatorios', 'Relatórios', ''],
     ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'],
     ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'], ['integracoes', 'Integrações', 'manager'],
-    ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', 'manager'],
+    ['utilizadores', 'Utilizadores', 'owner'], ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', 'manager'],
   ];
 
   function canSee(perm) {

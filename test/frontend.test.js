@@ -71,6 +71,14 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(d.querySelector('h1').textContent.includes('Tempo de estúdio'), 'título do herói');
   w.close();
 
+  // Marcar exige conta. Cria-se uma e guarda-se o cookie de sessão no jar, para
+  // as páginas abertas a seguir chegarem já com sessão de cliente iniciada.
+  const assinar = async (nome, email, tel) => (await fetch(base + '/api/conta/signup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' },
+    body: JSON.stringify({ name: nome, email, phone: tel, password: 'cliente-1234' }),
+  })).headers.get('set-cookie').split(';')[0];
+  jar.cookie = await assinar('Ana Silva', 'ana@teste.cv', '991 23 45');
+
   console.log('\nMarcar sessão');
   dom = await open('/marcar?studio=1', jar); w = dom.window; d = w.document;
   await waitFor(() => d.querySelectorAll('#studios .choice').length === 2, 'estúdios no formulário');
@@ -157,12 +165,11 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(d.getElementById('passo-2').hidden && !d.getElementById('passo-3').hidden, '"Seguinte" leva ao passo 3');
   ok(d.getElementById('passo-conta').textContent === 'Passo 3 de 3', 'contador: Passo 3 de 3');
   ok(/14:00 às 17:00/.test(d.getElementById('summary').textContent) && /7\s?500/.test(d.getElementById('summary').textContent), 'resumo: 14:00 às 17:00, 7 500 CVE');
-  // enviar com campos em falta
-  d.getElementById('book-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
-  await waitFor(() => !d.getElementById('form-error').hidden, 'erro de validação');
-  ok(/nome/i.test(d.getElementById('form-error').textContent), 'sem nome: mostra erro claro');
-  setVal(w, d.getElementById('name'), 'Ana Silva');
-  setVal(w, d.getElementById('phone'), '991 23 45');
+  // Os dados de contacto vêm da conta: campos preenchidos e bloqueados, sem
+  // passo de os escrever à mão.
+  ok(d.getElementById('name').value === 'Ana Silva' && d.getElementById('name').readOnly, 'o nome vem da conta e está bloqueado');
+  ok(d.getElementById('phone').readOnly && d.getElementById('conta-gate').hidden, 'o telefone vem da conta e o convite a entrar está escondido');
+  ok(/Ana Silva/.test(d.getElementById('conta-nota').textContent), 'mostra "A marcar como Ana Silva"');
   const sv1 = d.querySelector('input[name=service][value="1"]'); sv1.checked = true; ev(w, sv1, 'change');
   // Recuar e voltar a avançar não pode apagar nada do que já foi preenchido.
   d.getElementById('btn-voltar').click();
@@ -229,10 +236,13 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(/Não encontrámos/.test(d.getElementById('lookup-error').textContent), 'telefone errado: mensagem de erro');
   w.close();
 
-  // criar 2 pedidos via API para o painel
-  const post = (u, b) => fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' }, body: JSON.stringify(b) }).then((r) => r.json());
-  await post('/api/public/bookings', { room_id: 1, date: day, start: '10:00', duration_minutes: 120, name: 'Bruno Lopes', phone: '5551234', title: 'EP' });
-  await post('/api/public/bookings', { room_id: 3, date: day, start: '11:00', duration_minutes: 60, name: 'Carla Mendes', phone: '7778889' });
+  // criar 2 pedidos via API para o painel, cada um da sua conta de cliente
+  // (os dados da marcação vêm da conta com sessão iniciada).
+  const post = (u, b, cookie) => fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(b) }).then((r) => r.json());
+  const ckBruno = await assinar('Bruno Lopes', 'bruno@teste.cv', '5551234');
+  const ckCarla = await assinar('Carla Mendes', 'carla@teste.cv', '7778889');
+  await post('/api/public/bookings', { room_id: 1, date: day, start: '10:00', duration_minutes: 120, title: 'EP' }, ckBruno);
+  await post('/api/public/bookings', { room_id: 3, date: day, start: '11:00', duration_minutes: 60 }, ckCarla);
 
   console.log('\nPainel');
   jar = {};
@@ -249,7 +259,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, d.querySelector('input[type=password]'), 'palavra-passe-teste');
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side'), 'painel');
-  ok(d.querySelectorAll('.side .nav').length === 11, 'menu com 11 secções (inclui Dashboard, Relatórios e Gestão de acesso)');
+  ok(d.querySelectorAll('.side .nav').length === 14, 'menu com 14 secções (inclui Dashboard, Relatórios, Utilizadores e Gestão de acesso)');
   // O Painel mostra agora só os pedidos por confirmar e as sessões de hoje
   // (o resumo de números passou para a secção Dashboard).
   await waitFor(() => d.querySelector('[aria-labelledby=h-pend]'), 'painel');
@@ -417,16 +427,39 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => d.querySelector('.side .brand').getAttribute('aria-label') === 'Produções Teste', 'nome atualizado');
   ok(true, 'guardar definições atualiza o nome da marca no menu');
 
-  // Gestão de acesso: a lista de utilizadores, com o novo perfil de agente.
-  w.location.hash = '#/acesso';
-  await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Gestão de acesso' && d.querySelector('.user-card'), 'gestão de acesso');
-  ok(d.querySelectorAll('.user-card').length === 2, 'acesso: 1 utilizador + linha de novo');
+  // Utilizadores: a lista de contas, com o novo perfil de agente.
+  w.location.hash = '#/utilizadores';
+  await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Utilizadores' && d.querySelector('.user-card'), 'utilizadores');
+  ok(d.querySelectorAll('.user-card').length === 2, 'utilizadores: 1 conta + linha de novo');
   const novaConta = [...d.querySelectorAll('.user-card')].pop();
   const perfil = novaConta.querySelector('select');
   const campoEstudio = [...novaConta.querySelectorAll('.field')].find((f) => /Estúdio do agente/.test(f.textContent));
   ok(campoEstudio && campoEstudio.hidden, 'o seletor de estúdio começa escondido');
   perfil.value = 'agent'; perfil.dispatchEvent(new w.Event('change', { bubbles: true }));
   ok(!campoEstudio.hidden, 'escolher "Agente de estúdio" mostra o seletor de estúdio');
+
+  // Gestão de acesso (RBAC): roles, permissões e atribuições — retrato do modelo atual.
+  w.location.hash = '#/acesso';
+  await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Controlo de Acesso (RBAC)', 'gestão de acesso (RBAC)');
+  ok([...d.querySelectorAll('.tabs .tab')].map((t) => t.textContent).join(' | ') === 'Roles (3) | Permissões (15) | Atribuições (1)', 'RBAC: três abas com contagens');
+  ok(d.querySelectorAll('.rbac-card').length === 3 && /Proprietário/.test(d.querySelector('.rbac-card').textContent), 'RBAC: três roles, a começar no Proprietário');
+  [...d.querySelectorAll('.tabs .tab')].find((t) => /Permissões/.test(t.textContent)).click();
+  await waitFor(() => d.querySelector('.rbac-perms'), 'aba de permissões');
+  ok(d.querySelectorAll('.rbac-perms li').length === 15, 'RBAC: 15 permissões listadas');
+  [...d.querySelectorAll('.tabs .tab')].find((t) => /Atribuições/.test(t.textContent)).click();
+  await waitFor(() => d.querySelector('table.data tbody tr'), 'aba de atribuições');
+  ok(/Proprietário/.test(d.querySelector('table.data tbody').textContent), 'RBAC: atribuições mostram a função de cada utilizador');
+  // Criar um perfil novo pelo modal "Novo Role".
+  [...d.querySelectorAll('.tabs .tab')].find((t) => /Roles/.test(t.textContent)).click();
+  await waitFor(() => d.querySelector('.rbac-card'), 'volta aos roles');
+  d.querySelector('.page-head .tools button').click();
+  const rbDlg = await waitFor(() => d.querySelector('dialog.modal[open]'), 'modal Novo Role');
+  const rbTxt = rbDlg.querySelectorAll('input[type=text]');
+  setVal(w, rbTxt[0], 'Comercial'); setVal(w, rbTxt[1], 'comercial');
+  const rbCb = rbDlg.querySelector('.rbac-check input'); rbCb.checked = true; ev(w, rbCb, 'change');
+  rbDlg.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => [...d.querySelectorAll('.tabs .tab')][0].textContent === 'Roles (4)', 'novo role na lista');
+  ok(/Comercial/.test(d.getElementById('view').textContent), 'RBAC: criar role pelo modal adiciona-o à lista');
 
   // Sair
   [...d.querySelectorAll('.side-foot button')].find((b) => b.textContent === 'Sair').click();
@@ -448,7 +481,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(/Só o proprietário/.test(d.querySelector('form.panel').textContent) && d.querySelector('form.panel input[type=text]').disabled, 'equipa vê as definições só de leitura');
   ok(!d.querySelector('.user-card'), 'equipa não vê a gestão de utilizadores');
   // A Gestão de acesso é só do proprietário: a equipa nem sequer a vê no menu.
-  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Gestão de acesso/.test(a.textContent)), 'a equipa não vê o item Gestão de acesso');
+  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Gestão de acesso|Utilizadores/.test(a.textContent)), 'a equipa não vê Utilizadores nem Gestão de acesso');
   w.location.hash = '#/acesso';
   await waitFor(() => w.location.hash === '#/painel', 'equipa reencaminhada da gestão de acesso');
   ok(true, 'a equipa é levada ao painel se tentar abrir a gestão de acesso');
@@ -470,7 +503,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   const temaAntes = d.documentElement.getAttribute('data-tema');
   d.querySelector('.tb-btn').click();
   ok(d.documentElement.getAttribute('data-tema') !== temaAntes, 'o botão de tema alterna claro/escuro');
-  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Estúdios|Serviços|Integrações|Gestão de acesso/.test(a.textContent)), 'o agente não vê as secções de gestor');
+  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Estúdios|Serviços|Integrações|Utilizadores|Gestão de acesso/.test(a.textContent)), 'o agente não vê as secções de gestor');
   w.close();
 
   // ---- Cabeçalho preso ao topo ----
