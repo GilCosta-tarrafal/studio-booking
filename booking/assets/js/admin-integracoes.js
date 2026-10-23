@@ -13,8 +13,8 @@
   function cartaoFornecedor(f, aoSincronizar) {
     return h('section', { class: 'panel' },
       h('h2', {}, f.nome, ' ', h('span', { class: 'modo ' + (f.ativo ? 'remoto' : 'presencial') }, f.ativo ? 'ligado' : 'desligado')),
-      h('table', { class: 'hours-table' }, h('tbody', {},
-        f.detalhes.map(([k, v]) => h('tr', {}, h('td', { style: { width: '16em' } }, k), h('td', {}, v))))),
+      h('table', { class: 'kv-table' }, h('tbody', {},
+        f.detalhes.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
       f.sincronizavel && h('div', { class: 'row-actions' },
         h('button', { class: 'btn btn-sm', type: 'button', onclick: () => aoSincronizar(f.id) }, 'Sincronizar agora')));
   }

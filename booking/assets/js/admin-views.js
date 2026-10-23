@@ -811,6 +811,36 @@
   };
 
   // ============================================================ Definições
+  // Moedas e indicativos que se podem escolher. Guarda-se o mesmo de sempre: o
+  // código da moeda (texto que aparece a seguir aos preços) e os dígitos do
+  // indicativo. Um valor antigo que não esteja na lista continua disponível.
+  const MOEDAS = [
+    ['AOA', 'Kwanza angolano'], ['ARS', 'Peso argentino'], ['AUD', 'Dólar australiano'], ['BRL', 'Real brasileiro'],
+    ['CAD', 'Dólar canadiano'], ['CHF', 'Franco suíço'], ['CNY', 'Yuan chinês'], ['CVE', 'Escudo cabo-verdiano'],
+    ['DKK', 'Coroa dinamarquesa'], ['EUR', 'Euro'], ['GBP', 'Libra esterlina'], ['GHS', 'Cedi ganês'],
+    ['INR', 'Rupia indiana'], ['JPY', 'Iene japonês'], ['MAD', 'Dirham marroquino'], ['MOP', 'Pataca de Macau'],
+    ['MXN', 'Peso mexicano'], ['MZN', 'Metical moçambicano'], ['NGN', 'Naira nigeriana'], ['NOK', 'Coroa norueguesa'],
+    ['SEK', 'Coroa sueca'], ['STN', 'Dobra de São Tomé'], ['USD', 'Dólar americano'], ['XAF', 'Franco CFA (África Central)'],
+    ['XOF', 'Franco CFA (África Ocidental)'], ['ZAR', 'Rand sul-africano'],
+  ];
+  const PAISES = [
+    ['244', 'Angola'], ['54', 'Argentina'], ['61', 'Austrália'], ['32', 'Bélgica'], ['55', 'Brasil'],
+    ['238', 'Cabo Verde'], ['1', 'Canadá / Estados Unidos'], ['86', 'China'], ['225', 'Costa do Marfim'],
+    ['45', 'Dinamarca'], ['34', 'Espanha'], ['33', 'França'], ['233', 'Gana'], ['245', 'Guiné-Bissau'],
+    ['240', 'Guiné Equatorial'], ['91', 'Índia'], ['39', 'Itália'], ['81', 'Japão'], ['352', 'Luxemburgo'],
+    ['853', 'Macau'], ['212', 'Marrocos'], ['52', 'México'], ['258', 'Moçambique'], ['234', 'Nigéria'],
+    ['47', 'Noruega'], ['31', 'Países Baixos'], ['351', 'Portugal'], ['44', 'Reino Unido'], ['221', 'Senegal'],
+    ['239', 'São Tomé e Príncipe'], ['46', 'Suécia'], ['41', 'Suíça'], ['670', 'Timor-Leste'],
+    ['27', 'África do Sul'], ['49', 'Alemanha'],
+  ].sort((a, b) => a[1].localeCompare(b[1], 'pt'));
+
+  function seletorLista(lista, atual, rotulo, dis) {
+    const temAtual = !atual || lista.some(([v]) => v === atual);
+    return h('select', { value: atual, disabled: dis },
+      !temAtual && h('option', { value: atual }, atual + ' (atual)'),
+      lista.map(([v, nome]) => h('option', { value: v }, rotulo(v, nome))));
+  }
+
   function settingsPanel(s, isOwner) {
     const dis = !isOwner;
     const f = {
@@ -822,8 +852,8 @@
       instagram: h('input', { type: 'url', maxlength: 200, placeholder: 'https://instagram.com/...', value: s.instagram, disabled: dis }),
       spotify: h('input', { type: 'url', maxlength: 200, placeholder: 'https://open.spotify.com/...', value: s.spotify, disabled: dis }),
       youtube: h('input', { type: 'url', maxlength: 200, placeholder: 'https://youtube.com/@...', value: s.youtube, disabled: dis }),
-      currency: h('input', { type: 'text', maxlength: 8, value: s.currency, disabled: dis }),
-      country_code: h('input', { type: 'text', inputmode: 'numeric', maxlength: 4, value: s.country_code, disabled: dis }),
+      currency: seletorLista(MOEDAS, s.currency, (v, nome) => `${nome} (${v})`, dis),
+      country_code: seletorLista(PAISES, s.country_code, (v, nome) => `${nome} (+${v})`, dis),
       slot_minutes: h('select', { value: s.slot_minutes, disabled: dis }, [15, 30, 60, 90, 120].map((n) => h('option', { value: n }, n + ' minutos'))),
       min_minutes: h('input', { type: 'number', min: 15, step: 15, value: s.min_minutes, disabled: dis }),
       max_minutes: h('input', { type: 'number', min: 15, step: 15, value: s.max_minutes, disabled: dis }),
@@ -864,7 +894,7 @@
         field('Spotify', f.spotify, { hint: 'Perfil de artista ou playlist do estúdio.' }),
         field('YouTube', f.youtube, { hint: 'Canal do estúdio.' })),
       h('div', { class: 'grid-2' },
-        field('Moeda', f.currency, { hint: 'Texto mostrado a seguir aos preços, por exemplo CVE ou €.' }),
+        field('Moeda', f.currency, { hint: 'O código aparece a seguir aos preços, por exemplo 2500 CVE.' }),
         field('Indicativo do país', f.country_code, { hint: 'Acrescentado a números locais nos links de WhatsApp.' })),
       h('h3', {}, 'Regras de marcação'),
       h('div', { class: 'grid-3' },
