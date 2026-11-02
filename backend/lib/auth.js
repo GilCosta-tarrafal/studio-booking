@@ -66,12 +66,17 @@ function loadUser(req, _res, next) {
   req.user = null;
   if (token) {
     const row = db.prepare(
-      `SELECT u.id, u.name, u.email, u.role, u.active, u.studio_id, s.expires_at
+      `SELECT u.id, u.name, u.email, u.role, u.active, u.studio_id, u.last_seen_at, s.expires_at
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`
     ).get(sha(token));
     if (row && row.expires_at > Date.now() && row.active) {
       req.user = { id: row.id, name: row.name, email: row.email, role: row.role, studio_id: row.studio_id || null };
+      // "Último acesso" do perfil. Grava-se no máximo uma vez por minuto, para
+      // não escrever na base a cada pedido.
+      if (!row.last_seen_at || Date.now() - Date.parse(row.last_seen_at) > 60000) {
+        db.prepare('UPDATE users SET last_seen_at=? WHERE id=?').run(new Date().toISOString(), row.id);
+      }
     }
   }
   next();

@@ -4,7 +4,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { parseHM, weekday } = require('./util');
+const { parseHM, weekday, nowLocal } = require('./util');
 const TR = require('./traducoes');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   notes          TEXT NOT NULL DEFAULT '',
   internal_notes TEXT NOT NULL DEFAULT '',
   status         TEXT NOT NULL DEFAULT 'pedido'
-                 CHECK (status IN ('pedido','confirmado','em_curso','concluido','cancelado')),
+                 CHECK (status IN ('pedido','confirmado','em_curso','concluido','cancelado','expirado')),
   -- 1 = o cliente não vai ao estúdio; manda os ficheiros
   remote         INTEGER NOT NULL DEFAULT 0,
   price          INTEGER NOT NULL DEFAULT 0,
@@ -184,6 +184,36 @@ CREATE TABLE IF NOT EXISTS blocks (
   CHECK (end_min > start_min)
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_room_date ON blocks(room_id, date);
+
+-- O que cada pessoa da equipa fez no painel: entradas, saídas, alterações e
+-- erros. Alimenta a secção "Atividade" do perfil (ver lib/atividade.js).
+CREATE TABLE IF NOT EXISTS user_activity (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL CHECK (kind IN ('login','logout','change','error')),
+  action     TEXT NOT NULL,
+  detail     TEXT NOT NULL DEFAULT '',
+  status     INTEGER,
+  ip         TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity(user_id, created_at);
+
+-- Catálogos editáveis em Configurações (géneros musicais, tipos de cliente,
+-- métodos de pagamento...). "sistema" = item de que o código depende (ex.: os
+-- estados das marcações): não se apaga, não se desativa e o código não muda.
+CREATE TABLE IF NOT EXISTS catalogo_itens (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  catalogo   TEXT NOT NULL,
+  codigo     TEXT NOT NULL,
+  nome       TEXT NOT NULL,
+  descricao  TEXT NOT NULL DEFAULT '',
+  ativo      INTEGER NOT NULL DEFAULT 1,
+  sistema    INTEGER NOT NULL DEFAULT 0,
+  ordem      INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  UNIQUE (catalogo, codigo)
+);
 `);
 
 // Colunas acrescentadas depois da primeira versão. CREATE TABLE IF NOT EXISTS não
@@ -207,10 +237,56 @@ for (const tabela of ['studios', 'rooms', 'services']) acrescentaColuna(tabela, 
 // sem estúdio atribuído). ON DELETE SET NULL: se o estúdio for eliminado, o
 // agente deixa de estar preso — não se perde a conta.
 acrescentaColuna('users', 'studio_id', 'INTEGER REFERENCES studios(id) ON DELETE SET NULL');
+// Perfil: telefone de contacto e quando/de onde a pessoa entrou e mexeu pela
+// última vez. Datas em ISO; vazias (null) até acontecer pela primeira vez.
+acrescentaColuna('users', 'phone', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('users', 'last_login_at', 'TEXT');
+acrescentaColuna('users', 'last_login_ip', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('users', 'last_seen_at', 'TEXT');
+acrescentaColuna('users', 'password_changed_at', 'TEXT');
+// Última vez que a pessoa abriu o sininho: o que for mais recente está "por ler".
+acrescentaColuna('users', 'notif_seen_at', 'TEXT');
 // Conta de cliente que fez a marcação. Vazio (null) nas marcações antigas,
 // feitas antes de haver contas, e nas criadas pela equipa no painel. ON DELETE
 // SET NULL: apagar a conta não apaga o histórico de marcações do estúdio.
 acrescentaColuna('bookings', 'client_id', 'INTEGER REFERENCES clients(id) ON DELETE SET NULL');
+// Escolhas que vêm dos catálogos de Configurações (guarda-se o código do item;
+// vazio = não indicado). O género musical continua na coluna "style".
+acrescentaColuna('bookings', 'project_type', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('bookings', 'client_type', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('bookings', 'payment_method', "TEXT NOT NULL DEFAULT ''");
+
+// Estado "expirado" (pedido que ninguém confirmou até à hora da sessão). Nas
+// bases antigas a lista de estados está fechada numa CHECK, que o SQLite não
+// deixa alterar: cria-se uma tabela igual já com o estado novo, passam-se os
+// dados tal e qual e troca-se uma pela outra, tudo numa só transação.
+{
+  const def = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bookings'").get().sql;
+  if (!def.includes("'expirado'")) {
+    const nova = def
+      .replace("'concluido','cancelado')", "'concluido','cancelado','expirado')")
+      .replace(/^CREATE TABLE\s+(IF NOT EXISTS\s+)?"?bookings"?/i, 'CREATE TABLE bookings_nova');
+    if (!nova.includes("'expirado'") || !nova.startsWith('CREATE TABLE bookings_nova')) {
+      throw new Error('Não foi possível acrescentar o estado "expirado" à tabela das marcações.');
+    }
+    db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec(nova);
+        db.exec('INSERT INTO bookings_nova SELECT * FROM bookings');
+        db.exec('DROP TABLE bookings');
+        db.exec('ALTER TABLE bookings_nova RENAME TO bookings');
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, date);
+                 CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
+                 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);`);
+        const falhas = db.pragma('foreign_key_check');
+        if (falhas.length) throw new Error('Referências partidas depois de trocar a tabela das marcações.');
+      })();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
+}
 
 // As bases criadas antes de haver coordenadas ficaram com os estúdios de
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
@@ -386,7 +462,7 @@ function hoursFor(studio, date) {
 function findConflict(roomId, date, start, end, excludeBookingId = 0) {
   const b = db.prepare(
     `SELECT id, code FROM bookings
-      WHERE room_id=? AND date=? AND status!='cancelado'
+      WHERE room_id=? AND date=? AND status NOT IN ('cancelado','expirado')
         AND start_min<? AND end_min>? AND id!=? LIMIT 1`
   ).get(roomId, date, end, start, excludeBookingId);
   if (b) return { type: 'booking', ...b };
@@ -402,10 +478,20 @@ function findConflict(roomId, date, start, end, excludeBookingId = 0) {
 function busyIntervals(roomId, date) {
   const a = db.prepare(
     `SELECT start_min AS s, end_min AS e FROM bookings
-      WHERE room_id=? AND date=? AND status!='cancelado'`
+      WHERE room_id=? AND date=? AND status NOT IN ('cancelado','expirado')`
   ).all(roomId, date);
   const b = db.prepare('SELECT start_min AS s, end_min AS e FROM blocks WHERE room_id=? AND date=?').all(roomId, date);
   return [...a, ...b].sort((x, y) => x.s - y.s);
+}
+
+// Pedidos que ninguém confirmou até à hora de começar passam a "expirado":
+// deixam de ocupar a sala e saem da lista de pedidos por confirmar.
+function expirarPedidos() {
+  const { date, minutes } = nowLocal();
+  return db.prepare(
+    `UPDATE bookings SET status='expirado', updated_at=?
+      WHERE status='pedido' AND (date<? OR (date=? AND start_min<=?))`
+  ).run(new Date().toISOString(), date, date, minutes).changes;
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -513,5 +599,5 @@ function ensureRbacOwners() {
 
 module.exports = {
   db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
-  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, ensureRbacOwners,
+  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, ensureRbacOwners, expirarPedidos,
 };

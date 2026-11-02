@@ -134,6 +134,7 @@
     'estado.em_curso': 'Em curso',
     'estado.concluido': 'Concluído',
     'estado.cancelado': 'Cancelado',
+    'estado.expirado': 'Expirado',
 
     // ---- Dias da semana (domingo primeiro) ----
     'dias.curtos': 'Dom,Seg,Ter,Qua,Qui,Sex,Sáb',
@@ -462,6 +463,7 @@
     'estado.em_curso': 'In progress',
     'estado.concluido': 'Completed',
     'estado.cancelado': 'Cancelled',
+    'estado.expirado': 'Expired',
 
     'dias.curtos': 'Sun,Mon,Tue,Wed,Thu,Fri,Sat',
     'dias.longos': 'Sunday,Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
@@ -780,6 +782,7 @@
     'estado.em_curso': 'En cours',
     'estado.concluido': 'Terminé',
     'estado.cancelado': 'Annulé',
+    'estado.expirado': 'Expiré',
 
     'dias.curtos': 'Dim,Lun,Mar,Mer,Jeu,Ven,Sam',
     'dias.longos': 'Dimanche,Lundi,Mardi,Mercredi,Jeudi,Vendredi,Samedi',

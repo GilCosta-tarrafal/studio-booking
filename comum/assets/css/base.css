@@ -215,6 +215,7 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 .tag[data-s="em_curso"] { --tag-bg: #102E20; --tag-ink: #8AD9AC; --tag-dot: #46B87C; }
 .tag[data-s="concluido"] { --tag-bg: #202020; --tag-ink: #B4B4B4; --tag-dot: #8A8A8A; }
 .tag[data-s="cancelado"] { --tag-bg: #2E1210; --tag-ink: #EFA79F; --tag-dot: #C85A4E; }
+.tag[data-s="expirado"] { --tag-bg: #1E1E22; --tag-ink: #A9A9B4; --tag-dot: #6E6E7A; }
 /* No claro trocam-se por tons lavados do mesmo matiz, para as cores dos
    estados continuarem a dizer o mesmo. */
 :root[data-tema="claro"] .tag { --tag-bg: var(--surface-2); --tag-ink: var(--ink); }
@@ -223,6 +224,7 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 :root[data-tema="claro"] .tag[data-s="em_curso"] { --tag-bg: #DFF2E7; --tag-ink: #14603C; }
 :root[data-tema="claro"] .tag[data-s="concluido"] { --tag-bg: #ECEDEF; --tag-ink: #4C5256; }
 :root[data-tema="claro"] .tag[data-s="cancelado"] { --tag-bg: #FBE6E3; --tag-ink: #8E2A20; }
+:root[data-tema="claro"] .tag[data-s="expirado"] { --tag-bg: #ECECEF; --tag-ink: #4A4A55; }
 
 /* ---------- Régua do dia ---------- */
 .strip { position: relative; container-type: inline-size; }

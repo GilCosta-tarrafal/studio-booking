@@ -7,10 +7,13 @@ const {
 const auth = require('../lib/auth');
 const U = require('../lib/util');
 const TR = require('../lib/traducoes');
+const CAT = require('../lib/catalogos');
 const { HttpError } = U;
 
 const router = express.Router();
-const STATUSES = ['pedido', 'confirmado', 'em_curso', 'concluido', 'cancelado'];
+const STATUSES = ['pedido', 'confirmado', 'em_curso', 'concluido', 'cancelado', 'expirado'];
+// Estados que não ocupam a sala nem contam como receita.
+const LIVRES = "('cancelado','expirado')";
 
 const withTimes = (r) => ({ ...r, start: U.fmtHM(r.start_min), end: U.fmtHM(r.end_min) });
 const flag = (v) => (v === false || v === 0 || v === '0' ? 0 : 1);
@@ -72,6 +75,7 @@ function normalizeBooking(b) {
   return {
     room, room_id: room.id, service_id, date, start, end, status, remote,
     title: U.clean(b.title, 120), style: U.clean(b.style, 60),
+    ...catalogoCampos(b),
     client_name, client_phone: U.clean(b.client_phone, 30), client_email,
     notes: U.clean(b.notes, 1000), internal_notes: U.clean(b.internal_notes, 2000),
     price: blankPrice ? priceFor(room, start, end) : Math.max(0, U.toInt(b.price)),
@@ -79,8 +83,20 @@ function normalizeBooking(b) {
   };
 }
 
+// Tipo de projeto, tipo de cliente e método de pagamento vêm dos catálogos de
+// Configurações: guarda-se o código, que tem de existir (vazio = não indicado).
+function catalogoCampos(b) {
+  const out = {};
+  for (const [campo, key, rotulo] of [['project_type', 'tipos_projeto', 'Tipo de projeto'], ['client_type', 'tipos_cliente', 'Tipo de cliente'], ['payment_method', 'metodos_pagamento', 'Método de pagamento']]) {
+    const v = CAT.codigoValido(key, b[campo]);
+    if (v === null) throw new HttpError(400, rotulo + ' inválido.');
+    out[campo] = v;
+  }
+  return out;
+}
+
 function assertNoConflict(n, excludeId = 0) {
-  if (n.status === 'cancelado') return;
+  if (n.status === 'cancelado' || n.status === 'expirado') return;
   const c = findConflict(n.room_id, n.date, n.start, n.end, excludeId);
   if (!c) return;
   if (c.type === 'booking') throw new HttpError(409, `Já existe a marcação ${c.code} nessa sala e horário.`);
@@ -127,10 +143,12 @@ router.post('/bookings', (req, res) => {
     assertNoConflict(n);
     return db.prepare(
       `INSERT INTO bookings(code,room_id,service_id,title,style,date,start_min,end_min,client_name,client_phone,
-                            client_email,notes,internal_notes,status,remote,price,paid,source,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'admin',?,?)`
+                            client_email,notes,internal_notes,status,remote,price,paid,project_type,client_type,payment_method,
+                            source,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'admin',?,?)`
     ).run(newCode(), n.room_id, n.service_id, n.title, n.style, n.date, n.start, n.end, n.client_name, n.client_phone,
-      n.client_email, n.notes, n.internal_notes, n.status, n.remote, n.price, n.paid, now, now).lastInsertRowid;
+      n.client_email, n.notes, n.internal_notes, n.status, n.remote, n.price, n.paid, n.project_type, n.client_type,
+      n.payment_method, now, now).lastInsertRowid;
   })();
   res.status(201).json({ booking: withTimes(db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(id)) });
 });
@@ -146,10 +164,12 @@ router.put('/bookings/:id', (req, res) => {
     assertNoConflict(n, id);
     db.prepare(
       `UPDATE bookings SET room_id=?, service_id=?, title=?, style=?, date=?, start_min=?, end_min=?, client_name=?,
-              client_phone=?, client_email=?, notes=?, internal_notes=?, status=?, remote=?, price=?, paid=?, updated_at=?
+              client_phone=?, client_email=?, notes=?, internal_notes=?, status=?, remote=?, price=?, paid=?,
+              project_type=?, client_type=?, payment_method=?, updated_at=?
         WHERE id=?`
     ).run(n.room_id, n.service_id, n.title, n.style, n.date, n.start, n.end, n.client_name, n.client_phone,
-      n.client_email, n.notes, n.internal_notes, n.status, n.remote, n.price, n.paid, new Date().toISOString(), id);
+      n.client_email, n.notes, n.internal_notes, n.status, n.remote, n.price, n.paid,
+      n.project_type, n.client_type, n.payment_method, new Date().toISOString(), id);
   })();
   res.json({ booking: withTimes(db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(id)) });
 });
@@ -186,6 +206,76 @@ router.get('/pending-count', (req, res) => {
   res.json({ pending: db.prepare(sql).get().n });
 });
 
+// ------------------------------------------------------------ Notificações (sininho)
+// Calculadas na hora a partir do que já existe: pedidos por confirmar, sessões
+// de hoje, pagamentos em atraso e tentativas falhadas de entrar nesta conta.
+// "Por ler" = mais recente do que a última vez que a pessoa abriu o sininho.
+router.get('/notificacoes', (req, res) => {
+  const now = U.nowLocal();
+  const scope = scopeStudio(req);
+  const sf = scope ? ' AND r.studio_id=' + scope : '';
+  const inicioDia = new Date(now.date + 'T00:00:00Z').toISOString();
+  const itens = [];
+
+  const pedidos = db.prepare(
+    `SELECT b.id, b.client_name, b.date, b.start_min, b.created_at, s.name studio
+       FROM bookings b JOIN rooms r ON r.id=b.room_id JOIN studios s ON s.id=r.studio_id
+      WHERE b.status='pedido'${sf} ORDER BY b.created_at DESC LIMIT 15`
+  ).all();
+  for (const p of pedidos) {
+    itens.push({
+      id: 'pedido-' + p.id, kind: 'pedido', title: 'Novo pedido de marcação',
+      text: `${p.client_name} · ${p.studio} · ${p.date} às ${U.fmtHM(p.start_min)}`,
+      at: p.created_at, href: '#/marcacoes',
+    });
+  }
+
+  const hoje = db.prepare(
+    `SELECT COUNT(*) n FROM bookings b JOIN rooms r ON r.id=b.room_id
+      WHERE b.date=? AND b.status IN ('confirmado','em_curso')${sf}`
+  ).get(now.date).n;
+  if (hoje) {
+    itens.push({
+      id: 'hoje-' + now.date, kind: 'hoje', title: hoje === 1 ? '1 sessão marcada para hoje' : `${hoje} sessões marcadas para hoje`,
+      text: 'Veja o horário no Painel.', at: inicioDia, href: '#/painel',
+    });
+  }
+
+  const atraso = db.prepare(
+    `SELECT COUNT(*) n, COALESCE(SUM(b.price-b.paid),0) v FROM bookings b JOIN rooms r ON r.id=b.room_id
+      WHERE b.status='concluido' AND b.price>b.paid AND b.date<?${sf}`
+  ).get(now.date);
+  if (atraso.n) {
+    itens.push({
+      id: 'atraso-' + now.date, kind: 'pagamento',
+      title: atraso.n === 1 ? '1 sessão concluída por pagar' : `${atraso.n} sessões concluídas por pagar`,
+      text: `Falta receber ${Number(atraso.v).toLocaleString('pt-PT')} ${getSettings().currency}.`, at: inicioDia, href: '#/relatorios',
+    });
+  }
+
+  const tentativas = db.prepare(
+    `SELECT id, ip, created_at FROM user_activity
+      WHERE user_id=? AND action='Tentativa de login falhada' AND created_at>=? ORDER BY id DESC LIMIT 5`
+  ).all(req.user.id, new Date(Date.now() - 7 * 86400000).toISOString());
+  for (const t of tentativas) {
+    itens.push({
+      id: 'login-' + t.id, kind: 'seguranca', title: 'Tentativa falhada de entrar na sua conta',
+      text: t.ip ? 'A partir de ' + t.ip.replace(/^::ffff:/, '') + '.' : 'Palavra-passe errada.',
+      at: t.created_at, href: '#/perfil?sec=atividade',
+    });
+  }
+
+  const visto = db.prepare('SELECT notif_seen_at FROM users WHERE id=?').get(req.user.id).notif_seen_at;
+  itens.sort((a, b) => (a.at < b.at ? 1 : -1));
+  for (const i of itens) i.unread = !visto || i.at > visto;
+  res.json({ items: itens, unread: itens.filter((i) => i.unread).length });
+});
+
+router.post('/notificacoes/vistas', (req, res) => {
+  db.prepare('UPDATE users SET notif_seen_at=? WHERE id=?').run(new Date().toISOString(), req.user.id);
+  res.json({ ok: true });
+});
+
 router.get('/dashboard', (req, res) => {
   const now = U.nowLocal();
   // O agente vê sempre só o seu estúdio; o filtro do painel não o liberta disso.
@@ -198,18 +288,52 @@ router.get('/dashboard', (req, res) => {
 
   const counts = {
     pending: n(`SELECT COUNT(*) v ${base} AND b.status='pedido'`).v,
-    today: n(`SELECT COUNT(*) v ${base} AND b.date=? AND b.status!='cancelado'`, now.date).v,
-    next7: n(`SELECT COUNT(*) v ${base} AND b.date>? AND b.date<=? AND b.status!='cancelado'`, now.date, U.addDays(now.date, 7)).v,
+    today: n(`SELECT COUNT(*) v ${base} AND b.date=? AND b.status NOT IN ${LIVRES}`, now.date).v,
+    next7: n(`SELECT COUNT(*) v ${base} AND b.date>? AND b.date<=? AND b.status NOT IN ${LIVRES}`, now.date, U.addDays(now.date, 7)).v,
   };
   const money = {
-    received_month: n(`SELECT COALESCE(SUM(b.paid),0) v ${base} AND b.date>=? AND b.date<=? AND b.status!='cancelado'`, monthStart, monthEnd).v,
+    received_month: n(`SELECT COALESCE(SUM(b.paid),0) v ${base} AND b.date>=? AND b.date<=? AND b.status NOT IN ${LIVRES}`, monthStart, monthEnd).v,
     outstanding: n(`SELECT COALESCE(SUM(b.price-b.paid),0) v ${base} AND b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid`).v,
   };
   const pending = db.prepare(`${BOOKING_SELECT} WHERE b.status='pedido'${studioId ? ' AND r.studio_id=' + studioId : ''}
                               ORDER BY b.date, b.start_min LIMIT 12`).all().map(withTimes);
-  const today = db.prepare(`${BOOKING_SELECT} WHERE b.date=? AND b.status!='cancelado'${studioId ? ' AND r.studio_id=' + studioId : ''}
+  const today = db.prepare(`${BOOKING_SELECT} WHERE b.date=? AND b.status NOT IN ${LIVRES}${studioId ? ' AND r.studio_id=' + studioId : ''}
                             ORDER BY b.start_min`).all(now.date).map(withTimes);
   res.json({ today: now.date, counts, money, pending, todayList: today });
+});
+
+// Fluxo financeiro do Dashboard: os últimos 13 meses (o 13.º serve só para
+// comparar o primeiro com o anterior), já com os meses sem marcações a zero, e
+// a faturação de cada serviço em cada mês. As canceladas não contam.
+router.get('/dashboard/fluxo', (req, res) => {
+  const now = U.nowLocal();
+  const studioId = scopeStudio(req) || U.toInt(req.query.studio_id);
+  const sf = studioId ? ' AND r.studio_id=' + studioId : '';
+  const [y, m] = now.date.split('-').map(Number);
+  const meses = [];
+  for (let i = 12; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    meses.push(d.toISOString().slice(0, 7));
+  }
+  const de = meses[0] + '-01', ate = meses[meses.length - 1] + '-31';
+  const FROM = `FROM bookings b JOIN rooms r ON r.id=b.room_id LEFT JOIN services sv ON sv.id=b.service_id
+                WHERE b.status NOT IN ${LIVRES} AND b.date>=? AND b.date<=?${sf}`;
+  const porMes = new Map(db.prepare(`SELECT substr(b.date,1,7) month, COUNT(*) sessions,
+      COALESCE(SUM(b.end_min-b.start_min),0) minutes, COALESCE(SUM(b.price),0) billed, COALESCE(SUM(b.paid),0) received
+      ${FROM} GROUP BY month`).all(de, ate).map((r) => [r.month, r]));
+  const servicos = db.prepare(`SELECT substr(b.date,1,7) month, b.service_id id, COALESCE(sv.name,'Sem serviço') name,
+      COUNT(*) sessions, COALESCE(SUM(b.price),0) billed
+      ${FROM} GROUP BY month, b.service_id`).all(de, ate);
+  res.json({
+    current: meses[meses.length - 1],
+    months: meses.map((mes) => {
+      const r = porMes.get(mes) || {};
+      return {
+        month: mes, sessions: r.sessions || 0, minutes: r.minutes || 0, billed: r.billed || 0, received: r.received || 0,
+        services: servicos.filter((s) => s.month === mes).map(({ id, name, sessions, billed }) => ({ id, name, sessions, billed })),
+      };
+    }),
+  });
 });
 
 // ------------------------------------------------------------ Relatórios
@@ -234,7 +358,7 @@ function computeReport(req) {
   const FROM = `FROM bookings b JOIN rooms r ON r.id=b.room_id JOIN studios s ON s.id=r.studio_id
                 LEFT JOIN services sv ON sv.id=b.service_id WHERE ${W}`;
   // O dinheiro ignora as canceladas: não são receita nem dívida reais.
-  const vivo = "CASE WHEN b.status!='cancelado' THEN";
+  const vivo = `CASE WHEN b.status NOT IN ${LIVRES} THEN`;
   const one = (sql) => db.prepare(sql).get(...args);
   const many = (sql) => db.prepare(sql).all(...args);
 
@@ -314,7 +438,7 @@ router.get('/calendar', (req, res) => {
     };
   }).filter((st) => st.rooms.length);
   const ids = new Set(out.flatMap((s) => s.rooms.map((r) => r.id)));
-  const bookings = db.prepare(BOOKING_SELECT + " WHERE b.date=? AND b.status!='cancelado' ORDER BY b.start_min").all(date)
+  const bookings = db.prepare(BOOKING_SELECT + ` WHERE b.date=? AND b.status NOT IN ${LIVRES} ORDER BY b.start_min`).all(date)
     .filter((b) => ids.has(b.room_id)).map(withTimes);
   const blocks = db.prepare('SELECT * FROM blocks WHERE date=?').all(date)
     .filter((k) => ids.has(k.room_id)).map((k) => ({ ...k, start: U.fmtHM(k.start_min), end: U.fmtHM(k.end_min) }));
@@ -506,7 +630,7 @@ router.get('/clients', (req, res) => {
   const rows = db.prepare(
     'SELECT b.client_name, b.client_phone, b.client_email, b.date, b.paid, b.price FROM bookings b'
     + (scope ? ' JOIN rooms r ON r.id=b.room_id' : '')
-    + " WHERE b.status!='cancelado'" + (scope ? ' AND r.studio_id=' + scope : '') + ' ORDER BY b.date'
+    + ` WHERE b.status NOT IN ${LIVRES}` + (scope ? ' AND r.studio_id=' + scope : '') + ' ORDER BY b.date'
   ).all();
   const map = new Map();
   for (const r of rows) {

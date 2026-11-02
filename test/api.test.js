@@ -592,6 +592,21 @@ function futureWeekday(offset = 3) {
   res = await fetch(base + '/api/public/bookings', { method: 'POST', headers: { 'X-Requested-With': 'studio', 'Content-Type': 'application/json' }, body: '{mau json' });
   ok(res.status === 400, 'JSON inválido → 400 (não 500)');
 
+  // Expirado: um pedido que ninguém confirmou até à hora passa a "expirado" e
+  // deixa a sala livre.
+  console.log('\nExpirado');
+  const { expirarPedidos, findConflict } = require('../backend/lib/db');
+  const ontem = U.addDays(U.nowLocal().date, -1);
+  const salaX = db.prepare('SELECT id FROM rooms ORDER BY id LIMIT 1').get().id;
+  const agoraIso = new Date().toISOString();
+  const velho = db.prepare(`INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,status,created_at,updated_at)
+                            VALUES('EXPTST',?,?,600,660,'Teste','pedido',?,?)`).run(salaX, ontem, agoraIso, agoraIso).lastInsertRowid;
+  ok(!!findConflict(salaX, ontem, 600, 660), 'o pedido por confirmar ocupa a sala');
+  ok(expirarPedidos() >= 1, 'o pedido de ontem expira');
+  ok(db.prepare('SELECT status FROM bookings WHERE id=?').get(velho).status === 'expirado', 'fica com o estado "expirado"');
+  ok(!findConflict(salaX, ontem, 600, 660), 'e a sala fica livre');
+  db.prepare('DELETE FROM bookings WHERE id=?').run(velho);
+
   console.log(`\n${passed} certos, ${failed} falhados`);
   server.close();
   mapas.close();

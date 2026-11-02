@@ -8,11 +8,6 @@
   const cur = () => app.settings.currency;
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-  // Cartão de indicador (número em destaque com rótulo), usado no Dashboard e
-  // nos Relatórios.
-  const kpiCard = (label, valor) => h('div', { class: 'kpi' },
-    h('span', { class: 'kpi-l' }, label), h('strong', { class: 'kpi-v' }, valor));
-
   // Pequeno ícone SVG (herda a cor e o tamanho do texto à volta).
   function svgIcon(inner, size = 20) {
     const span = h('span', { class: 'ico', 'aria-hidden': 'true' });
@@ -65,71 +60,7 @@
     },
   };
 
-  // Gráfico circular (donut) em SVG: um anel com um segmento por categoria, um
-  // número no centro e uma legenda com os valores (a legenda e os rótulos são a
-  // "codificação secundária" — a identidade nunca depende só da cor).
-  function donutChart(titulo, segmentos, centro) {
-    const total = segmentos.reduce((s, x) => s + x.value, 0);
-    const size = 150, thick = 20, r = (size - thick) / 2, cx = size / 2, C = 2 * Math.PI * r;
-    const esc = (v) => String(v).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-    let off = 0, arcs = '';
-    for (const s of segmentos) {
-      if (!s.value) continue;
-      const len = (s.value / total) * C;
-      const dash = Math.max(len - 2, 0.01); // 2px de folga entre segmentos
-      arcs += `<circle class="donut-seg ${s.cls}" cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke-width="${thick}"`
-        + ` stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"`
-        + ` transform="rotate(-90 ${cx} ${cx})"><title>${esc(s.label)}: ${esc(s.vLabel)}</title></circle>`;
-      off += len;
-    }
-    const svg = `<svg viewBox="0 0 ${size} ${size}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(titulo)}">`
-      + `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${thick}"/>${arcs}`
-      + `<text x="${cx}" y="${cx - 3}" text-anchor="middle" dominant-baseline="central" class="donut-num">${esc(centro.num)}</text>`
-      + `<text x="${cx}" y="${cx + 16}" text-anchor="middle" dominant-baseline="central" class="donut-sub">${esc(centro.sub)}</text></svg>`;
-    const graf = h('div', { class: 'donut' });
-    graf.innerHTML = svg;
-    const leg = h('ul', { class: 'donut-leg' }, segmentos.map((s) => h('li', {},
-      h('span', { class: 'donut-dot ' + s.cls }),
-      h('span', { class: 'donut-leg-l' }, s.label),
-      h('span', { class: 'donut-leg-v' }, s.vLabel))));
-    return h('section', { class: 'panel donut-card' }, h('h3', {}, titulo), h('div', { class: 'donut-wrap' }, graf, leg));
-  }
-
-  // Dashboard: os números de resumo em cartões e, por baixo, o resumo de tudo em
-  // gráficos circulares (estado das marcações, receita e serviços).
-  views.dashboard = {
-    title: 'Dashboard',
-    async render(box) {
-      const qs = ui.studio ? '?studio_id=' + ui.studio : '';
-      const [d, rep] = await Promise.all([api('/api/admin/dashboard' + qs), api('/api/admin/reports' + qs)]);
-      box.append(pageHead('Dashboard', studioFilter(A.refresh),
-        h('button', { class: 'btn', type: 'button', onclick: () => openBooking({ onSaved: A.refresh }) }, 'Nova marcação')));
-      box.append(h('div', { class: 'kpis' },
-        kpiCard('Pedidos por confirmar', String(d.counts.pending)),
-        kpiCard('Sessões hoje', String(d.counts.today)),
-        kpiCard('Próximos 7 dias', String(d.counts.next7)),
-        kpiCard('Recebido este mês', money(d.money.received_month, cur())),
-        kpiCard('Por receber', money(d.money.outstanding, cur()))));
-
-      const t = rep.totals;
-      if (!t.sessions) {
-        box.append(h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Ainda não há marcações para resumir em gráficos.')));
-        return;
-      }
-      const estado = rep.byStatus.map((s) => ({ label: STATUS[s.status] || s.status, value: s.sessions, vLabel: String(s.sessions), cls: 's-' + s.status }));
-      const soma = t.received + t.outstanding;
-      const receita = [
-        { label: 'Recebido', value: t.received, vLabel: money(t.received, cur()), cls: 'rec' },
-        { label: 'Por receber', value: t.outstanding, vLabel: money(t.outstanding, cur()), cls: 'owe' },
-      ];
-      const servico = rep.byService.map((s, i) => ({ label: s.name, value: s.sessions, vLabel: String(s.sessions), cls: 'c' + (i % 6 + 1) }));
-
-      box.append(h('div', { class: 'donuts' },
-        donutChart('Marcações por estado', estado, { num: String(t.sessions), sub: 'marcações' }),
-        donutChart('Receita', receita, { num: soma ? Math.round(t.received / soma * 100) + '%' : '—', sub: 'recebido' }),
-        donutChart('Marcações por serviço', servico, { num: String(t.sessions), sub: 'sessões' })));
-    },
-  };
+  // O Dashboard (gráficos) vive em admin-dashboard.js.
 
   // ============================================================ Calendário
   const HOUR = 56;
@@ -241,7 +172,7 @@
   function payCell(b) {
     if (!b.price && !b.paid) return h('td', { class: 'num' }, '—');
     const owed = b.price - b.paid;
-    const note = b.status === 'cancelado' ? '' : owed <= 0 ? 'Pago' : b.paid > 0 ? 'Falta ' + money(owed, cur()) : 'Por pagar';
+    const note = b.status === 'cancelado' || b.status === 'expirado' ? '' : owed <= 0 ? 'Pago' : b.paid > 0 ? 'Falta ' + money(owed, cur()) : 'Por pagar';
     return h('td', { class: 'num' }, money(b.price, cur()), note && h('span', { class: 'sub' }, note));
   }
 
@@ -487,8 +418,9 @@
       for (const el of [fDe, fAte, fEstado, fServico, fModo]) el.addEventListener('change', load);
 
       box.append(pageHead('Relatórios', studioFilter(load)));
+      // De/Até andam juntos (o período) e ficam lado a lado até em ecrãs pequenos.
       box.append(h('section', { class: 'panel rep-filtros' },
-        field('De', fDe), field('Até', fAte), field('Estado', fEstado),
+        h('div', { class: 'rep-periodo' }, field('De', fDe), field('Até', fAte)), field('Estado', fEstado),
         field('Serviço', fServico), field('Modo', fModo),
         h('div', { class: 'rep-presets' },
           h('span', { class: 'rep-presets-l' }, 'Atalhos:'),

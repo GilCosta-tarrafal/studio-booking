@@ -12,7 +12,7 @@ const PDFDocument = require('pdfkit');
 const path = require('path');
 
 const LOGO = path.join(__dirname, '..', '..', 'publico', 'assets', 'img', 'logo.png');
-const STATUS_PT = { pedido: 'Pedido', confirmado: 'Confirmado', em_curso: 'Em curso', concluido: 'Concluído', cancelado: 'Cancelado' };
+const STATUS_PT = { pedido: 'Pedido', confirmado: 'Confirmado', em_curso: 'Em curso', concluido: 'Concluído', cancelado: 'Cancelado', expirado: 'Expirado' };
 
 const nf = new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 });
 const money = (n, cur) => nf.format(n || 0).replace(/ /g, ' ') + (cur ? ' ' + cur : '');

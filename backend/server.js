@@ -4,9 +4,10 @@ const express = require('express');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const { db, getSettings, ensureRbacOwners } = require('./lib/db');
+const { db, getSettings, ensureRbacOwners, expirarPedidos } = require('./lib/db');
 const auth = require('./lib/auth');
 const contaAuth = require('./lib/conta-auth');
+const atividade = require('./lib/atividade');
 const { HttpError } = require('./lib/util');
 const prefs = require('./lib/prefs');
 const TR = require('./lib/traducoes');
@@ -73,8 +74,11 @@ app.use('/api/public', require('./routes/public'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/conta', require('./routes/conta'));
 app.use('/api/integracoes', integracoes.publico);
+// Cada alteração feita no painel fica na atividade de quem a fez (ver o perfil).
+app.use('/api/admin', atividade.middleware);
 app.use('/api/admin/integracoes', auth.requireAuth, integracoes.admin);
 app.use('/api/admin/rbac', auth.requireAuth, auth.requireOwner, require('./routes/rbac'));
+app.use('/api/admin/catalogos', auth.requireAuth, require('./routes/catalogos'));
 app.use('/api/admin', auth.requireAuth, require('./routes/admin'));
 app.use('/api', (req, res) => res.status(404).json({ error: req.t('api.naoEncontrado') }));
 
@@ -156,6 +160,16 @@ app.get('/admin', page(BOOKING, 'admin.html', { traduzida: false }));
 // sempre, venha o ficheiro da pasta que vier. Os nomes não se repetem entre
 // pastas, por isso a ordem não importa.
 const estaticos = { index: false, setHeaders: (res) => res.set('Cache-Control', 'no-cache') };
+
+// Os estilos do formulário de marcação vêm do catálogo "Géneros musicais" de
+// Configurações (os ativos, pela ordem de lá). O ficheiro estilos.js da pasta
+// marcacoes fica como reserva, mas este endereço responde primeiro.
+const catalogos = require('./lib/catalogos');
+app.get('/js/estilos.js', (_req, res) => {
+  const nomes = catalogos.itens('generos').filter((i) => i.ativo).map((i) => i.nome);
+  res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+  res.send(`'use strict';\n// Gerado a partir de Configurações › Géneros musicais.\nwindow.ESTILOS = ${JSON.stringify(nomes)};\n`);
+});
 app.use(express.static(path.join(COMUM, 'assets'), estaticos));
 app.use(express.static(path.join(PUBLICO, 'assets'), estaticos));
 app.use(express.static(path.join(MARCACOES, 'assets'), estaticos));
@@ -204,7 +218,11 @@ function start(port = process.env.PORT || 3005) {
   }
   auth.purgeSessions();
   contaAuth.purgeSessions();
-  setInterval(() => { auth.purgeSessions(); contaAuth.purgeSessions(); }, 60 * 60 * 1000).unref();
+  atividade.limpar();
+  setInterval(() => { auth.purgeSessions(); contaAuth.purgeSessions(); atividade.limpar(); }, 60 * 60 * 1000).unref();
+  // Pedidos não confirmados até à hora da sessão passam a "expirado".
+  expirarPedidos();
+  setInterval(expirarPedidos, 5 * 60 * 1000).unref();
   integracoes.iniciar();
   const host = process.env.HOST || '0.0.0.0';
   // Sem PORT definido, se a porta estiver ocupada por outro programa tenta-se a

@@ -31,6 +31,8 @@
   };
   // Aplica o tema guardado logo no arranque, antes de desenhar fosse o que for.
   prefs.setTema(prefs.tema());
+  // E a língua: fora do português, o tradutor passa a traduzir tudo o que se desenha.
+  if (window.I18N && window.I18N.arranque) window.I18N.arranque();
 
   // ---------------------------------------------------------- Pequenos componentes
   function toast(msg, error = false) {
@@ -90,6 +92,7 @@
   function showLogin() {
     stopPolling();
     app.user = null;
+    Object.assign(notif, { items: [], unread: 0, avisado: false, pintar: null });
     // O ecrã de entrada é sempre escuro (fotografia + cartão escuro); o tema
     // guardado volta a aplicar-se ao entrar (ver boot).
     document.documentElement.setAttribute('data-tema', 'escuro');
@@ -134,9 +137,21 @@
   }
 
   async function reloadRefs() {
-    const [st, sv] = await Promise.all([api('/api/admin/studios'), api('/api/admin/services')]);
+    const [st, sv, cat] = await Promise.all([api('/api/admin/studios'), api('/api/admin/services'), api('/api/admin/catalogos')]);
     app.studios = st.studios;
     app.services = sv.services;
+    app.catalogos = Object.fromEntries(cat.catalogos.map((c) => [c.key, c.itens]));
+  }
+
+  // Lista de escolha a partir de um catálogo de Configurações. Mostra os itens
+  // ativos e, numa marcação antiga, também o valor que já lá estiver (mesmo
+  // que entretanto tenha sido desativado). `porNome` = guarda o nome (género).
+  function catalogoSelect(key, atual, vazio, porNome = false) {
+    const itens = (app.catalogos && app.catalogos[key]) || [];
+    const val = (i) => (porNome ? i.nome : i.codigo);
+    const visiveis = itens.filter((i) => i.ativo || val(i) === atual);
+    const extra = atual && !visiveis.some((i) => val(i) === atual) ? [h('option', { value: atual }, atual)] : [];
+    return h('select', { value: atual || '' }, h('option', { value: '' }, vazio), visiveis.map((i) => h('option', { value: val(i) }, i.nome)), extra);
   }
 
   function setPending(n) {
@@ -153,6 +168,7 @@
         const r = await api('/api/admin/pending-count');
         if (r.pending > app.pending) toast('Novo pedido de marcação.');
         setPending(r.pending);
+        loadNotifs();
       } catch (_) { /* tenta na próxima */ }
     }, 60000);
   }
@@ -165,9 +181,12 @@
   const NAV = [
     ['dashboard', 'Dashboard', ''], ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''], ['relatorios', 'Relatórios', ''],
     ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'],
-    ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'], ['integracoes', 'Integrações', 'manager'],
-    ['utilizadores', 'Utilizadores', 'owner'], ['acesso', 'Gestão de acesso', 'owner'], ['definicoes', 'Definições', 'manager'],
+    ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'],
+    ['utilizadores', 'Utilizadores', 'owner'], ['acesso', 'Gestão de acesso', 'owner'], ['configuracoes', 'Configurações', 'manager'],
   ];
+  // Definições e Integrações vivem agora dentro de Configurações; os endereços
+  // antigos continuam a funcionar e levam à secção certa.
+  const DENTRO_CONFIG = { definicoes: 'geral', integracoes: 'integracoes' };
 
   function canSee(perm) {
     if (perm === 'owner') return app.user.role === 'owner';
@@ -187,7 +206,7 @@
 
   // Botão de tema (claro/escuro). Vale para todo o painel; fica guardado.
   function themeControl() {
-    const btn = h('button', { class: 'tb-btn', type: 'button', 'aria-label': 'Mudar entre claro e escuro' });
+    const btn = h('button', { class: 'tb-btn tb-theme', type: 'button', 'aria-label': 'Mudar entre claro e escuro' });
     const paint = () => {
       const claro = prefs.tema() === 'claro';
       btn.replaceChildren(h('span', { class: 'tb-ico', 'aria-hidden': 'true' }, claro ? '☀' : '☾'), h('span', {}, claro ? 'Claro' : 'Escuro'));
@@ -197,12 +216,122 @@
     return btn;
   }
 
-  // Seletor de idioma. Guarda a escolha e acompanha o link "Ver o site".
+  // Menu que abre por baixo de um botão da barra de topo e fecha ao clicar
+  // fora, com Escape ou ao escolher uma opção.
+  function popover(btn, menu) {
+    const wrap = h('div', { class: 'tb-usermenu' }, btn, menu);
+    const onDoc = (e) => { if (!wrap.contains(e.target)) fechar(); };
+    const onKey = (e) => { if (e.key === 'Escape') { fechar(); btn.focus(); } };
+    function fechar() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', onDoc); document.removeEventListener('keydown', onKey); }
+    function abrir() { menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); setTimeout(() => { document.addEventListener('click', onDoc); document.addEventListener('keydown', onKey); }, 0); }
+    btn.onclick = () => (menu.hidden ? abrir() : fechar());
+    return { wrap, fechar };
+  }
+
+  // Seletor de idioma: botão com o globo e a língua atual; o menu lista as
+  // línguas pelo nome na própria língua. Escolher traduz o painel na hora
+  // (admin-i18n.js) e guarda a escolha, que acompanha o link "Ver o site".
+  const LINGUA_MENU = [['en', 'GB', 'English'], ['pt', 'PT', 'Português'], ['fr', 'FR', 'Français']];
+  const svgIco = (paths, size = 17) => {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+    for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); svg.append(p); }
+    return svg;
+  };
+  const GLOBO = ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M3 12h18', 'M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z'];
   function langControl() {
-    const sel = h('select', { class: 'tb-sel', 'aria-label': 'Idioma', value: prefs.lingua() },
-      LINGUAS.map(([c, label]) => h('option', { value: c }, label)));
-    sel.addEventListener('change', () => { prefs.setLingua(sel.value); toast('Idioma guardado: ' + sel.value.toUpperCase() + '.'); });
-    return sel;
+    const atual = prefs.lingua();
+    const [, bandeira] = LINGUA_MENU.find(([c]) => c === atual);
+    const btn = h('button', { class: 'tb-btn tb-lang', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Idioma' },
+      svgIco(GLOBO), h('span', { class: 'tb-lang-flag' }, bandeira), h('strong', {}, atual.toUpperCase()),
+      svgIco(['M6 9l6 6 6-6'], 14));
+    const menu = h('div', { class: 'tb-menu tb-lang-menu', role: 'menu', hidden: true },
+      LINGUA_MENU.map(([c, flag, nome]) => h('button', {
+        class: 'tb-menu-item' + (c === atual ? ' on' : ''), type: 'button', role: 'menuitemradio', 'aria-checked': String(c === atual), lang: c,
+        onclick: () => { p.fechar(); mudarLingua(c); },
+      }, h('span', { class: 'tb-lang-flag' }, flag), h('span', { class: 'tb-lang-nome' }, nome), c === atual && svgIco(['M5 12l5 5 9-10'], 16))));
+    const p = popover(btn, menu);
+    return p.wrap;
+  }
+
+  // ---------------------------------------------------------- Sininho (notificações)
+  // Pedidos por confirmar, sessões de hoje, pagamentos em atraso e tentativas
+  // falhadas de entrar na conta. O ponto vermelho conta o que está por ler;
+  // abrir o sininho marca tudo como visto (no servidor, por pessoa).
+  const notif = { items: [], unread: 0, avisado: false };
+  const NOTIF_ICO = {
+    pedido: ['M5 5h14v15H5z', 'M5 10h14', 'M9 3v4', 'M15 3v4', 'M12 13v4', 'M10 15h4'],
+    hoje: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'],
+    pagamento: ['M3 7h18v10H3z', 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', 'M6 10h.01', 'M18 14h.01'],
+    seguranca: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', 'M12 9v4', 'M12 16h.01'],
+  };
+  const SINO = ['M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20a2 2 0 0 0 4 0'];
+
+  function quando(iso) {
+    const seg = (Date.parse(iso) - Date.now()) / 1000;
+    const rtf = new Intl.RelativeTimeFormat((window.I18N && window.I18N.locale) || 'pt-PT', { numeric: 'auto' });
+    for (const [lim, un, div] of [[60, 'second', 1], [3600, 'minute', 60], [86400, 'hour', 3600], [604800, 'day', 86400], [Infinity, 'week', 604800]]) {
+      if (Math.abs(seg) < lim) return Math.abs(seg) < 45 ? rtf.format(0, 'second') : rtf.format(Math.round(seg / div), un);
+    }
+    return '';
+  }
+
+  function bellControl() {
+    const badge = h('span', { class: 'tb-bell-n', hidden: true });
+    const btn = h('button', { class: 'tb-btn tb-bell', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Notificações' }, svgIco(SINO, 18), badge);
+    const lista = h('div', { class: 'tb-notif-list' });
+    const lidas = h('button', { class: 'tb-notif-all', type: 'button' }, 'Marcar como lidas');
+    const menu = h('div', { class: 'tb-menu tb-notif-menu', role: 'menu', hidden: true },
+      h('div', { class: 'tb-notif-head' }, h('strong', {}, 'Notificações'), lidas), lista);
+    const p = popover(btn, menu);
+
+    function pintar() {
+      badge.hidden = !notif.unread;
+      badge.textContent = notif.unread > 9 ? '9+' : String(notif.unread);
+      btn.setAttribute('aria-label', notif.unread ? `Notificações (${notif.unread} por ler)` : 'Notificações');
+      lidas.hidden = !notif.unread;
+      lista.replaceChildren(...(notif.items.length
+        ? notif.items.map((n) => h('a', { class: 'tb-notif' + (n.unread ? ' unread' : ''), href: n.href, role: 'menuitem', onclick: () => p.fechar() },
+          h('span', { class: 'tb-notif-ico ' + n.kind }, svgIco(NOTIF_ICO[n.kind] || SINO, 16)),
+          h('span', { class: 'tb-notif-txt' }, h('strong', {}, n.title), h('span', {}, n.text), h('small', {}, quando(n.at)))))
+        : [h('p', { class: 'tb-notif-empty' }, 'Sem notificações. Está tudo em dia.')]));
+    }
+    async function marcarVistas() {
+      if (!notif.unread) return;
+      notif.unread = 0;
+      badge.hidden = true; lidas.hidden = true;
+      btn.setAttribute('aria-label', 'Notificações');
+      try { await api('/api/admin/notificacoes/vistas', { method: 'POST' }); } catch (_) { /* tenta na próxima */ }
+    }
+    // Abre com os destaques de "por ler" ainda visíveis e marca como visto.
+    btn.addEventListener('click', () => { if (!menu.hidden) marcarVistas(); });
+    lidas.onclick = () => { marcarVistas(); notif.items.forEach((n) => { n.unread = false; }); pintar(); };
+    pintar();
+    notif.pintar = pintar;
+    return p.wrap;
+  }
+
+  // Vai buscar as notificações; à entrada, avisa se houver alguma por ler.
+  async function loadNotifs() {
+    try {
+      const r = await api('/api/admin/notificacoes');
+      notif.items = r.items;
+      notif.unread = r.unread;
+      if (notif.pintar) notif.pintar();
+      if (!notif.avisado && r.unread) toast(r.unread === 1 ? 'Tem 1 notificação por ler.' : `Tem ${r.unread} notificações por ler.`);
+      notif.avisado = true;
+    } catch (_) { /* o sininho fica como estava */ }
+  }
+
+  // Muda a língua do painel: o tradutor passa a traduzir (ou deixa de traduzir,
+  // no português) e o painel volta a desenhar-se a partir dos textos originais.
+  function mudarLingua(l) {
+    if (l === prefs.lingua()) return;
+    prefs.setLingua(l);
+    if (window.I18N && window.I18N.definir) window.I18N.definir(l);
+    renderShell();
+    route();
   }
 
   // Janela para a pessoa trocar a sua palavra-passe (POST /api/auth/password).
@@ -238,12 +367,28 @@
     });
   }
 
-  // Chip com o nome: ao clicar abre um menu com alterar palavra-passe e sair.
+  // Ícones a traço do menu do chip.
+  const MENU_ICO = {
+    perfil: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4 21a8 8 0 0 1 16 0'],
+    senha: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
+    sair: ['M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4', 'M9 16l-4-4 4-4', 'M5 12h11'],
+  };
+  function menuIco(nome) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: 17, height: 17, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+    for (const d of MENU_ICO[nome]) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); svg.append(p); }
+    return svg;
+  }
+
+  // Chip com o nome: ao clicar abre um menu com o perfil, alterar palavra-passe e sair.
   function userMenu(papel) {
     const iniciais = (app.user.name || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
     const menu = h('div', { class: 'tb-menu', role: 'menu', hidden: true },
-      h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); changePasswordModal(); } }, 'Alterar palavra-passe'),
-      h('button', { class: 'tb-menu-item danger', type: 'button', role: 'menuitem', onclick: () => { fechar(); logout(); } }, 'Sair'));
+      h('div', { class: 'tb-menu-who' }, h('strong', {}, app.user.name), h('span', {}, app.user.email)),
+      h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); location.hash = '#/perfil'; } }, menuIco('perfil'), 'O Meu Perfil'),
+      h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); changePasswordModal(); } }, menuIco('senha'), 'Alterar palavra-passe'),
+      h('button', { class: 'tb-menu-item danger', type: 'button', role: 'menuitem', onclick: () => { fechar(); logout(); } }, menuIco('sair'), 'Terminar sessão'));
     const btn = h('button', { class: 'tb-user', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' },
       h('span', { class: 'tb-avatar' }, iniciais),
       h('span', { class: 'tb-user-txt' }, h('strong', {}, app.user.name), h('span', {}, papel)),
@@ -274,6 +419,7 @@
         h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
         h('span', { class: 'tb-studio-name' }, st ? st.name : app.settings.business_name)),
       h('div', { class: 'tb-right' },
+        bellControl(),
         langControl(),
         themeControl(),
         userMenu(chipRole())));
@@ -325,6 +471,7 @@
   async function route() {
     if (!app.user) return;
     const { name, params } = parseHash();
+    if (DENTRO_CONFIG[name] && canSee('manager')) { location.hash = '#/configuracoes?sec=' + DENTRO_CONFIG[name]; return; }
     // Secção que o perfil não vê (ex.: um agente a tentar #/estudios): volta ao painel.
     const navItem = NAV.find(([k]) => k === name);
     if (navItem && !canSee(navItem[2])) { location.hash = '#/painel'; return; }
@@ -371,6 +518,7 @@
     renderShell();
     startPolling();
     route();
+    loadNotifs();
   }
   window.addEventListener('hashchange', route);
 
@@ -407,7 +555,7 @@
   // ---------------------------------------------------------- Janela: marcação
   const STATUS_MSG = {
     pedido: 'a aguardar confirmação', confirmado: 'confirmada', em_curso: 'em curso',
-    concluido: 'concluída', cancelado: 'cancelada',
+    concluido: 'concluída', cancelado: 'cancelada', expirado: 'expirada',
   };
 
   function allRooms() {
@@ -434,7 +582,10 @@
         app.services.filter((s) => s.active || s.id === b.service_id).map((s) => h('option', { value: s.id }, s.name))),
       remote: h('input', { type: 'checkbox', checked: !!b.remote }),
       title: h('input', { type: 'text', maxlength: 120, value: b.title || '' }),
-      style: h('input', { type: 'text', maxlength: 60, value: b.style || '' }),
+      style: catalogoSelect('generos', b.style || '', 'Sem género indicado', true),
+      projectType: catalogoSelect('tipos_projeto', b.project_type || '', 'Não indicado'),
+      clientType: catalogoSelect('tipos_cliente', b.client_type || '', 'Não indicado'),
+      payMethod: catalogoSelect('metodos_pagamento', b.payment_method || '', 'Não indicado'),
       name: h('input', { type: 'text', maxlength: 80, required: true, value: b.client_name || '', autocomplete: 'off' }),
       phone: h('input', { type: 'tel', maxlength: 30, value: b.client_phone || '', autocomplete: 'off' }),
       email: h('input', { type: 'email', maxlength: 120, value: b.client_email || '', autocomplete: 'off' }),
@@ -501,6 +652,7 @@
           const body = {
             status: f.status.value, room_id: +f.room.value, date: f.date.value, start: f.start.value, end: f.end.value,
             service_id: f.service.value || null, remote: f.remote.checked, title: f.title.value, style: f.style.value,
+            project_type: f.projectType.value, client_type: f.clientType.value, payment_method: f.payMethod.value,
             client_name: f.name.value, client_phone: f.phone.value,
             client_email: f.email.value, notes: f.notes.value, internal_notes: f.internal.value, price: f.price.value, paid: f.paid.value || 0,
           };
@@ -517,15 +669,16 @@
       h('div', { class: 'grid-2' }, field('Estado', f.status), field('Sala', f.room)),
       h('div', { class: 'grid-3' }, field('Dia', f.date), field('Início', f.start), field('Fim', f.end)),
       h('div', { class: 'grid-2' }, field('Serviço', f.service), field('Projeto', f.title)),
-      h('div', { class: 'grid-2' }, field('Estilo', f.style), null),
+      h('div', { class: 'grid-2' }, field('Tipo de projeto', f.projectType), field('Género musical', f.style)),
       remoteWrap,
       h('div', { class: 'grid-2' }, field('Nome do cliente', f.name), field('Telefone', f.phone)),
-      field('Email', f.email),
+      h('div', { class: 'grid-2' }, field('Email', f.email), field('Tipo de cliente', f.clientType)),
       field('Mensagem do cliente', f.notes),
       field('Notas internas (o cliente não vê)', f.internal),
       h('div', { class: 'grid-2' },
         field('Valor total', f.price, { hint: 'Deixe vazio para calcular pelo preço da sala.' }),
         field('Valor já recebido', f.paid)),
+      h('div', { class: 'grid-2' }, field('Método de pagamento', f.payMethod), null),
       err,
       h('div', { class: 'modal-foot' },
         h('div', { class: 'spacer' }, del, whats),
@@ -577,8 +730,16 @@
         h('button', { class: 'btn', type: 'submit' }, 'Bloquear')))));
   }
 
+  // Volta a desenhar a barra de topo (ex.: depois de a pessoa mudar o nome no perfil).
+  function renderTopBar() {
+    const atual = document.querySelector('.topbar');
+    if (atual) atual.replaceWith(topBar());
+    const who = document.querySelector('.side-foot .who');
+    if (who) who.textContent = `${app.user.name} (${roleLabel()})`;
+  }
+
   window.Admin = {
     app, ui, views, api, toast, field, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
-    bookingItem, reloadRefs, refresh: route, refreshPending, boot,
+    bookingItem, reloadRefs, refresh: route, refreshPending, boot, renderTopBar,
   };
 })();

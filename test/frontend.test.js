@@ -259,7 +259,20 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, d.querySelector('input[type=password]'), 'palavra-passe-teste');
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side'), 'painel');
-  ok(d.querySelectorAll('.side .nav').length === 14, 'menu com 14 secções (inclui Dashboard, Relatórios, Utilizadores e Gestão de acesso)');
+  ok(d.querySelectorAll('.side .nav').length === 13, 'menu com 13 secções (inclui Dashboard, Relatórios, Utilizadores, Gestão de acesso e Configurações)');
+  ok(![...d.querySelectorAll('.side .nav')].some((a) => /^(Definições|Integrações)$/.test(a.textContent.trim())), 'Definições e Integrações saíram do menu (estão em Configurações)');
+  // Sininho: os 2 pedidos e a tentativa falhada de há pouco estão por ler.
+  await waitFor(() => !d.querySelector('.tb-bell-n').hidden, 'sininho com número');
+  ok(+d.querySelector('.tb-bell-n').textContent >= 3, 'sininho: conta os pedidos e a tentativa falhada (' + d.querySelector('.tb-bell-n').textContent + ')');
+  ok([...d.querySelectorAll('#toasts .toast')].some((t) => /notificações por ler/.test(t.textContent)), 'ao entrar, avisa das notificações por ler');
+  d.querySelector('.tb-bell').click();
+  const notifs = [...d.querySelectorAll('.tb-notif')];
+  ok(!d.querySelector('.tb-notif-menu').hidden && notifs.filter((n) => /Novo pedido de marcação/.test(n.textContent)).length === 2, 'sininho: lista os dois pedidos');
+  ok(notifs.some((n) => /Tentativa falhada/.test(n.textContent) && n.getAttribute('href') === '#/perfil?sec=atividade'), 'sininho: avisa da tentativa falhada e leva à atividade');
+  ok(d.querySelector('.tb-bell-n').hidden, 'abrir o sininho marca como visto');
+  const rN = await (await w.fetch('/api/admin/notificacoes')).json();
+  ok(rN.unread === 0, 'o servidor guarda que as notificações foram vistas');
+  d.querySelector('.tb-bell').click();
   // O Painel mostra agora só os pedidos por confirmar e as sessões de hoje
   // (o resumo de números passou para a secção Dashboard).
   await waitFor(() => d.querySelector('[aria-labelledby=h-pend]'), 'painel');
@@ -272,6 +285,19 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => d.querySelector('.kpis .kpi'), 'dashboard');
   const cartaoPend = [...d.querySelectorAll('.kpis .kpi')].find((k) => /Pedidos por confirmar/.test(k.querySelector('.kpi-l').textContent));
   ok(cartaoPend && cartaoPend.querySelector('.kpi-v').textContent === '2', 'dashboard: cartão "Pedidos por confirmar" com 2');
+  // Gráficos: fluxo financeiro com 12 meses, cartões com variação e donut por serviço.
+  ok(d.querySelectorAll('.dv-kpi').length === 4 && d.querySelectorAll('.dv-kpi .dv-delta').length === 3, 'dashboard: quatro cartões, três comparados com o mês anterior');
+  ok(d.querySelectorAll('.dv-svg .dv-month').length === 12 && d.querySelectorAll('.dv-table tbody tr').length === 12, 'dashboard: o fluxo mostra um ano, também em tabela');
+  ok(!!d.querySelector('.dv-donut .dv-donut-c'), 'dashboard: donut da faturação por serviço');
+  const segBtn = (txt) => [...d.querySelectorAll('.dv-seg button')].find((b) => b.textContent.includes(txt));
+  segBtn('3 meses').click();
+  ok(d.querySelectorAll('.dv-svg .dv-month').length === 3 && segBtn('3 meses').getAttribute('aria-pressed') === 'true', 'dashboard: período de 3 meses');
+  segBtn('Área').click();
+  ok(d.querySelectorAll('.dv-svg .dv-area').length === 2 && d.querySelectorAll('.dv-svg .dv-line').length === 2, 'dashboard: modo área com as duas séries');
+  const meses = d.querySelectorAll('.dv-svg .dv-hit');
+  ev(w, meses[0], 'click');
+  ok(d.querySelectorAll('.dv-svg .dv-month')[0].classList.contains('sel'), 'dashboard: clicar num mês escolhe-o');
+  segBtn('Barras').click(); segBtn('Ano').click();
   w.location.hash = '#/painel';
   await waitFor(() => d.querySelector('[aria-labelledby=h-pend]'), 'volta ao painel');
 
@@ -302,7 +328,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   [...d.querySelectorAll('table.data tbody .btn-outline')].find((b) => b.textContent === 'Abrir').click();
   const dlg = await waitFor(() => d.querySelector('dialog.modal[open]'), 'janela da marcação');
   ok(/Código [A-Z2-9]{6}/.test(dlg.textContent), 'janela mostra o código da marcação');
-  ok(dlg.querySelector('select').options.length === 5, 'lista de estados (5)');
+  ok(dlg.querySelector('select').options.length === 6, 'lista de estados (6, com "Expirado")');
   ok(dlg.querySelectorAll('optgroup').length === 2, 'salas agrupadas por estúdio');
   // reagendar para conflito
   const inputs = dlg.querySelectorAll('input[type=time]');
@@ -323,10 +349,14 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, inp('date'), day, 'change');
   setVal(w, inp('time', 0), '10:00', 'change'); setVal(w, inp('time', 1), '11:00', 'change');
   setVal(w, nd.querySelector('input[type=text][required]'), 'Cliente ao balcão');
-  // O painel também escreve e guarda o estilo, tal como o site.
-  const campoEstilo = [...nd.querySelectorAll('.field')].find((c) => /Estilo/.test(c.textContent));
-  ok(!!campoEstilo, 'a janela da marcação tem campo "Estilo"');
-  setVal(w, campoEstilo.querySelector('input'), 'Kizomba');
+  // O género escolhe-se da lista de Configurações (a mesma do site).
+  const campoEstilo = [...nd.querySelectorAll('.field')].find((c) => /Género musical/.test(c.textContent));
+  ok(!!campoEstilo && [...campoEstilo.querySelector('select').options].some((o) => o.value === 'Trap'), 'a janela da marcação tem a lista "Género musical"');
+  setVal(w, campoEstilo.querySelector('select'), 'Trap', 'change');
+  const campoTipo = [...nd.querySelectorAll('.field')].find((c) => /Tipo de cliente/.test(c.textContent));
+  setVal(w, campoTipo.querySelector('select'), 'ARTISTA_ACORDO', 'change');
+  const campoPag = [...nd.querySelectorAll('.field')].find((c) => /Método de pagamento/.test(c.textContent));
+  setVal(w, campoPag.querySelector('select'), 'TRANSFERENCIA', 'change');
   ok(inp('number', 0).value === '2500', 'preço sugerido = 2500 (1 h na sala 1)');
   nd.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => !nd.querySelector('.notice.error').hidden, 'erro de conflito');
@@ -336,8 +366,10 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   nd.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => !d.querySelector('dialog.modal'), 'janela fechada');
   ok(true, 'marcação válida é guardada e a janela fecha');
-  await waitFor(() => /Kizomba/.test(d.querySelector('table.data tbody').textContent), 'estilo na lista');
-  ok(true, 'o estilo escrito no painel fica guardado e aparece na lista');
+  await waitFor(() => /Trap/.test(d.querySelector('table.data tbody').textContent), 'estilo na lista');
+  ok(true, 'o género escolhido no painel fica guardado e aparece na lista');
+  const guardada = (await (await w.fetch('/api/admin/bookings?q=balc')).json()).bookings[0];
+  ok(guardada.client_type === 'ARTISTA_ACORDO' && guardada.payment_method === 'TRANSFERENCIA', 'tipo de cliente e método de pagamento ficam guardados');
 
   // Calendário
   w.location.hash = `#/calendario?date=${day}`;
@@ -408,9 +440,10 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => { fetch(base + '/api/public/config').then((r) => r.json()).then((c) => { svEn = c.services[0].i18n.en.name; }); return svEn === 'Vocal recording'; }, 'tradução gravada');
   ok(svEn === 'Vocal recording', 'escrever a tradução no painel e guardar chega ao site');
 
-  // Integrações: sem nada ligado, mostra os dois fornecedores desligados.
+  // Integrações (dentro de Configurações): sem nada ligado, os dois fornecedores desligados.
   w.location.hash = '#/integracoes';
-  await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Integrações', 'integrações');
+  await waitFor(() => d.querySelector('.cf-sub-h') && d.querySelector('.cf-sub-h').textContent === 'Integrações', 'integrações');
+  ok(w.location.hash === '#/configuracoes?sec=integracoes' && d.querySelector('.cf-link[aria-current=page]').textContent === 'Integrações', 'o endereço antigo das integrações abre-as dentro de Configurações');
   const nomes = [...d.querySelectorAll('#view section.panel h2')].map((x) => x.textContent);
   ok(nomes.some((n) => /Stripe/.test(n) && /desligado/.test(n)) && nomes.some((n) => /gravadora/.test(n)), 'integrações: Stripe e gravadora, desligados');
   ok(/Sucesso a partir de/.test(d.getElementById('view').textContent), 'integrações: limite de sucesso editável');
@@ -426,6 +459,34 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   sf.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side .brand').getAttribute('aria-label') === 'Produções Teste', 'nome atualizado');
   ok(true, 'guardar definições atualiza o nome da marca no menu');
+
+  // Configurações › catálogos: listas editáveis; os estados do sistema têm cadeado.
+  console.log('\nConfigurações');
+  w.location.hash = '#/configuracoes?sec=estados_marcacao';
+  await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Estados de marcação', 'estados de marcação');
+  const estadosCat = [...d.querySelectorAll('.cf-item')];
+  ok(estadosCat.length === 6 && estadosCat.every((li) => li.querySelector('.cf-act.lock') && !li.querySelector('.cf-act.del')), 'estados de marcação: 6, todos do sistema (cadeado, sem apagar)');
+  ok(estadosCat.some((li) => /Expirado/.test(li.textContent)) && !d.querySelector('.cf-add'), 'inclui "Expirado" e não deixa acrescentar estados');
+  ok(d.querySelectorAll('.cf-group-t').length === 3, 'menu de Configurações com Geral, Catálogos e Integrações');
+  w.location.hash = '#/configuracoes?sec=metodos_pagamento';
+  await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Métodos de pagamento', 'métodos de pagamento');
+  ok([...d.querySelectorAll('.cf-item strong')].some((e) => e.textContent === 'Transferência bancária'), 'métodos de pagamento já vêm preenchidos');
+  d.querySelector('.cf-add').click();
+  const dlgCat = await waitFor(() => d.querySelector('dialog.modal[open]'), 'novo item');
+  setVal(w, dlgCat.querySelector('input[type=text]'), 'Cartão pré-pago');
+  dlgCat.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => [...d.querySelectorAll('.cf-item')].some((li) => /CARTAO_PRE_PAGO/.test(li.textContent)), 'item criado');
+  ok(true, 'acrescentar um método de pagamento gera o código a partir do nome (CARTAO_PRE_PAGO)');
+  const novoLi = [...d.querySelectorAll('.cf-item')].find((li) => /CARTAO_PRE_PAGO/.test(li.textContent));
+  novoLi.querySelector('.cf-act.del').click();
+  await waitFor(() => ![...d.querySelectorAll('.cf-item')].some((li) => /CARTAO_PRE_PAGO/.test(li.textContent)), 'item apagado');
+  ok(true, 'apagar um item que não está em uso');
+  const usado = [...d.querySelectorAll('.cf-item')].find((li) => /TRANSFERENCIA/.test(li.textContent));
+  usado.querySelector('.cf-act.del').click();
+  await waitFor(() => [...d.querySelectorAll('#toasts .toast')].some((t) => /em uso|usado em/.test(t.textContent)), 'aviso de item em uso');
+  ok(true, 'um item usado numa marcação não se apaga (sugere desativar)');
+  const js = await (await w.fetch('/js/estilos.js')).text();
+  ok(js.includes('window.ESTILOS = ["Drill","Trap","Boom Bap","Rap / Hip-Hop","Afrobeats","R&B"]'),'os estilos do site vêm dos géneros ativos de Configurações');
 
   // Utilizadores: a lista de contas, com o novo perfil de agente.
   w.location.hash = '#/utilizadores';
@@ -485,6 +546,33 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   w.location.hash = '#/acesso';
   await waitFor(() => w.location.hash === '#/painel', 'equipa reencaminhada da gestão de acesso');
   ok(true, 'a equipa é levada ao painel se tentar abrir a gestão de acesso');
+
+  // O Meu Perfil: abre pelo menu do chip, guarda os dados e troca a palavra-passe.
+  console.log('\nO Meu Perfil');
+  const itensMenu = [...d.querySelectorAll('.tb-menu:not(.tb-lang-menu) .tb-menu-item')].map((b) => b.textContent.trim());
+  ok(itensMenu.join('|') === 'O Meu Perfil|Alterar palavra-passe|Terminar sessão', 'o menu do chip tem perfil, palavra-passe e terminar sessão');
+  ok(d.querySelector('.tb-menu-who').textContent.includes('tec@teste.cv'), 'o menu mostra o nome e o email de quem entrou');
+  d.querySelector('.tb-menu:not(.tb-lang-menu) .tb-menu-item').click();
+  await waitFor(() => d.querySelector('.pf-hero'), 'página do perfil');
+  ok(d.querySelector('.pf-name strong').textContent === 'Técnica', 'o perfil mostra o nome');
+  ok(d.querySelectorAll('.pf-nav-a').length === 4 && d.querySelectorAll('.pf-sec').length === 4, 'quatro secções: dados, conta, segurança e atividade');
+  ok(/Responsável/.test(d.getElementById('pf-conta').textContent) && /Acesso de equipa/.test(d.getElementById('pf-conta').textContent), 'conta e acessos mostra o papel e as permissões');
+  await waitFor(() => /Login efetuado/.test(d.querySelector('.pf-timeline').textContent), 'atividade com o login');
+  ok(true, 'a atividade mostra o login que acabou de ser feito');
+  const fDados = d.querySelector('#pf-dados form');
+  ok(fDados.querySelector('button[type=submit]').disabled, 'sem alterações, Guardar está desligado');
+  setVal(w, fDados.querySelector('input[type=tel]'), '+238 991 23 45');
+  ok(!fDados.querySelector('button[type=submit]').disabled, 'ao mudar o telefone, Guardar liga-se');
+  fDados.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => d.querySelector('#pf-dados input[type=tel]') && d.querySelector('#pf-dados input[type=tel]') !== fDados.querySelector('input[type=tel]'), 'perfil redesenhado');
+  ok(d.querySelector('#pf-dados input[type=tel]').value === '+238 991 23 45', 'o telefone fica guardado');
+  const fSenha = d.querySelector('#pf-seguranca form');
+  const [sAtual, sNova, sConf] = fSenha.querySelectorAll('input[type=password]');
+  setVal(w, sAtual, staffPw); setVal(w, sNova, 'Nova-Senha#2026'); setVal(w, sConf, 'Nova-Senha#2026');
+  ok(fSenha.querySelectorAll('.pf-rules li.ok').length === 5 && fSenha.querySelector('.pf-strength').dataset.n === '4', 'palavra-passe forte: as cinco regras ficam cumpridas');
+  fSenha.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => /Última alteração/.test(d.getElementById('pf-seguranca').textContent), 'palavra-passe alterada');
+  ok(true, 'depois de trocar a palavra-passe, o perfil mostra a última alteração');
   w.close();
 
   // Vista de agente: barra de topo com estúdio, idioma, tema e identidade.
@@ -498,11 +586,24 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.topbar'), 'barra de topo do agente');
   ok(d.querySelector('.tb-studio-name').textContent.trim() === studios[0].name, 'a barra mostra o nome do estúdio');
-  ok(!!d.querySelector('.topbar .tb-sel') && !!d.querySelector('.topbar .tb-btn') && !!d.querySelector('.topbar .tb-avatar'), 'a barra tem idioma, tema e identidade');
+  ok(!!d.querySelector('.topbar .tb-lang') && !!d.querySelector('.topbar .tb-theme') && !!d.querySelector('.topbar .tb-avatar'), 'a barra tem idioma, tema e identidade');
   ok(/Ailton Santos/.test(d.querySelector('.tb-user').textContent), 'a barra mostra o nome do agente');
   const temaAntes = d.documentElement.getAttribute('data-tema');
-  d.querySelector('.tb-btn').click();
+  d.querySelector('.tb-theme').click();
   ok(d.documentElement.getAttribute('data-tema') !== temaAntes, 'o botão de tema alterna claro/escuro');
+  // Idioma: o menu lista as línguas pelo nome; escolher traduz o painel na hora.
+  d.querySelector('.tb-lang').click();
+  const linguas = [...d.querySelectorAll('.tb-lang-menu .tb-menu-item')];
+  ok(!d.querySelector('.tb-lang-menu').hidden && linguas.map((b) => b.querySelector('.tb-lang-nome').textContent).join('|') === 'English|Português|Français', 'o menu de idioma lista English, Português e Français');
+  ok(linguas[1].classList.contains('on') && linguas[1].getAttribute('aria-checked') === 'true', 'o português está marcado');
+  linguas[0].click();
+  await waitFor(() => d.querySelector('.tb-lang strong') && d.querySelector('.tb-lang strong').textContent === 'EN', 'painel em inglês');
+  await waitFor(() => [...d.querySelectorAll('.side .nav')].some((a) => /^Bookings/.test(a.textContent)), 'menu traduzido');
+  ok(true, 'escolher English traduz o painel sem recarregar');
+  d.querySelector('.tb-lang').click();
+  [...d.querySelectorAll('.tb-lang-menu .tb-menu-item')][1].click();
+  await waitFor(() => [...d.querySelectorAll('.side .nav')].some((a) => /^Marcações/.test(a.textContent)), 'menu de volta ao português');
+  ok(true, 'voltar a Português repõe os textos originais');
   ok(![...d.querySelectorAll('.side .nav')].some((a) => /Estúdios|Serviços|Integrações|Utilizadores|Gestão de acesso/.test(a.textContent)), 'o agente não vê as secções de gestor');
   w.close();
 
