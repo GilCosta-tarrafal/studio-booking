@@ -1,145 +1,149 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Gera o relatório de marcações em PDF (pdfkit) e envia-o na resposta. É usado
-// pela rota GET /api/admin/reports.pdf, que o devolve como anexo — o navegador
-// guarda o ficheiro diretamente, sem abrir a janela de impressão.
+// Relatório de marcações em PDF (pdfkit): a "Folha de Marcações". É usado pela
+// rota GET /api/admin/reports.pdf, que o devolve como anexo.
 //
-// Layout: papel timbrado (logótipo + nome à esquerda, contactos da sede à
-// direita), título e período, os totais e as repartições em tabelas, e um
-// rodapé repetido em cada página com a origem do documento e o número de página.
+// Layout (A4 deitado, como o recibo): à esquerda o logótipo, o nome e a frase
+// do negócio; à direita os dados do estúdio (nome legal, NIF, telefone, email,
+// morada — de Estúdios). Depois o título com o número de registos, a moeda e o
+// período, a tabela das marcações (cabeçalho laranja, linhas alternadas, o
+// cabeçalho repete-se em cada página), uma última linha com os totais e, em todas as
+// páginas, o rodapé com a origem do documento e o número da página.
 // ---------------------------------------------------------------------------
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
 const LOGO = path.join(__dirname, '..', '..', 'publico', 'assets', 'img', 'logo.png');
-const STATUS_PT = { pedido: 'Pedido', confirmado: 'Confirmado', em_curso: 'Em curso', concluido: 'Concluído', cancelado: 'Cancelado', expirado: 'Expirado' };
+const STATUS_PT = { pedido: 'Pedido', aguarda_pagamento: 'Aguarda pagamento', confirmado: 'Confirmado', em_curso: 'Em curso', concluido: 'Concluído', cancelado: 'Cancelado', expirado: 'Expirado' };
+const COR = {
+  laranja: '#E5622A', pessego: '#FEF3E8', tinta: '#111827', suave: '#6B7280', linha: '#E5E7EB', zebra: '#F8F9FB', branco: '#FFFFFF',
+};
 
-const nf = new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 });
-const money = (n, cur) => nf.format(n || 0).replace(/ /g, ' ') + (cur ? ' ' + cur : '');
+const nf = new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const dinheiro = (n, cur) => `${cur || ''} ${nf.format(n || 0).replace(/\s/g, ' ')}`.trim();
+const ddmmaaaa = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
+const hm = (min) => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
 const horas = (min) => { const v = (min || 0) / 60; return (Number.isInteger(v) ? v : v.toFixed(1)) + ' h'; };
-const mesLabel = (m) => m.slice(5) + '/' + m.slice(0, 4);
 
+// Colunas da folha: título, fração da largura, alinhamento e o valor de cada linha.
+const COLUNAS = (cur) => [
+  ['DATA MARCAÇÃO', 0.085, 'left', (b) => ddmmaaaa(b.created_at)],
+  ['CÓDIGO', 0.07, 'left', (b) => b.code],
+  ['CLIENTE', 0.13, 'left', (b) => b.client_name],
+  ['ESTÚDIO / SALA', 0.135, 'left', (b) => `${b.studio_name}\n${b.room_name}`],
+  ['SERVIÇO', 0.11, 'left', (b) => [b.service_name || 'Sessão', b.style].filter(Boolean).join('\n')],
+  ['DATA SESSÃO', 0.08, 'left', (b) => ddmmaaaa(b.date)],
+  ['HORÁRIO', 0.08, 'left', (b) => `${hm(b.start_min)}-${hm(b.end_min)}`],
+  ['VALOR', 0.075, 'left', (b) => dinheiro(b.price, cur)],
+  ['PAGO', 0.075, 'left', (b) => dinheiro(b.paid, cur)],
+  ['EM FALTA', 0.075, 'left', (b) => (['cancelado', 'expirado'].includes(b.status) ? '—' : dinheiro(Math.max(0, b.price - b.paid), cur))],
+  ['ESTADO', 0.085, 'left', (b) => STATUS_PT[b.status] || b.status],
+];
+
+// d: resultado de computeReport; ctx: { business, estudio, periodo, geradoEm, dominio, cur }
 function gerar(res, d, ctx) {
-  const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 64, left: 40, right: 40 }, bufferPages: true });
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 36, bottom: 60, left: 40, right: 40 }, bufferPages: true, info: { Title: 'Folha de Marcações' } });
   doc.pipe(res);
+  const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
+  const fundo = () => doc.page.height - doc.page.margins.bottom;
+  const biz = ctx.business || {}, st = ctx.estudio || {}, cur = ctx.cur || '';
 
-  const L = doc.page.margins.left;
-  const R = doc.page.width - doc.page.margins.right;
-  const W = R - L;
-  const bottomY = () => doc.page.height - doc.page.margins.bottom;
-  const INK = '#111', MUTED = '#555', LINE = '#cfcfcf', HEAD = '#f2f2f2';
-
-  // -------------------------------------------------- Papel timbrado
-  const topY = doc.page.margins.top;
-  try { doc.image(LOGO, L, topY, { width: 46, height: 46 }); } catch (_) { /* segue sem logótipo */ }
-  const marcaX = L + 58, marcaW = W - 58 - 220;
-  doc.fillColor(INK).font('Helvetica-Bold').fontSize(15).text(ctx.business.business_name || 'Relatório', marcaX, topY + 2, { width: marcaW });
-  if (ctx.business.tagline) doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(ctx.business.tagline, marcaX, doc.y + 1, { width: marcaW });
-  const leftBottom = doc.y;
-
-  const rW = 220, rX = R - rW;
-  doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK).text(ctx.business.business_name || '', rX, topY, { width: rW, align: 'right' });
-  doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
-  for (const c of ctx.contactos) doc.text(c, rX, doc.y + 1, { width: rW, align: 'right' });
-  const lhY = Math.max(topY + 50, leftBottom, doc.y) + 6;
-  doc.moveTo(L, lhY).lineTo(R, lhY).lineWidth(1.3).strokeColor('#333').stroke();
+  // -------------------------------------------------- Cabeçalho
+  let y = doc.page.margins.top;
+  let yEsq = y;
+  try { doc.image(LOGO, L, y, { fit: [64, 48] }); yEsq = y + 54; } catch (_) { /* segue sem logótipo */ }
+  doc.font('Helvetica-Bold').fontSize(13).fillColor(COR.tinta).text(biz.business_name || '', L, yEsq, { width: W / 2 });
+  if (biz.tagline) doc.font('Helvetica').fontSize(8.5).fillColor(COR.suave).text(biz.tagline, L, doc.y + 2, { width: W / 2 });
+  const fimEsq = doc.y;
+  const rW = 260, rX = R - rW;
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(COR.laranja)
+    .text((st.legal_name || st.name || biz.business_name || '').toUpperCase(), rX, y, { width: rW, align: 'right' });
+  doc.font('Helvetica').fontSize(8).fillColor(COR.tinta);
+  const morada = [st.address, st.city].filter(Boolean).join(', ');
+  for (const linha of [st.nif && 'NIF: ' + st.nif, (st.phone || biz.phone) && 'Tel: ' + (st.phone || biz.phone), st.email || biz.email, morada].filter(Boolean)) {
+    doc.text(linha, rX, doc.y + 2, { width: rW, align: 'right' });
+  }
+  y = Math.max(fimEsq, doc.y) + 12;
+  doc.moveTo(L, y).lineTo(R, y).lineWidth(0.7).strokeColor(COR.linha).stroke();
 
   // -------------------------------------------------- Título
-  let y = lhY + 12;
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(INK).text('Relatório de marcações', L, y, { width: W - 240 });
-  const tituloBottom = doc.y;
-  doc.font('Helvetica').fontSize(8.5).fillColor(MUTED)
-    .text(ctx.periodo + ' · Gerado em ' + ctx.geradoEm.split(',')[0], R - 240, y + 4, { width: 240, align: 'right' });
-  y = Math.max(tituloBottom, y + 18) + 10;
+  y += 14;
+  doc.font('Helvetica-Bold').fontSize(16).fillColor(COR.tinta).text('Folha de Marcações', L, y);
+  const n = d.rows.length;
+  const sub = [`${n} ${n === 1 ? 'registo' : 'registos'}`, cur && 'Moeda: ' + cur, ctx.periodo].filter(Boolean).join(' • ');
+  doc.font('Helvetica').fontSize(8.5).fillColor(COR.suave).text(sub + (d.limited ? ' (primeiros 500)' : ''), L, doc.y + 3);
+  y = doc.y + 16;
 
-  // -------------------------------------------------- Ajudantes de tabela
-  const ensure = (need) => { if (y + need > bottomY()) { doc.addPage(); y = doc.page.margins.top; } };
-  function heading(txt) {
-    ensure(22);
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text(txt, L, y);
-    y = doc.y + 3;
-  }
-  // cols: [{ title, align, w (fração de W), bold }]; linhas: [[c0, c1, ...]]
-  function tabela(cols, linhas) {
-    const rowH = 17, padX = 10;
-    const temCab = cols.some((c) => c.title);
-    ensure((temCab ? rowH : 0) + linhas.length * rowH + 4);
-    const top = y;
-    let acc = 0;
-    const cx = cols.map((c) => { const o = { x: L + acc * W, w: c.w * W, align: c.align, bold: c.bold }; acc += c.w; return o; });
-    let ry = top;
-    if (temCab) {
-      doc.rect(L, ry, W, rowH).fillColor(HEAD).fill();
-      cols.forEach((c, i) => doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#444')
-        .text(c.title || '', cx[i].x + padX, ry + 5, { width: cx[i].w - padX * 2, align: c.align, lineBreak: false }));
-      ry += rowH;
-    }
-    linhas.forEach((ln) => {
-      if (ry > top + (temCab ? rowH : 0)) doc.moveTo(L, ry).lineTo(R, ry).lineWidth(0.4).strokeColor('#e8e8e8').stroke();
-      ln.forEach((val, i) => doc.font(cx[i].bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(cx[i].bold ? INK : '#333')
-        .text(String(val), cx[i].x + padX, ry + 5, { width: cx[i].w - padX * 2, align: cx[i].align, lineBreak: false }));
-      ry += rowH;
-    });
-    doc.rect(L, top, W, ry - top).lineWidth(0.8).strokeColor(LINE).stroke();
-    y = ry + 12;
-  }
+  // -------------------------------------------------- Tabela
+  const cols = COLUNAS(cur);
+  const padX = 8, fs = 7.6;
+  let acc = 0;
+  const cx = cols.map(([, frac]) => { const o = { x: L + acc * W, w: frac * W }; acc += frac; return o; });
+  const cabecalho = () => {
+    const alto = 30;
+    doc.rect(L, y, W, alto).fill(COR.laranja);
+    cols.forEach(([titulo, , align], i) => doc.font('Helvetica-Bold').fontSize(7.6).fillColor(COR.branco)
+      .text(titulo, cx[i].x + padX, y + 11, { width: cx[i].w - padX * 2, align, lineBreak: false }));
+    y += alto;
+  };
 
-  // -------------------------------------------------- Conteúdo
-  if (!d.totals.sessions) {
-    doc.font('Helvetica').fontSize(10).fillColor(MUTED).text('Sem marcações no período e filtros escolhidos.', L, y);
+  if (!n) {
+    doc.font('Helvetica').fontSize(10).fillColor(COR.suave).text('Sem marcações no período e filtros escolhidos.', L, y);
+    y = doc.y + 16;
   } else {
-    const canc = d.byStatus.find((s) => s.status === 'cancelado');
-    const perdido = canc ? canc.billed : 0;
-    const col2 = [{ w: 0.62, align: 'left' }, { w: 0.38, align: 'right', bold: true }];
+    cabecalho();
+    d.rows.forEach((b, idx) => {
+      const valores = cols.map(([, , , f]) => String(f(b) ?? ''));
+      doc.font('Helvetica').fontSize(fs);
+      const alto = Math.max(...valores.map((v, i) => doc.heightOfString(v, { width: cx[i].w - padX * 2 }))) + 18;
+      if (y + alto > fundo()) { doc.addPage(); y = doc.page.margins.top; cabecalho(); }
+      if (idx % 2 === 0) doc.rect(L, y, W, alto).fill(COR.zebra);
+      valores.forEach((v, i) => doc.font('Helvetica').fontSize(fs).fillColor(COR.tinta)
+        .text(v, cx[i].x + padX, y + 9, { width: cx[i].w - padX * 2, align: cols[i][2] }));
+      y += alto;
+    });
 
-    heading('Finanças');
-    tabela(col2, [
-      ['Faturado', money(d.totals.billed, ctx.cur)],
-      ['Recebido', money(d.totals.received, ctx.cur)],
-      ['Por receber', money(d.totals.outstanding, ctx.cur)],
-      ['Perdido em cancelamentos', money(perdido, ctx.cur)],
-    ]);
-
-    heading('Fluxo de marcações');
-    tabela(col2, [
-      ['Sessões', String(d.totals.sessions)],
-      ['Horas reservadas', horas(d.totals.minutes)],
-      ['Clientes', String(d.totals.clients)],
-    ]);
-
-    const col4 = (label0) => [
-      { title: label0, w: 0.40, align: 'left' },
-      { title: 'Sessões', w: 0.16, align: 'right' },
-      { title: 'Faturado', w: 0.22, align: 'right' },
-      { title: 'Recebido', w: 0.22, align: 'right' },
-    ];
-    const reparticao = (titulo, label0, linhas) => {
-      if (!linhas.length) return;
-      heading(titulo);
-      tabela(col4(label0), linhas.map((r) => [r.l, String(r.s), money(r.b, ctx.cur), money(r.r, ctx.cur)]));
+    // -------------------------------------------------- Linha de totais
+    // A soma de cada coluna de dinheiro, tal como está na folha (o "em falta"
+    // das canceladas e expiradas não conta, porque lá aparece "—").
+    const livre = (b) => ['cancelado', 'expirado'].includes(b.status);
+    const soma = (f) => d.rows.reduce((s, b) => s + f(b), 0);
+    const totais = {
+      7: dinheiro(soma((b) => b.price || 0), cur),
+      8: dinheiro(soma((b) => b.paid || 0), cur),
+      9: dinheiro(soma((b) => (livre(b) ? 0 : Math.max(0, (b.price || 0) - (b.paid || 0)))), cur),
     };
-    reparticao('Por estado', 'Estado', d.byStatus.map((s) => ({ l: STATUS_PT[s.status] || s.status, s: s.sessions, b: s.billed, r: s.received })));
-    if (d.byStudio.length > 1) reparticao('Por estúdio', 'Estúdio', d.byStudio.map((s) => ({ l: s.name, s: s.sessions, b: s.billed, r: s.received })));
-    reparticao('Por serviço', 'Serviço', d.byService.map((s) => ({ l: s.name, s: s.sessions, b: s.billed, r: s.received })));
-    if (d.byMonth.length > 1) reparticao('Por mês', 'Mês', d.byMonth.map((s) => ({ l: mesLabel(s.month), s: s.sessions, b: s.billed, r: s.received })));
+    const altoT = 30;
+    if (y + altoT > fundo()) { doc.addPage(); y = doc.page.margins.top; cabecalho(); }
+    doc.rect(L, y, W, altoT).fill(COR.pessego);
+    doc.font('Helvetica-Bold').fontSize(fs).fillColor(COR.laranja)
+      .text(`${n} ${n === 1 ? 'sessão' : 'sessões'} · ${horas(d.totals.minutes)}`, cx[0].x + padX, y + 11, { width: cx[2].x + cx[2].w - cx[0].x - padX * 2, lineBreak: false })
+      .text('TOTAIS:', cx[6].x + padX, y + 11, { width: cx[6].w - padX * 2, lineBreak: false });
+    for (const [i, v] of Object.entries(totais)) {
+      // Somas grandes não cabem a negrito: a letra encolhe até caber numa linha.
+      const largura = cx[i].w - padX;
+      let tam = fs;
+      doc.font('Helvetica-Bold');
+      while (tam > 5.5 && doc.fontSize(tam).widthOfString(v) > largura) tam -= 0.2;
+      doc.fontSize(tam).fillColor(COR.laranja).text(v, cx[i].x + padX, y + 11 + (fs - tam) / 2, { width: largura, lineBreak: false });
+    }
+    y += altoT;
   }
 
   // -------------------------------------------------- Rodapé (todas as páginas)
-  const plataforma = `Documento extraído da plataforma ${ctx.business.business_name || ''}`
+  const plataforma = `Documento extraído da plataforma ${biz.business_name || ''}`
     + `${ctx.dominio ? ' (' + ctx.dominio + ')' : ''} — gerado em ${ctx.geradoEm}`;
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(range.start + i);
-    // Sem margem inferior, o texto do rodapé (desenhado na zona da margem) não
-    // faz o pdfkit criar páginas novas.
+    // Sem margem de baixo, o rodapé (desenhado nessa zona) não abre páginas novas.
     doc.page.margins.bottom = 0;
-    const fy = doc.page.height - 48;
-    doc.moveTo(L, fy).lineTo(R, fy).lineWidth(0.6).strokeColor(LINE).stroke();
-    doc.font('Helvetica').fontSize(7.5).fillColor('#777')
-      .text(plataforma, L, fy + 6, { width: W - 90, align: 'left', lineBreak: false })
-      .text(`Página ${i + 1} de ${range.count}`, R - 90, fy + 6, { width: 90, align: 'right', lineBreak: false });
+    const fy = doc.page.height - 44;
+    doc.moveTo(L, fy).lineTo(R, fy).lineWidth(0.6).strokeColor(COR.linha).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COR.suave)
+      .text(plataforma, L, fy + 8, { width: W - 100, align: 'left', lineBreak: false })
+      .text(`Página ${i + 1} de ${range.count}`, R - 100, fy + 8, { width: 100, align: 'right', lineBreak: false });
   }
-
   doc.end();
 }
 

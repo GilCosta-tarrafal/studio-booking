@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="{{LANG}}" data-tema="{{TEMA}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n-tpl="{pg.titulo} | {{NAME}}">{{t:pg.titulo}} | {{NAME}}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/img/favicon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="/img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/pagar.css">
+<script src="/js/carregamento.js" defer></script>
+</head>
+<body class="page-inner page-faixa">
+<div id="carregar" class="carregar" hidden role="status" aria-label="A carregar">
+  <div class="carregar-cartao">
+    <span class="carregar-logo"><img src="/img/logo.png" alt="" width="52" height="52"><span class="carregar-anel" aria-hidden="true"></span></span>
+    <span class="carregar-marca">{{NAME}}</span>
+  </div>
+</div>
+<a class="skip" href="#conteudo" data-i18n="nav.saltar">Saltar para o conteúdo</a>
+<header class="cabecalho">
+  <div class="container">
+    <nav class="topbar" aria-label="Principal" data-i18n-attr="aria-label:nav.principal">
+      <a class="brand" href="/"><img class="brand-mark" src="/img/logo.png" alt="" width="34" height="34"><span>{{NAME}}</span></a>
+      <div class="topnav">
+        <a href="/" data-i18n="nav.inicio">Início</a>
+      </div>
+      <div class="topacoes">
+        {{PREFS}}
+        <a class="conta-link" id="conta-link" href="/conta" aria-label="A minha conta" data-i18n-attr="aria-label:conta.minhaConta"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12.4a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6z"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="conta-nome" data-i18n="conta.entrar">Entrar</span></a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<!-- Faixa de abertura: as mesmas fotografias em slides da entrada, agora só
+     atrás do cabeçalho e do título. O formulário, por baixo, fica em fundo limpo. -->
+<div class="hero hero-curto on-dark">
+  <div class="hero-slides" aria-hidden="true">
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+    <div class="hero-slide"></div>
+  </div>
+  <div class="container">
+    <h1 data-i18n="pg.titulo">Pagamento</h1>
+    <p class="lead" data-i18n="pg.lead">O estúdio aceitou a sua marcação. Falta só o pagamento para ficar confirmada.</p>
+  </div>
+</div>
+
+<!-- Os ecrãs (carteira, cartão novo, resumo e recibo) são desenhados por /js/pagar.js. -->
+<main id="conteudo" class="container pg">
+  <div id="pg-app" aria-live="polite"><p class="boot">…</p></div>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-sobre">
+      <h2>{{NAME}}</h2>
+      <p class="fine" data-tagline>{{TAGLINE}}</p>
+      <ul class="social" id="social" hidden></ul>
+    </div>
+
+    <nav aria-labelledby="t-links">
+      <h3 id="t-links" data-i18n="rodape.links">Links rápidos</h3>
+      <ul class="footer-links">
+        <li><a href="/#servicos" data-i18n="nav.servicos">Serviços</a></li>
+        <li><a href="/marcar" data-i18n="nav.marcar">Marcar sessão</a></li>
+        <li><a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a></li>
+      </ul>
+    </nav>
+
+    <div>
+      <h3 data-i18n="rodape.contactos">Contactos</h3>
+      <ul class="contact-list" id="contacts"><li class="fine" data-i18n="rodape.semContactos">Use o formulário de marcação para falar com o estúdio.</li></ul>
+    </div>
+
+    <div>
+      <h3 data-i18n="rodape.horario">Horário</h3>
+      <div id="footer-hours"></div>
+    </div>
+  </div>
+
+  <div class="container footer-fim">
+    <img class="footer-mark" src="/img/logo.png" alt="{{NAME}}" width="34" height="34">
+    <p class="fine">© {{YEAR}} {{NAME}}. <span data-i18n="rodape.direitos">Todos os direitos reservados.</span></p>
+  </div>
+</footer>
+
+<script src="/js/dicionario.js"></script>
+<script src="/js/prefs.js"></script>
+<script src="/js/cabecalho.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/datas.js"></script>
+<script src="/js/conta-nav.js"></script>
+<script src="/js/rodape.js"></script>
+<script src="/js/pagar.js"></script>
+</body>
+</html>

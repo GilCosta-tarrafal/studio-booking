@@ -490,7 +490,7 @@
 
   function studioForm(s) {
     const isNew = !s;
-    const st = s || { name: '', city: '', address: '', phone: '', description: '', lat: null, lon: null, active: 1, hours: DEFAULT_HOURS };
+    const st = s || { name: '', city: '', address: '', phone: '', legal_name: '', nif: '', email: '', description: '', lat: null, lon: null, active: 1, hours: DEFAULT_HOURS };
     const f = {
       name: h('input', { type: 'text', maxlength: 80, required: true, value: st.name }),
       city: h('input', { type: 'text', maxlength: 60, value: st.city }),
@@ -499,10 +499,38 @@
       lat: h('input', { type: 'number', step: 'any', min: -90, max: 90, value: st.lat == null ? '' : st.lat, placeholder: 'Ex.: 48.8566' }),
       lon: h('input', { type: 'number', step: 'any', min: -180, max: 180, value: st.lon == null ? '' : st.lon, placeholder: 'Ex.: 2.3522' }),
       phone: h('input', { type: 'tel', maxlength: 30, value: st.phone }),
+      // Cabeçalho do recibo (lado direito): nome legal, NIF, email, telefone e morada.
+      legal_name: h('input', { type: 'text', maxlength: 120, value: st.legal_name || '', placeholder: 'Vazio: usa o nome do estúdio' }),
+      nif: h('input', { type: 'text', maxlength: 30, value: st.nif || '', inputmode: 'numeric' }),
+      email: h('input', { type: 'email', maxlength: 120, value: st.email || '' }),
+      // Imposto: proposto pela localização (país e taxa), mas editável.
+      pais: h('input', { type: 'text', readonly: true, value: '', placeholder: 'Sai da localização do estúdio' }),
+      vat_rate: h('input', { type: 'number', min: 0, max: 50, step: 0.01, value: st.vat_rate == null ? '' : st.vat_rate, placeholder: 'Ex.: 15' }),
       description: h('textarea', { maxlength: 400 }, st.description),
       active: h('input', { type: 'checkbox', checked: !!st.active }),
     };
     const traducoes = blocoTraducoes([['name', 'Nome do estúdio', 80], ['city', 'Cidade ou ilha', 60], ['description', 'Descrição', 400, true]], st.traducoes);
+    // País e imposto: guardados no estúdio; ao mudar o sítio, propõe-se a taxa do país.
+    const fiscalAtual = { country_code: st.country_code || '', tax_name: st.tax_name || 'IVA' };
+    const notaIva = h('p', { class: 'hint' });
+    const pintarPais = (nome) => { f.pais.value = nome || (fiscalAtual.country_code ? fiscalAtual.country_code.toUpperCase() : ''); };
+    pintarPais(st.pais_nome);
+    f.aoMudarSitio = async () => {
+      const lat = parseFloat(f.lat.value), lon = parseFloat(f.lon.value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      notaIva.textContent = 'A ver o país deste sítio…';
+      try {
+        const { fiscal } = await api(`/api/admin/fiscal?lat=${lat}&lon=${lon}`);
+        if (!fiscal) { notaIva.textContent = 'Não foi possível saber o país deste sítio. Escreva a taxa de IVA à mão.'; return; }
+        fiscalAtual.country_code = fiscal.codigo; fiscalAtual.tax_name = fiscal.imposto;
+        pintarPais(fiscal.pais + (fiscal.regiao ? ' (' + fiscal.regiao + ')' : ''));
+        if (fiscal.taxa != null) {
+          f.vat_rate.value = fiscal.taxa;
+          notaIva.textContent = `Taxa normal de ${fiscal.imposto} em ${fiscal.regiao || fiscal.pais}: ${fiscal.taxa}%. Corrija se o estúdio tiver outra.`;
+        } else notaIva.textContent = `Não temos a taxa de ${fiscal.pais}. Escreva-a à mão.`;
+      } catch (ex) { notaIva.textContent = ex.message; }
+    };
+    for (const el of [f.lat, f.lon]) el.addEventListener('change', f.aoMudarSitio);
     const rows = ORDER.map((i) => {
       const d = st.hours[i];
       const on = h('input', { type: 'checkbox', checked: !!d, 'aria-label': 'Aberto ' + DAY_LONG[i] });
@@ -522,6 +550,8 @@
       const hours = Array(7).fill(null);
       for (const r of rows) hours[r.i] = r.on.checked ? { open: r.open.value, close: r.close.value } : null;
       const body = { name: f.name.value, city: f.city.value, address: f.address.value, phone: f.phone.value,
+        legal_name: f.legal_name.value, nif: f.nif.value, email: f.email.value,
+        country_code: fiscalAtual.country_code, tax_name: fiscalAtual.tax_name, vat_rate: f.vat_rate.value,
         lat: f.lat.value, lon: f.lon.value, description: f.description.value, active: f.active.checked, hours,
         traducoes: traducoes.valor() };
       try {
@@ -539,7 +569,17 @@
     return h('form', { onsubmit: submit },
       h('div', { class: 'grid-2' }, field('Nome do estúdio', f.name), field('Cidade ou ilha', f.city)),
       h('div', { class: 'grid-2' }, field('Morada', f.address), field('Telefone do estúdio', f.phone)),
+      h('h3', {}, 'Dados para o recibo'),
+      h('p', { class: 'hint' }, 'Aparecem no canto superior direito do recibo das marcações deste estúdio, com o telefone e a morada.'),
+      h('div', { class: 'grid-3' },
+        field('Nome no recibo', f.legal_name, { hint: 'Razão social, por exemplo.' }),
+        field('NIF', f.nif),
+        field('Email do estúdio', f.email)),
       localizacao(f),
+      h('div', { class: 'grid-2' },
+        field('País (para o IVA)', f.pais),
+        field('Taxa de IVA (%)', f.vat_rate, { hint: 'Proposta pela localização. Os preços já incluem este imposto.' })),
+      notaIva,
       field('Descrição', f.description),
       traducoes.el,
       h('h3', {}, 'Horário de funcionamento'),
@@ -573,6 +613,7 @@
       f.lon.value = lon.toFixed(6).replace(/\.?0+$/, '');
       nota.className = 'hint loc-nota ok';
       nota.textContent = onde ? `Encontrado: ${onde}` : `Coordenadas lidas do link: ${f.lat.value}, ${f.lon.value}`;
+      if (f.aoMudarSitio) f.aoMudarSitio();
     };
     const falhou = (msg) => { nota.className = 'hint loc-nota mau'; nota.textContent = msg; };
 

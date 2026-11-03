@@ -412,7 +412,9 @@
     const titulo = t(confirmed ? 'feito.confirmada' : 'feito.enviado');
     document.title = titulo + ' | ' + biz.name;
     $('done-title').textContent = titulo;
-    $('done-text').textContent = t(confirmed ? 'feito.textoConfirmada' : 'feito.textoEnviado');
+    // Pedido com valor: o estúdio aceita e o cliente é avisado para pagar.
+    $('done-text').textContent = t(confirmed ? 'feito.textoConfirmada' : 'feito.textoEnviado')
+      + (!confirmed && b.price > 0 ? ' ' + t('feito.pagarDepois') : '');
     $('done-code').textContent = b.code;
 
     const dl = $('done-details');

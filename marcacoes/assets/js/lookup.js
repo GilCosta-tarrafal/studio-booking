@@ -37,14 +37,39 @@
     if (wa) actions.append(h('a', { class: 'btn btn-outline', href: wa, rel: 'noopener' }, t('botao.falarEstudio')));
     // O valor em falta paga-se no Stripe; o "Já pago" só muda quando o Stripe
     // nos confirma o pagamento, nunca por o cliente voltar para aqui.
-    if (pagamentos && ['confirmado', 'em_curso'].includes(b.status) && b.price > b.paid) {
+    // Aceite pelo estúdio e à espera do pagamento: vai para a página de
+    // pagamento do site (cartões, resumo e recibo).
+    if (b.status === 'aguarda_pagamento' && b.price > b.paid) {
+      actions.prepend(h('a', { class: 'btn', href: '/pagar?code=' + encodeURIComponent(b.code) }, t('botao.pagar', { valor: money(b.price - b.paid, cur) })));
+    } else if (pagamentos && ['confirmado', 'em_curso'].includes(b.status) && b.price > b.paid) {
       const pagar = h('button', { type: 'button', class: 'btn', onclick: () => pay(b.code, pagar) },
         t('botao.pagar', { valor: money(b.price - b.paid, cur) }));
       actions.prepend(pagar);
     }
+    actions.append(h('button', { type: 'button', class: 'btn btn-outline', onclick: (e) => baixarRecibo(b.code, e.currentTarget) }, t('botao.recibo')));
     if (res.can_cancel) {
       actions.append(h('button', { type: 'button', class: 'btn btn-danger', onclick: () => cancel(b.code) }, t('botao.cancelar')));
     }
+  }
+
+  // O recibo é um PDF pedido com o código e o telefone (POST), por isso não
+  // pode ser um link simples: vem como ficheiro e descarrega-se daqui.
+  async function baixarRecibo(code, botao) {
+    $('lookup-error').hidden = true;
+    botao.disabled = true;
+    try {
+      const r = await fetch('/api/public/recibo', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' },
+        body: JSON.stringify({ code, phone: $('phone').value }),
+      });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).error) || t('api.erro'));
+      const url = URL.createObjectURL(await r.blob());
+      const a = h('a', { href: url, download: 'recibo-' + code + '.pdf' });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) { showError(e.message); }
+    finally { botao.disabled = false; }
   }
 
   async function cancel(code) {

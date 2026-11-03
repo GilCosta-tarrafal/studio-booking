@@ -26,7 +26,7 @@
     return v[I18N.lingua] || v.pt || Object.values(v)[0] || '';
   }
 
-  const ESTADOS = ['pedido', 'confirmado', 'em_curso', 'concluido', 'cancelado', 'expirado'];
+  const ESTADOS = ['pedido', 'aguarda_pagamento', 'confirmado', 'em_curso', 'concluido', 'cancelado', 'expirado'];
   const estados = () => Object.fromEntries(ESTADOS.map((k) => [k, t('estado.' + k)]));
 
   // ---- Construção segura de DOM (nunca usa innerHTML com dados) ----

@@ -14,7 +14,16 @@ process.env.ADMIN_PASSWORD = 'palavra-passe-teste';
 // sem internet e sem incomodar um serviço que é comunitário.
 const http = require('http');
 const mapas = http.createServer((req, res) => {
-  const q = decodeURIComponent(new URL(req.url, 'http://x').searchParams.get('q') || '');
+  const u = new URL(req.url, 'http://x');
+  // De coordenadas para país (o que o estúdio usa para propor a taxa de IVA).
+  if (u.pathname === '/reverse') {
+    const lat = Number(u.searchParams.get('lat')), lon = Number(u.searchParams.get('lon'));
+    if (lat === 0) { res.writeHead(500).end('nao'); return; }
+    const cc = lat > 14 && lat < 18 && lon < -22 ? 'cv' : lon < -6 && lat > 30 ? 'pt' : lat > 42 && lon > -5 && lon < 8 ? 'fr' : '';
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(cc ? { address: { country_code: cc } } : { error: 'Unable to geocode' }));
+    return;
+  }
+  const q = decodeURIComponent(u.searchParams.get('q') || '');
   if (/rebentar/i.test(q)) { res.writeHead(500).end('nao'); return; }
   const achado = /assomada/i.test(q) ? [{ lat: '15.1000', lon: '-23.6833', display_name: 'Assomada, Santa Catarina, Cabo Verde' }]
     : /paris/i.test(q) ? [{ lat: '48.8566', lon: '2.3522', display_name: 'Paris, France' }] : [];
@@ -211,7 +220,7 @@ function futureWeekday(offset = 3) {
   const bId = r.json.bookings.find((b) => b.code === code).id;
 
   r = await call('PATCH', `/api/admin/bookings/${bId}/status`, { cookie, body: { status: 'confirmado' } });
-  ok(r.status === 200 && r.json.booking.status === 'confirmado', 'confirmar pedido');
+  ok(r.status === 200 && r.json.booking.status === 'aguarda_pagamento' && r.json.aguarda_pagamento === true, 'aceitar um pedido do site com valor: fica "aguarda pagamento" e o cliente é avisado');
 
   const manual = { room_id: room1, date: day, start: '11:00', end: '12:30', client_name: 'Cliente ao balcão', client_phone: '', status: 'confirmado' };
   r = await call('POST', '/api/admin/bookings', { cookie, body: manual });
@@ -283,7 +292,7 @@ function futureWeekday(offset = 3) {
   r = await call('GET', `/api/public/availability?room_id=${room1}&date=${day}`);
   ok(r.json.cells.length === 24, 'blocos de 30 min: 24 células');
   r = await call('POST', '/api/public/bookings', { body: payload({ room_id: room2, start: '13:30', duration_minutes: 90, phone: '7778889' }) });
-  ok(r.status === 201 && r.json.booking.status === 'confirmado', 'confirmação automática ativa: nasce "confirmado"');
+  ok(r.status === 201 && r.json.booking.status === 'aguarda_pagamento', 'confirmação automática ativa: com valor, nasce "aguarda pagamento" (o estúdio aceitou; falta pagar)');
   r = await call('PUT', '/api/admin/settings', { cookie, body: { business_name: 'X', slot_minutes: 45, min_minutes: 60, max_minutes: 240, lead_hours: 2, max_advance_days: 60 } });
   ok(r.status === 400, 'bloco de 45 min rejeitado');
 
@@ -606,6 +615,149 @@ function futureWeekday(offset = 3) {
   ok(db.prepare('SELECT status FROM bookings WHERE id=?').get(velho).status === 'expirado', 'fica com o estado "expirado"');
   ok(!findConflict(salaX, ontem, 600, 660), 'e a sala fica livre');
   db.prepare('DELETE FROM bookings WHERE id=?').run(velho);
+
+  // Gravação prolongada: o projeto bloqueia a sala no período; se uma marcação
+  // ativa coincidir, dá erro de conflito e não guarda nada.
+  console.log('\nGravação prolongada');
+  const dono = cookie;   // a sessão do dono aberta no início continua válida
+  ok(!!dono, 'sessão do dono para os projetos');
+  const diaG = U.addDays(U.nowLocal().date, 40);
+  const marcG = db.prepare(`INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,status,created_at,updated_at)
+                            VALUES('GRVTST',?,?,600,720,'Cliente Esquecido','confirmado',?,?)`).run(salaX, U.addDays(diaG, 1), agoraIso, agoraIso).lastInsertRowid;
+  const corpoG = { tipo: 'gravacao', titulo: 'Álbum do Djodje', artista: 'Djodje', room_id: salaX, data_inicio: diaG, data_fim: U.addDays(diaG, 2), hora_inicio: '09:00', hora_fim: '13:00' };
+  const blocosDe = (pid) => db.prepare('SELECT COUNT(*) n FROM blocks WHERE projeto_id=?').get(pid).n;
+  const projetosAntes = db.prepare('SELECT COUNT(*) n FROM int_projetos').get().n;
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: corpoG });
+  ok(r.status === 409 && /Conflito de horário/.test(r.json.error) && /GRVTST/.test(r.json.error), 'marcação no período: erro de conflito com o código da marcação');
+  ok(db.prepare('SELECT COUNT(*) n FROM int_projetos').get().n === projetosAntes && !db.prepare("SELECT 1 FROM blocks WHERE reason LIKE 'Gravação prolongada%'").get(), 'com conflito, nem o projeto nem os bloqueios ficam guardados');
+  db.prepare("UPDATE bookings SET status='cancelado' WHERE id=?").run(marcG);
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: corpoG });
+  ok(r.status === 200 && r.json.projeto && r.json.projeto.tipo === 'gravacao', 'sem conflito, o projeto guarda-se');
+  const pidG = r.json.projeto.id;
+  ok(blocosDe(pidG) === 3, 'um bloqueio por dia (3 dias)');
+  ok(!!findConflict(salaX, U.addDays(diaG, 1), 600, 660) && !findConflict(salaX, U.addDays(diaG, 1), 840, 900), 'a sala fica bloqueada só no horário da gravação');
+  r = await call('POST', '/api/admin/bookings', { cookie: dono, body: { room_id: salaX, date: diaG, start: '10:00', end: '11:00', client_name: 'Novo', status: 'confirmado' } });
+  ok(r.status === 409, 'nesse horário o estúdio não aceita marcações');
+  r = await call('PUT', `/api/admin/integracoes/projetos/${pidG}`, { cookie: dono, body: { ...corpoG, data_fim: diaG, dia_inteiro: true } });
+  ok(r.status === 200 && blocosDe(pidG) === 1 && db.prepare('SELECT start_min s, end_min e FROM blocks WHERE projeto_id=?').get(pidG).e === 1440, 'editar refaz os bloqueios (1 dia, o dia inteiro)');
+  r = await call('GET', '/api/integracoes/projetos');
+  ok(!(r.json.projetos || []).some((p) => p.id === pidG), 'a gravação prolongada não aparece no site');
+  r = await call('DELETE', `/api/admin/integracoes/projetos/${pidG}`, { cookie: dono });
+  ok(r.status === 200 && blocosDe(pidG) === 0, 'apagar o projeto liberta a sala');
+  db.prepare('DELETE FROM bookings WHERE id=?').run(marcG);
+
+  // Recibo em PDF: o painel e o cliente (com o código e o telefone) descarregam-no;
+  // o cabeçalho leva os dados do estúdio preenchidos em Estúdios.
+  console.log('\nRecibo');
+  const estR = db.prepare('SELECT s.* FROM studios s JOIN rooms r ON r.studio_id=s.id WHERE r.id=?').get(salaX);
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, hours: JSON.parse(estR.hours), legal_name: 'Produções Teste, Lda.', nif: '987654321', email: 'Geral@Teste.cv' } });
+  ok(r.status === 200, 'o estúdio guarda o nome no recibo, o NIF e o email');
+  const estR2 = db.prepare('SELECT legal_name, nif, email FROM studios WHERE id=?').get(estR.id);
+  ok(estR2.legal_name === 'Produções Teste, Lda.' && estR2.nif === '987654321' && estR2.email === 'geral@teste.cv', 'os dados do recibo ficam no estúdio');
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, hours: JSON.parse(estR.hours), email: 'nao-e-email' } });
+  ok(r.status === 400, 'email do estúdio inválido: recusado');
+  const marcR = db.prepare(`INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,client_phone,status,price,paid,created_at,updated_at)
+                            VALUES('RECTST',?,?,600,720,'Gil Gomes','9912345','confirmado',5000,2000,?,?)`).run(salaX, U.addDays(U.nowLocal().date, 50), agoraIso, agoraIso).lastInsertRowid;
+  let pdf = await fetch(base + `/api/admin/bookings/${marcR}/recibo.pdf`, { headers: { Cookie: dono } });
+  let bytes = Buffer.from(await pdf.arrayBuffer());
+  ok(pdf.status === 200 && pdf.headers.get('content-type') === 'application/pdf' && bytes.slice(0, 4).toString() === '%PDF', 'o painel descarrega o recibo em PDF');
+  ok(/recibo-RECTST\.pdf/.test(pdf.headers.get('content-disposition') || ''), 'o ficheiro chama-se recibo-<código>.pdf');
+  ok((bytes.toString('latin1').match(/\/Type \/Page\b/g) || []).length === 1, 'o recibo cabe numa página');
+  pdf = await fetch(base + `/api/admin/bookings/${marcR}/recibo.pdf`);
+  ok(pdf.status === 401, 'sem sessão, o painel não dá o recibo');
+  r = await call('POST', '/api/public/recibo', { body: { code: 'RECTST', phone: '991 23 45' } });
+  ok(r.status === 200 && r.res.headers.get('content-type') === 'application/pdf', 'o cliente descarrega o recibo com o código e o telefone');
+  r = await call('POST', '/api/public/recibo', { body: { code: 'RECTST', phone: '000 00 00' } });
+  ok(r.status === 404, 'com outro telefone, o recibo não sai');
+  // Relatório em PDF (Folha de Marcações): A4 deitado, com a marcação na tabela.
+  pdf = await fetch(base + '/api/admin/reports.pdf', { headers: { Cookie: dono } });
+  bytes = Buffer.from(await pdf.arrayBuffer());
+  const txtPdf = bytes.toString('latin1');
+  ok(pdf.status === 200 && pdf.headers.get('content-type') === 'application/pdf' && txtPdf.startsWith('%PDF'), 'o relatório descarrega-se em PDF');
+  ok(/\/MediaBox \[0 0 841\.89 595\.28\]/.test(txtPdf), 'o relatório vem em A4 deitado');
+  ok(/relatorio-inicio_a_hoje\.pdf/.test(pdf.headers.get('content-disposition') || ''), 'o ficheiro do relatório tem o período no nome');
+  // Faturas internas: o IVA vem da localização do estúdio; numeração seguida
+  // por série do ano; uma fatura em vigor por marcação; anular não liberta o número.
+  console.log('\nIVA pela localização e faturas');
+  r = await call('GET', '/api/admin/fiscal?lat=15.1&lon=-23.68', { cookie: dono });
+  ok(r.status === 200 && r.json.fiscal.codigo === 'cv' && r.json.fiscal.taxa === 15 && r.json.fiscal.fonte === 'mapa', 'Assomada → Cabo Verde, IVA 15% (pelo serviço de mapas)');
+  r = await call('GET', '/api/admin/fiscal?lat=37.74&lon=-25.67', { cookie: dono });
+  ok(r.json.fiscal.codigo === 'pt' && r.json.fiscal.regiao === 'Açores' && r.json.fiscal.taxa === 16, 'Ponta Delgada → Portugal (Açores), IVA 16%');
+  r = await call('GET', '/api/admin/fiscal?lat=48.86&lon=2.35', { cookie: dono });
+  ok(r.json.fiscal.codigo === 'fr' && r.json.fiscal.taxa === 20, 'Paris → França, IVA 20%');
+  ok(require('../backend/lib/fiscal').aproximar(16.89, -24.98).codigo === 'cv', 'sem serviço de mapas, a tabela local reconhece Cabo Verde (São Vicente)');
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, vat_rate: '' } });
+  let estF = db.prepare('SELECT country_code, tax_name, vat_rate FROM studios WHERE id=?').get(estR.id);
+  ok(r.status === 200 && estF.country_code === 'cv' && estF.vat_rate === 15, 'guardar o estúdio sem taxa: fica com a do país onde está (15%)');
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, country_code: 'cv', vat_rate: '8' } });
+  ok(db.prepare('SELECT vat_rate FROM studios WHERE id=?').get(estR.id).vat_rate === 8, 'a taxa proposta pode ser corrigida à mão');
+  await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, country_code: 'cv', vat_rate: '15' } });
+
+  const ano = U.nowLocal().date.slice(0, 4);
+  const novaMarc = (code, status) => db.prepare(`INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,client_phone,status,price,paid,created_at,updated_at)
+                                VALUES(?,?,?,600,720,'Gil Gomes','9912345',?,1150,0,?,?)`).run(code, salaX, U.addDays(U.nowLocal().date, 60), status, agoraIso, agoraIso).lastInsertRowid;
+  const mF = novaMarc('FATTS1', 'confirmado'), mP = novaMarc('FATTS2', 'pedido');
+  r = await call('POST', `/api/admin/bookings/${mP}/fatura`, { cookie: dono, body: {} });
+  ok(r.status === 400, 'um pedido por confirmar não se fatura');
+  r = await call('POST', `/api/admin/bookings/${mF}/fatura`, { cookie: dono, body: { cliente_nif: '123456789', cliente_morada: 'Assomada' } });
+  const fat1 = r.json.fatura;
+  ok(r.status === 201 && fat1.serie === 'FT ' + ano && fat1.numero_texto.startsWith('FT ' + ano + '/'), 'emitir: fatura da série do ano (' + (fat1 && fat1.numero_texto) + ')');
+  ok(fat1.total === 1150 && fat1.base === 1000 && fat1.imposto === 150 && fat1.taxa === 15, 'o valor inclui o IVA: 1150 = 1000 + 150 (15%)');
+  ok(fat1.cliente_nif === '123456789' && fat1.emitente.nif === '987654321', 'a fatura guarda o NIF do cliente e os dados do estúdio');
+  r = await call('POST', `/api/admin/bookings/${mF}/fatura`, { cookie: dono, body: {} });
+  ok(r.status === 409, 'só uma fatura em vigor por marcação');
+  pdf = await fetch(base + `/api/admin/faturas/${fat1.id}.pdf`, { headers: { Cookie: dono } });
+  bytes = Buffer.from(await pdf.arrayBuffer());
+  ok(pdf.status === 200 && bytes.slice(0, 4).toString() === '%PDF' && (bytes.toString('latin1').match(/\/Type \/Page\b/g) || []).length === 1, 'a fatura descarrega-se em PDF, numa página');
+  r = await call('POST', `/api/admin/faturas/${fat1.id}/anular`, { cookie: dono, body: {} });
+  ok(r.status === 400, 'anular pede o motivo');
+  r = await call('POST', `/api/admin/faturas/${fat1.id}/anular`, { cookie: dono, body: { motivo: 'NIF errado' } });
+  ok(r.status === 200 && r.json.fatura.estado === 'anulada', 'anular a fatura');
+  r = await call('POST', `/api/admin/bookings/${mF}/fatura`, { cookie: dono, body: { cliente_nif: '111222333' } });
+  ok(r.status === 201 && r.json.fatura.numero === fat1.numero + 1, 'depois de anular emite-se outra, com o número seguinte (sem reaproveitar)');
+  r = await call('GET', `/api/admin/bookings/${mF}/fatura`, { cookie: dono });
+  ok(r.json.fatura.numero === fat1.numero + 1 && r.json.anuladas.length === 1, 'a marcação mostra a fatura em vigor e a anulada no histórico');
+  db.prepare('DELETE FROM bookings WHERE id IN (?,?)').run(mF, mP);
+
+  // Pagamento no site (/pagar), em demonstração: o estúdio aceita, o cliente
+  // junta um cartão de teste, paga, e a marcação fica confirmada com recibo.
+  console.log('\nPagamento no site');
+  r = await call('GET', '/api/pagamento/config', { cookie: clientCookie });
+  ok(r.status === 200 && r.json.modo === 'off', 'sem Stripe e sem demonstração ligada: pagamento no site desligado (nunca por falta de chaves)');
+  process.env.PAGAMENTOS_DEMO = '1';
+  r = await call('GET', '/api/pagamento/config', { cookie: clientCookie });
+  ok(r.json.modo === 'demo', 'com PAGAMENTOS_DEMO=1: modo de demonstração');
+  r = await call('GET', '/api/pagamento/config');
+  ok(r.status === 401, 'a página de pagamento exige a conta do cliente');
+  r = await call('POST', '/api/public/bookings', { cookie: clientCookie, body: { room_id: salaX, date: futureWeekday(12), start: '15:00', duration_minutes: 120 } });
+  if (r.status !== 201) console.log('   marcação de teste:', r.status, r.json);
+  const codeP = r.json.booking.code;
+  const idP = db.prepare('SELECT id FROM bookings WHERE code=?').get(codeP).id;
+  // As definições do teste confirmam sozinhas: o pedido nasce já aceite, a aguardar pagamento.
+  ok(db.prepare('SELECT status FROM bookings WHERE id=?').get(idP).status === 'aguarda_pagamento', 'pedido aceite (confirmação automática): aguarda pagamento');
+  r = await call('POST', '/api/pagamento/marcacao', { cookie: clientCookie, body: { code: codeP } });
+  const res0 = r.json.resumo;
+  ok(res0.pode_pagar && res0.taxa === 15 && Math.abs(res0.base + res0.imposto - res0.total) < 0.01, 'resumo com o IVA do estúdio (base + IVA = total)');
+  r = await call('POST', '/api/pagamento/cartoes', { cookie: clientCookie, body: { marca: 'visa', ultimos: '1111', mes: 8, ano: 2030 } });
+  ok(r.status === 400, 'na demonstração, um cartão que não é de teste é recusado');
+  r = await call('POST', '/api/pagamento/cartoes', { cookie: clientCookie, body: { marca: 'visa', ultimos: '4242', mes: 8, ano: 2030, titular: 'Ana' } });
+  ok(r.status === 201 && r.json.cartoes.length >= 1 && r.json.cartoes[0].ultimos === '4242', 'o cartão de teste fica na carteira (só marca e 4 dígitos)');
+  ok(!db.prepare("SELECT 1 FROM pag_cartoes WHERE externo_id LIKE '%4242424242%'").get(), 'o número completo do cartão nunca é guardado');
+  const cartaoP = r.json.cartoes[0].id;
+  r = await call('POST', '/api/pagamento/pagar', { cookie: clientCookie, body: { code: codeP, cartao_id: cartaoP } });
+  ok(r.status === 200 && r.json.estado === 'pago' && r.json.recibo.cartao.ultimos === '4242' && r.json.recibo.demo === true, 'pagar: pago, com recibo');
+  const depois = db.prepare('SELECT status, paid, price FROM bookings WHERE id=?').get(idP);
+  ok(depois.status === 'confirmado' && depois.paid === depois.price, 'pago tudo: a marcação fica confirmada');
+  const recP = r.json.recibo;
+  ok(!!recP.empresa.nome && recP.empresa.nif === '987654321', 'o recibo tem os dados da empresa e do estúdio');
+  pdf = await fetch(base + `/api/pagamento/recibo/${recP.id}/pdf`, { headers: { Cookie: clientCookie } });
+  bytes = Buffer.from(await pdf.arrayBuffer());
+  ok(pdf.status === 200 && bytes.slice(0, 4).toString() === '%PDF', 'o recibo do pagamento descarrega-se em PDF');
+  r = await call('POST', '/api/pagamento/pagar', { cookie: clientCookie, body: { code: codeP, cartao_id: cartaoP } });
+  ok(r.status === 400, 'já pago: não se paga duas vezes');
+  delete process.env.PAGAMENTOS_DEMO;
+  db.prepare('DELETE FROM bookings WHERE id=?').run(idP);
+  db.prepare('DELETE FROM bookings WHERE id=?').run(marcR);
 
   console.log(`\n${passed} certos, ${failed} falhados`);
   server.close();

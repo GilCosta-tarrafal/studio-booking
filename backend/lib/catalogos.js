@@ -51,7 +51,8 @@ const CATALOGOS = [
     key: 'estados_marcacao', titulo: 'Estados de marcação', desc: 'Os passos de uma marcação. São do sistema: muda-se só a descrição.',
     sistema: true, itens: [
       ['pedido', 'Pedido', 'Pendente: à espera de confirmação do estúdio.'],
-      ['confirmado', 'Confirmado', 'O estúdio aceitou; o horário está reservado.'],
+      ['aguarda_pagamento', 'Aguarda pagamento', 'O estúdio aceitou o pedido; falta o cliente pagar para ficar confirmada.'],
+      ['confirmado', 'Confirmado', 'Pago (ou aceite sem pagamento): o horário está reservado.'],
       ['em_curso', 'Em curso', 'A sessão está a decorrer.'],
       ['concluido', 'Concluído', 'A sessão terminou.'],
       ['cancelado', 'Cancelado', 'Recusado pelo estúdio ou cancelado pelo cliente. O horário fica livre.'],

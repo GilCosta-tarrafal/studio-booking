@@ -73,12 +73,16 @@ body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: 
 /* width:100% é essencial: sem ela, a margem automática faz a coluna
    ajustar-se à largura da tabela (que rola dentro da sua caixa) e empurrar a
    página toda para o lado. Com ela, a coluna nunca passa do contentor. */
-.main { padding: 28px 32px 96px; width: 100%; min-width: 0; max-width: 1040px; margin-inline: auto; container: painel / inline-size; }
+/* Ecrã cheio: o conteúdo ocupa toda a largura ao lado da barra lateral. */
+.main { padding: 28px 32px 96px; width: 100%; min-width: 0; margin-inline: auto; container: painel / inline-size; }
 .main:focus { outline: none; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .page-head h1 { font: 800 2rem/1.1 var(--display); letter-spacing: -.02em; margin: 0; }
 .tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .tools select, .tools input { width: auto; min-width: 160px; min-height: 40px; }
+/* Campo de data (dd/mm/aaaa) numa barra de ferramentas: largura própria, sem empurrar os botões ao lado. */
+.tools .data-pt { width: auto; flex: 0 0 auto; }
+.tools .data-pt-txt { width: 170px; }
 .tools .btn { min-height: 40px; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-bottom: 20px; }
@@ -264,7 +268,7 @@ body.admin .panel { background: rgba(14, 14, 14, .72); -webkit-backdrop-filter: 
 /* Cores: estados a condizer com as etiquetas; receita em verde/âmbar; serviços
    na paleta categórica validada (um tom por tema — ver tema claro em baixo). */
 .s-pedido { --dc: #E0A63A; } .s-confirmado { --dc: #5A9BE0; } .s-em_curso { --dc: #46B87C; }
-.s-concluido { --dc: #8A8A8A; } .s-cancelado { --dc: #C85A4E; } .s-expirado { --dc: #6E6E7A; }
+.s-concluido { --dc: #8A8A8A; } .s-cancelado { --dc: #C85A4E; } .s-expirado { --dc: #6E6E7A; } .s-aguarda_pagamento { --dc: #A06CE0; }
 .rec { --dc: #46B87C; } .owe { --dc: #E0A63A; }
 .c1 { --dc: #3987e5; } .c2 { --dc: #d95926; } .c3 { --dc: #199e70; }
 .c4 { --dc: #c98500; } .c5 { --dc: #d55181; } .c6 { --dc: #9085e9; }
@@ -336,6 +340,7 @@ table.data { width: 100%; border-collapse: collapse; min-width: 820px; }
   display: flex; flex-direction: column; gap: 0;
 }
 .cal-ev { --ev: var(--muted); --ev-bg: #202020; --ev-ink: var(--ink); border: 0; border-left: 4px solid var(--ev); background: var(--ev-bg); color: var(--ev-ink); }
+.cal-ev[data-s="aguarda_pagamento"] { --ev: #A06CE0; --ev-bg: #241A33; --ev-ink: #D3B8F5; }
 .cal-ev[data-s="pedido"] { --ev: #E0A63A; --ev-bg: #33270A; --ev-ink: #F2D28C; }
 .cal-ev[data-s="confirmado"] { --ev: #5A9BE0; --ev-bg: #12243A; --ev-ink: #AFCEF2; }
 .cal-ev[data-s="em_curso"] { --ev: #46B87C; --ev-bg: #102E20; --ev-ink: #9CE0BB; }
@@ -355,22 +360,16 @@ dialog.modal::backdrop { background: rgba(0, 0, 0, .74); }
 .modal-sub { color: var(--muted); margin: 0 0 18px; font-size: .92rem; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 16px; }
-/* Na página de Definições os campos ficam empilhados, todos à mesma largura e
-   um debaixo do outro — mais fáceis de ler. As janelas de marcação mantêm as
-   colunas (ficam fora, em dialog.modal, sem esta classe). */
+/* Definições: em ecrã cheio cada linha de campos (grid-2 / grid-3) usa a
+   largura toda, em 2 ou 3 colunas. Em áreas estreitas, empilham-se. */
 .panel-stack .grid-2, .panel-stack .grid-3 { grid-template-columns: 1fr; }
-/* Os campos empilhados ficam estreitos e centrados, em vez de ocuparem toda a
-   largura do painel (que é larga e faz as caixas parecerem exageradas). */
-.panel-stack > .grid-2,
-.panel-stack > .grid-3,
-.panel-stack > .field,
-.panel-stack > details.traducoes,
-.panel-stack > .check,
-.panel-stack > .hint,
-.panel-stack > h2,
-.panel-stack > h3,
-.panel-stack > .notice,
-.panel-stack > .modal-foot { max-width: 560px; margin-inline: auto; }
+@container painel (min-width: 760px) {
+  .panel-stack .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel-stack .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Lado a lado, os campos têm de ter todos a mesma altura para se alinharem. */
+.panel-stack .grid-2, .panel-stack .grid-3 { align-items: start; }
+.panel-stack .field input:not([type=checkbox]):not([type=radio]), .panel-stack .field select { height: 44px; }
 .modal-foot { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
 .modal-foot .spacer { margin-right: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .field-inline { display: flex; gap: 8px; align-items: center; }
@@ -563,6 +562,8 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .tools { width: 100%; }
   .tools > * { flex: 1 1 auto; }
   .tools select, .tools input { min-width: 0; flex: 1 1 160px; }
+  .tools .data-pt { flex: 1 1 160px; }
+  .tools .data-pt-txt { width: 100%; }
   .tools input[type=search] { flex-basis: 100%; }
   .tools .tools { flex: 1 1 100%; flex-wrap: nowrap; }
   .tools .tools .btn { flex: none; }
@@ -1072,3 +1073,42 @@ body.admin .cf-card, body.admin .cf-links { -webkit-backdrop-filter: blur(14px);
   .cf-item { flex-wrap: wrap; }
   .cf-acts { margin-left: auto; }
 }
+
+/* ---------- Listas de escolha e campos com cantos suaves ---------- */
+/* Caixas e listas um pouco mais redondas em todo o painel. Nos browsers que
+   já deixam estilizar a lista que abre (Chrome/Edge 135+, appearance:
+   base-select), a lista também fica arredondada, com sombra e o item escolhido
+   realçado; nos outros fica a lista do sistema, só com a caixa arredondada. */
+body.admin input[type=text], body.admin input[type=tel], body.admin input[type=email], body.admin input[type=date],
+body.admin input[type=time], body.admin input[type=number], body.admin input[type=password], body.admin input[type=search],
+body.admin input[type=url], body.admin select, body.admin textarea { border-radius: 10px; }
+body.admin .tb-sel { border-radius: 999px; }
+@supports (appearance: base-select) {
+  body.admin select, body.admin select::picker(select) { appearance: base-select; }
+  body.admin select { display: flex; align-items: center; gap: 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.admin select::picker-icon { color: var(--muted); font-size: .8rem; transition: rotate .2s; margin-left: auto; }
+  body.admin select:open::picker-icon { rotate: 180deg; }
+  body.admin select:open { border-color: var(--focus); }
+  body.admin select::picker(select) {
+    margin-block: 6px; padding: 6px; min-width: anchor-size(width);
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, .45);
+    opacity: 1; transition: opacity .15s, translate .15s, overlay .15s allow-discrete, display .15s allow-discrete;
+  }
+  @starting-style { body.admin select:open::picker(select) { opacity: 0; translate: 0 -4px; } }
+  :root[data-tema="claro"] body.admin select::picker(select) { box-shadow: 0 14px 34px rgba(16, 24, 40, .14); }
+  body.admin select option { padding: 9px 12px; border-radius: 9px; gap: 10px; cursor: pointer; }
+  body.admin select option:hover, body.admin select option:focus-visible { background: var(--mist); outline: none; }
+  body.admin select option:checked { background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+  :root[data-tema="claro"] body.admin select option:checked { color: var(--amber-deep); }
+  body.admin select option::checkmark { order: 1; margin-left: auto; }
+  body.admin select optgroup { padding: 4px 0; }
+  body.admin select optgroup legend { padding: 8px 12px 4px; color: var(--muted); font: 700 .72rem/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; }
+}
+
+/* Projetos: gravação prolongada (campos próprios e linha do cartão). */
+.projeto-gravacao { margin-bottom: 4px; }
+.projeto-gravacao .notice { margin: 0 0 14px; font-size: .9rem; }
+.projeto-gravacao-info { margin: 6px 0 10px; color: var(--muted); line-height: 1.5; }
+.projeto-gravacao-info strong { color: var(--ink); }

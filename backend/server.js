@@ -34,11 +34,13 @@ app.use((_req, res, next) => {
   res.set({
     'Content-Security-Policy': [
       "default-src 'self'",
-      "script-src 'self'",
+      // Stripe: as caixas do cartão da página /pagar vêm de js.stripe.com.
+      "script-src 'self' https://js.stripe.com",
+      "frame-src https://js.stripe.com https://hooks.stripe.com",
       "style-src 'self' https://fonts.googleapis.com",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://api.stripe.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -74,6 +76,7 @@ app.use('/api/public', require('./routes/public'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/conta', require('./routes/conta'));
 app.use('/api/integracoes', integracoes.publico);
+app.use('/api/pagamento', require('../integracoes/rotas/pagamento').router);
 // Cada alteração feita no painel fica na atividade de quem a fez (ver o perfil).
 app.use('/api/admin', atividade.middleware);
 app.use('/api/admin/integracoes', auth.requireAuth, integracoes.admin);
@@ -152,6 +155,7 @@ function page(pasta, file, { traduzida = true } = {}) {
 app.get('/', page(PUBLICO, 'index.html'));
 app.get('/marcar', page(MARCACOES, 'marcar.html'));
 app.get('/consultar', page(MARCACOES, 'consultar.html'));
+app.get('/pagar', page(MARCACOES, 'pagar.html'));
 app.get('/conta', page(CONTA, 'conta.html'));
 app.get('/admin', page(BOOKING, 'admin.html', { traduzida: false }));
 

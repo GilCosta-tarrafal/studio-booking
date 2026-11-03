@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   notes          TEXT NOT NULL DEFAULT '',
   internal_notes TEXT NOT NULL DEFAULT '',
   status         TEXT NOT NULL DEFAULT 'pedido'
-                 CHECK (status IN ('pedido','confirmado','em_curso','concluido','cancelado','expirado')),
+                 CHECK (status IN ('pedido','confirmado','em_curso','concluido','cancelado','expirado','aguarda_pagamento')),
   -- 1 = o cliente não vai ao estúdio; manda os ficheiros
   remote         INTEGER NOT NULL DEFAULT 0,
   price          INTEGER NOT NULL DEFAULT 0,
@@ -229,6 +229,52 @@ acrescentaColuna('bookings', 'style', "TEXT NOT NULL DEFAULT ''");
 // Vazio (null) quando não se sabe: aí o globo fica parado, sem marcador.
 acrescentaColuna('studios', 'lat', 'REAL');
 acrescentaColuna('studios', 'lon', 'REAL');
+// Dados do estúdio no cabeçalho do recibo: nome legal (razão social; vazio = o
+// nome do estúdio), NIF e email. O telefone e a morada já existiam.
+acrescentaColuna('studios', 'legal_name', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('studios', 'nif', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('studios', 'email', "TEXT NOT NULL DEFAULT ''");
+// Imposto do estúdio, proposto pela localização (lib/fiscal.js) e editável:
+// país (código ISO), nome do imposto (IVA, ou IGIC nas Canárias) e taxa em %.
+// Taxa vazia (null) = ainda por definir; sem ela não se emitem faturas.
+acrescentaColuna('studios', 'country_code', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('studios', 'tax_name', "TEXT NOT NULL DEFAULT 'IVA'");
+acrescentaColuna('studios', 'vat_rate', 'REAL');
+
+// Faturas internas (sem validade fiscal: não vêm de software certificado nem
+// do e-Fatura). Numeração seguida por série — uma série por ano, "FT 2026" —
+// e nunca se reaproveita um número: uma fatura errada anula-se e emite-se
+// outra. Guarda-se uma cópia dos dados do momento (cliente, valores, taxa),
+// para a fatura não mudar se a marcação ou o estúdio mudarem depois.
+db.exec(`
+CREATE TABLE IF NOT EXISTS faturas (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  serie          TEXT NOT NULL,
+  numero         INTEGER NOT NULL,
+  booking_id     INTEGER REFERENCES bookings(id) ON DELETE SET NULL,
+  studio_id      INTEGER,
+  -- Cópia dos dados do estúdio emitente (nome legal, NIF, morada...) em JSON.
+  emitente       TEXT NOT NULL DEFAULT '{}',
+  emitida_em     TEXT NOT NULL,
+  cliente_nome   TEXT NOT NULL,
+  cliente_nif    TEXT NOT NULL DEFAULT '',
+  cliente_morada TEXT NOT NULL DEFAULT '',
+  cliente_email  TEXT NOT NULL DEFAULT '',
+  descricao      TEXT NOT NULL,
+  total          REAL NOT NULL,
+  base           REAL NOT NULL,
+  imposto        REAL NOT NULL,
+  taxa           REAL NOT NULL,
+  imposto_nome   TEXT NOT NULL DEFAULT 'IVA',
+  moeda          TEXT NOT NULL DEFAULT '',
+  estado         TEXT NOT NULL DEFAULT 'emitida' CHECK (estado IN ('emitida','anulada')),
+  anulada_em     TEXT,
+  motivo_anulacao TEXT NOT NULL DEFAULT '',
+  emitida_por    INTEGER,
+  UNIQUE (serie, numero)
+);
+CREATE INDEX IF NOT EXISTS idx_faturas_booking ON faturas(booking_id);
+`);
 // O que o dono escreve noutras línguas (nome, descrição...). Ver lib/traducoes.js.
 for (const tabela of ['studios', 'rooms', 'services']) acrescentaColuna(tabela, 'traducoes', "TEXT NOT NULL DEFAULT '{}'");
 // Agentes de estúdio: um utilizador da equipa pode ficar preso a um estúdio
@@ -256,37 +302,71 @@ acrescentaColuna('bookings', 'project_type', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('bookings', 'client_type', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('bookings', 'payment_method', "TEXT NOT NULL DEFAULT ''");
 
-// Estado "expirado" (pedido que ninguém confirmou até à hora da sessão). Nas
-// bases antigas a lista de estados está fechada numa CHECK, que o SQLite não
-// deixa alterar: cria-se uma tabela igual já com o estado novo, passam-se os
-// dados tal e qual e troca-se uma pela outra, tudo numa só transação.
-{
-  const def = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bookings'").get().sql;
-  if (!def.includes("'expirado'")) {
-    const nova = def
-      .replace("'concluido','cancelado')", "'concluido','cancelado','expirado')")
-      .replace(/^CREATE TABLE\s+(IF NOT EXISTS\s+)?"?bookings"?/i, 'CREATE TABLE bookings_nova');
-    if (!nova.includes("'expirado'") || !nova.startsWith('CREATE TABLE bookings_nova')) {
-      throw new Error('Não foi possível acrescentar o estado "expirado" à tabela das marcações.');
-    }
-    db.pragma('foreign_keys = OFF');
-    try {
-      db.transaction(() => {
-        db.exec(nova);
-        db.exec('INSERT INTO bookings_nova SELECT * FROM bookings');
-        db.exec('DROP TABLE bookings');
-        db.exec('ALTER TABLE bookings_nova RENAME TO bookings');
-        db.exec(`CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, date);
-                 CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
-                 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);`);
-        const falhas = db.pragma('foreign_key_check');
-        if (falhas.length) throw new Error('Referências partidas depois de trocar a tabela das marcações.');
-      })();
-    } finally {
-      db.pragma('foreign_keys = ON');
-    }
+// Uma CHECK com uma lista fechada (estados, tipos...) não se altera no SQLite.
+// Para lhe acrescentar um valor: cria-se uma tabela igual já com a lista nova,
+// passam-se os dados tal e qual e troca-se uma pela outra, numa só transação.
+// `antigo`/`novo` são o pedaço exato da definição; se `novo` já lá estiver,
+// não faz nada. `indices` volta a criar os índices (vão-se com a tabela velha).
+// `marca`: o que, estando na definição, mostra que a mudança já foi feita.
+function alargarCheck(tabela, antigo, novo, indices = '', marca = novo) {
+  const def = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(tabela).sql;
+  if (def.includes(marca)) return;
+  const temp = tabela + '_nova';
+  const nova = def.replace(antigo, novo)
+    .replace(new RegExp('^CREATE TABLE\\s+(IF NOT EXISTS\\s+)?"?' + tabela + '"?', 'i'), 'CREATE TABLE ' + temp);
+  if (!nova.includes(novo) || !nova.startsWith('CREATE TABLE ' + temp)) {
+    throw new Error('Não foi possível atualizar a lista de valores da tabela ' + tabela + '.');
+  }
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      db.exec(nova);
+      db.exec(`INSERT INTO ${temp} SELECT * FROM ${tabela}`);
+      db.exec(`DROP TABLE ${tabela}`);
+      db.exec(`ALTER TABLE ${temp} RENAME TO ${tabela}`);
+      if (indices) db.exec(indices);
+      if (db.pragma('foreign_key_check').length) throw new Error('Referências partidas depois de atualizar a tabela ' + tabela + '.');
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
   }
 }
+
+// Os índices da tabela das marcações (voltam a criar-se ao trocar a tabela).
+const INDICES_BOOKINGS = `
+  CREATE INDEX IF NOT EXISTS idx_bookings_room_date ON bookings(room_id, date);
+  CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
+  CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);`;
+
+// Estado "expirado": pedido que ninguém confirmou até à hora da sessão.
+alargarCheck('bookings', "'concluido','cancelado')", "'concluido','cancelado','expirado')", INDICES_BOOKINGS, "'expirado'");
+// "Aguarda pagamento": o estúdio aceitou o pedido e falta só o cliente pagar
+// para a marcação ficar confirmada (ver PATCH /bookings/:id/status).
+alargarCheck('bookings', "'cancelado','expirado')", "'cancelado','expirado','aguarda_pagamento')", INDICES_BOOKINGS, "'aguarda_pagamento'");
+
+// Pagamento no site: cada conta de cliente tem um "customer" no Stripe, onde
+// ficam os cartões. Aqui só se guarda o que se mostra na carteira (marca,
+// 4 últimos dígitos, validade) e o id do cartão no Stripe — nunca o número.
+acrescentaColuna('clients', 'stripe_customer_id', "TEXT NOT NULL DEFAULT ''");
+db.exec(`
+CREATE TABLE IF NOT EXISTS pag_cartoes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  externo_id TEXT NOT NULL,
+  marca      TEXT NOT NULL DEFAULT '',
+  ultimos    TEXT NOT NULL DEFAULT '',
+  mes        INTEGER,
+  ano        INTEGER,
+  titular    TEXT NOT NULL DEFAULT '',
+  demo       INTEGER NOT NULL DEFAULT 0,
+  criado_em  TEXT NOT NULL,
+  UNIQUE (client_id, externo_id)
+);
+`);
+
+// Bloqueios criados por um projeto de gravação prolongada (Projetos): ficam
+// ligados a ele, para se refazerem ao editar e saírem ao apagar o projeto.
+acrescentaColuna('blocks', 'projeto_id', 'INTEGER');
 
 // As bases criadas antes de haver coordenadas ficaram com os estúdios de
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
@@ -484,13 +564,14 @@ function busyIntervals(roomId, date) {
   return [...a, ...b].sort((x, y) => x.s - y.s);
 }
 
-// Pedidos que ninguém confirmou até à hora de começar passam a "expirado":
+// Pedidos que ninguém confirmou (ou que o cliente não pagou) até à hora de
+// começar passam a "expirado":
 // deixam de ocupar a sala e saem da lista de pedidos por confirmar.
 function expirarPedidos() {
   const { date, minutes } = nowLocal();
   return db.prepare(
     `UPDATE bookings SET status='expirado', updated_at=?
-      WHERE status='pedido' AND (date<? OR (date=? AND start_min<=?))`
+      WHERE status IN ('pedido','aguarda_pagamento') AND (date<? OR (date=? AND start_min<=?))`
   ).run(new Date().toISOString(), date, date, minutes).changes;
 }
 
@@ -600,4 +681,5 @@ function ensureRbacOwners() {
 module.exports = {
   db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
   findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, ensureRbacOwners, expirarPedidos,
+  alargarCheck, acrescentaColuna,
 };

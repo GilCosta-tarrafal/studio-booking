@@ -401,6 +401,45 @@
     'Alterou a palavra-passe': { en: 'Changed the password', fr: 'A changé le mot de passe' },
     'Tentativa de alterar a palavra-passe falhada': { en: 'Failed attempt to change the password', fr: 'Tentative de changement de mot de passe échouée' },
     'Atualizou os dados pessoais': { en: 'Updated personal details', fr: 'A mis à jour ses données personnelles' },
+    // ---- Faturas e IVA ----
+    'País (para o IVA)': { en: 'Country (for VAT)', fr: 'Pays (pour la TVA)' },
+    'Taxa de IVA (%)': { en: 'VAT rate (%)', fr: 'Taux de TVA (%)' },
+    'Sai da localização do estúdio': { en: 'Comes from the studio location', fr: 'Déduit de l’emplacement du studio' },
+    'Proposta pela localização. Os preços já incluem este imposto.': { en: 'Suggested from the location. Prices already include this tax.', fr: 'Proposé selon l’emplacement. Les prix incluent déjà cette taxe.' },
+    'A ver o país deste sítio…': { en: 'Checking the country of this place…', fr: 'Recherche du pays de cet endroit…' },
+    'Não foi possível saber o país deste sítio. Escreva a taxa de IVA à mão.': { en: 'Could not tell the country of this place. Type the VAT rate.', fr: 'Impossible de connaître le pays de cet endroit. Saisissez le taux de TVA.' },
+    'Emitir fatura': { en: 'Issue invoice', fr: 'Émettre la facture' },
+    'Anular fatura': { en: 'Void invoice', fr: 'Annuler la facture' },
+    'Fatura anulada.': { en: 'Invoice voided.', fr: 'Facture annulée.' },
+    'Nome na fatura': { en: 'Name on invoice', fr: 'Nom sur la facture' },
+    'NIF do cliente': { en: 'Client tax ID (NIF)', fr: 'NIF du client' },
+    'Morada do cliente': { en: 'Client address', fr: 'Adresse du client' },
+    'Vazio: consumidor final': { en: 'Empty: final consumer', fr: 'Vide : consommateur final' },
+
+    // ---- Recibo ----
+    'Recibo (PDF)': { en: 'Receipt (PDF)', fr: 'Reçu (PDF)' },
+    'Dados para o recibo': { en: 'Receipt details', fr: 'Données du reçu' },
+    'Aparecem no canto superior direito do recibo das marcações deste estúdio, com o telefone e a morada.': { en: 'Shown in the top-right corner of this studio’s booking receipts, with the phone and address.', fr: 'Affichées en haut à droite des reçus des réservations de ce studio, avec le téléphone et l’adresse.' },
+    'NIF': { en: 'Tax ID (NIF)', fr: 'NIF' },
+    'Nome no recibo': { en: 'Name on receipt', fr: 'Nom sur le reçu' },
+    'Razão social, por exemplo.': { en: 'The legal company name, for example.', fr: 'La raison sociale, par exemple.' },
+    'Vazio: usa o nome do estúdio': { en: 'Empty: uses the studio name', fr: 'Vide : utilise le nom du studio' },
+    'Email do estúdio': { en: 'Studio email', fr: 'E-mail du studio' },
+
+    // ---- Projetos: gravação prolongada ----
+    'Gravação prolongada (com artista)': { en: 'Extended recording (with an artist)', fr: 'Enregistrement prolongé (avec un artiste)' },
+    'Durante este período, a sala fica bloqueada nesse horário e o estúdio não aceita outras marcações. Se já houver uma marcação que coincida, o projeto não é guardado e o erro diz qual é.': { en: 'During this period the room is blocked at those hours and the studio takes no other bookings. If an existing booking overlaps, the project is not saved and the error says which one.', fr: 'Pendant cette période, la salle est bloquée à ces heures et le studio n’accepte pas d’autres réservations. Si une réservation existante chevauche, le projet n’est pas enregistré et l’erreur indique laquelle.' },
+    'Um artista fica com uma sala durante um período. Não aparece no site: serve para bloquear a agenda.': { en: 'An artist takes a room for a period. Not shown on the site: it blocks the schedule.', fr: 'Un artiste occupe une salle pendant une période. N’apparaît pas sur le site : sert à bloquer l’agenda.' },
+    'Escolha a sala': { en: 'Choose the room', fr: 'Choisissez la salle' },
+    'Primeiro dia': { en: 'First day', fr: 'Premier jour' },
+    'Último dia': { en: 'Last day', fr: 'Dernier jour' },
+    'O dia inteiro': { en: 'All day', fr: 'Toute la journée' },
+    'Das': { en: 'From', fr: 'De' },
+    'Às': { en: 'To', fr: 'À' },
+    'o dia inteiro': { en: 'all day', fr: 'toute la journée' },
+    ' · sala bloqueada': { en: ' · room blocked', fr: ' · salle bloquée' },
+    'Sala removida': { en: 'Room removed', fr: 'Salle supprimée' },
+
     // ---- Configurações e catálogos ----
     'Configurações': { en: 'Settings', fr: 'Configuration' },
     'Listas, definições e integrações do estúdio, num só sítio.': { en: 'Studio lists, settings and integrations, all in one place.', fr: 'Listes, paramètres et intégrations du studio, au même endroit.' },
@@ -483,6 +522,9 @@
   // (data, nome...). Aqui traduz-se só o prefixo.
   const PREFIXOS = [
     [/^Hoje, /, { en: 'Today, ', fr: "Aujourd'hui, " }],
+    [/^Fatura (FT \d+\/\d+) \(PDF\)$/, { en: 'Invoice $1 (PDF)', fr: 'Facture $1 (PDF)' }],
+    [/^Fatura (FT \d+\/\d+) emitida\.$/, { en: 'Invoice $1 issued.', fr: 'Facture $1 émise.' }],
+    [/^Taxa normal de IVA em /, { en: 'Standard VAT rate in ', fr: 'Taux normal de TVA à ' }],
     [/^Apagar "/, { en: 'Delete "', fr: 'Supprimer "' }],
     [/^Tem (d+) notificações por ler.$/, { en: 'You have $1 unread notifications.', fr: 'Vous avez $1 notifications non lues.' }],
     [/^Notificações ((d+) por ler)$/, { en: 'Notifications ($1 unread)', fr: 'Notifications ($1 non lues)' }],

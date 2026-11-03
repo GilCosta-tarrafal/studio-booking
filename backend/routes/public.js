@@ -177,7 +177,11 @@ router.post('/bookings', requireClient, bookingLimiter, (req, res) => {
   }
 
   const now = new Date().toISOString();
-  const status = s.auto_confirm ? 'confirmado' : 'pedido';
+  // Confirmação automática = o estúdio aceita logo. Com valor a pagar, a
+  // marcação fica "aguarda pagamento" (o cliente é avisado), como quando o
+  // estúdio aceita à mão; sem valor, fica logo confirmada.
+  const preco = priceFor(room, start, end);
+  const status = !s.auto_confirm ? 'pedido' : preco > 0 ? 'aguarda_pagamento' : 'confirmado';
 
   const create = db.transaction(() => {
     // Verificação final dentro da transação, imediatamente antes de gravar.
@@ -188,11 +192,16 @@ router.post('/bookings', requireClient, bookingLimiter, (req, res) => {
                             client_email,notes,status,remote,price,paid,source,created_at,updated_at)
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'site',?,?)`
     ).run(code, room.id, serviceId, U.clean(b.title, 120), U.clean(b.style, 60), date, start, end, req.client.id, name, phone, email,
-      U.clean(b.notes, 1000), status, remote ? 1 : 0, priceFor(room, start, end), now, now);
+      U.clean(b.notes, 1000), status, remote ? 1 : 0, preco, now, now);
     return db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(info.lastInsertRowid);
   });
 
-  res.status(201).json({ ok: true, booking: publicBooking(create()) });
+  const criada = create();
+  if (status === 'aguarda_pagamento') {
+    require('../lib/aviso-pagamento').avisar({ ...criada, start: U.fmtHM(criada.start_min), end: U.fmtHM(criada.end_min) }, req)
+      .catch((e) => console.error('aviso de pagamento:', e.message));
+  }
+  res.status(201).json({ ok: true, booking: publicBooking(criada) });
 });
 
 // As marcações da conta com sessão iniciada, das mais recentes para as antigas.
@@ -217,8 +226,13 @@ router.post('/lookup', lookupLimiter, (req, res) => {
   res.json({ booking: publicBooking(row), can_cancel: canCancel(row) });
 });
 
+// Recibo em PDF, pedido com o código e o telefone (como a consulta).
+router.post('/recibo', lookupLimiter, (req, res) => {
+  require('../lib/pdf-recibo').enviar(res, findForClient(req));
+});
+
 function canCancel(row) {
-  if (row.status !== 'pedido' && row.status !== 'confirmado') return false;
+  if (!['pedido', 'aguarda_pagamento', 'confirmado'].includes(row.status)) return false;
   const now = U.nowLocal();
   return U.daysBetween(now.date, row.date) * 1440 + row.start_min > now.minutes;
 }

@@ -33,7 +33,7 @@ const SIMBOLOS = { '€': 'eur', '$': 'usd', 'us$': 'usd', '£': 'gbp', 'r$': 'b
 
 // Só se aceita pagar o que o estúdio já aceitou: um pedido por confirmar
 // ainda pode ser recusado, e aí era preciso devolver o dinheiro.
-const ESTADOS_PAGAVEIS = ['confirmado', 'em_curso'];
+const ESTADOS_PAGAVEIS = ['aguarda_pagamento', 'confirmado', 'em_curso'];
 
 function ativo() { return !!process.env.STRIPE_SECRET_KEY; }
 
@@ -92,7 +92,9 @@ async function criarCheckout({ booking, textoMoeda, siteUrl, lingua }) {
     success_url: volta + '&pago=1',
     cancel_url: volta + '&pago=0',
     metadata: { booking_code: booking.code },
-    payment_intent_data: { metadata: { booking_code: booking.code } },
+    // checkout=1: este pagamento já é tratado por checkout.session.completed;
+    // o aviso payment_intent.succeeded dele não pode voltar a somar.
+    payment_intent_data: { metadata: { booking_code: booking.code, checkout: '1' } },
     line_items: [{
       quantity: 1,
       price_data: {
@@ -109,6 +111,76 @@ async function criarCheckout({ booking, textoMoeda, siteUrl, lingua }) {
   db.prepare(`INSERT INTO int_pagamentos(booking_id,booking_code,fornecedor,externo_id,valor,moeda,criado_em,atualizado_em)
               VALUES(?,?,?,?,?,?,?,?)`).run(booking.id, booking.code, ID, sessao.id, valor, m, agora, agora);
   return { url: sessao.url, valor };
+}
+
+// ---------------------------------------------------------------- Pagamento no site
+// A página /pagar mostra as caixas do cartão do próprio Stripe (Stripe
+// Elements, chave publicável): o número do cartão vai do browser direto para
+// o Stripe. O servidor só cria os pedidos (guardar cartão / pagar) e lê o
+// resultado no Stripe — nunca aceita do browser que "está pago".
+const publicavel = () => process.env.STRIPE_PUBLISHABLE_KEY || '';
+const noSite = () => ativo() && !!publicavel();
+
+async function stripeGet(caminho) {
+  return pedirJson(API() + caminho, { headers: { Authorization: 'Bearer ' + process.env.STRIPE_SECRET_KEY } });
+}
+
+// O "customer" do Stripe da conta de cliente (cria-se à primeira vez).
+async function clienteStripe(cliente) {
+  if (cliente.stripe_customer_id) return cliente.stripe_customer_id;
+  const c = await stripe('/v1/customers', { name: cliente.name, email: cliente.email, phone: cliente.phone, metadata: { client_id: cliente.id } });
+  db.prepare('UPDATE clients SET stripe_customer_id=? WHERE id=?').run(c.id, cliente.id);
+  return c.id;
+}
+
+// Para guardar um cartão: o browser confirma este SetupIntent com as caixas do Stripe.
+async function criarSetup(customer) {
+  const s = await stripe('/v1/setup_intents', { customer, 'payment_method_types[0]': 'card', usage: 'on_session' });
+  return s.client_secret;
+}
+
+// O cartão guardado, tal como o Stripe o conhece (marca, 4 dígitos, validade).
+async function lerCartao(pmId, customer) {
+  const pm = await stripeGet('/v1/payment_methods/' + encodeURIComponent(pmId));
+  if (!pm || pm.customer !== customer || !pm.card) throw new Error('Cartão desconhecido.');
+  return { externo_id: pm.id, marca: pm.card.brand, ultimos: pm.card.last4, mes: pm.card.exp_month, ano: pm.card.exp_year, titular: (pm.billing_details && pm.billing_details.name) || '' };
+}
+
+// Cobra o valor em falta da marcação com um cartão guardado. Pode pedir uma
+// confirmação extra ao banco (3D Secure): aí devolve o client_secret, o
+// browser trata disso e depois chama confirmarIntent.
+async function pagarComCartao({ booking, customer, pmId, textoMoeda }) {
+  const m = moeda(textoMoeda);
+  if (!m) throw new Error('A moeda das Definições não é um código que o Stripe conheça. Defina STRIPE_CURRENCY.');
+  const valor = emFalta(booking);
+  const pi = await stripe('/v1/payment_intents', {
+    amount: paraStripe(valor, m), currency: m, customer, payment_method: pmId, confirm: 'true',
+    'payment_method_types[0]': 'card', description: `${booking.code} · ${booking.studio_name}, ${booking.room_name}`,
+    metadata: { booking_code: booking.code },
+  });
+  const agora = new Date().toISOString();
+  db.prepare(`INSERT OR IGNORE INTO int_pagamentos(booking_id,booking_code,fornecedor,externo_id,valor,moeda,criado_em,atualizado_em)
+              VALUES(?,?,?,?,?,?,?,?)`).run(booking.id, booking.code, ID, pi.id, valor, m, agora, agora);
+  return pi;
+}
+
+async function lerIntent(id) { return stripeGet('/v1/payment_intents/' + encodeURIComponent(id)); }
+
+// Um PaymentIntent pago (lido no Stripe): soma ao "Já pago" uma vez só.
+function marcarIntentPago(pi) {
+  const pag = db.prepare('SELECT * FROM int_pagamentos WHERE externo_id=?').get(pi.id);
+  if (pag && pag.estado === 'pago') return pag;
+  const m = String(pi.currency || (pag && pag.moeda) || '').toLowerCase();
+  const valor = doStripe(Number(pi.amount_received || pi.amount) || 0, m);
+  const code = (pi.metadata && pi.metadata.booking_code) || (pag && pag.booking_code);
+  const booking = code ? db.prepare(BOOKING_SELECT + ' WHERE b.code=?').get(code) : null;
+  const agora = new Date().toISOString();
+  if (!pag) {
+    db.prepare(`INSERT INTO int_pagamentos(booking_id,booking_code,fornecedor,externo_id,valor,moeda,estado,criado_em,atualizado_em)
+                VALUES(?,?,?,?,?,?,'pago',?,?)`).run(booking ? booking.id : null, code || '', ID, pi.id, valor, m, agora, agora);
+  } else db.prepare("UPDATE int_pagamentos SET estado='pago', valor=?, atualizado_em=? WHERE id=?").run(valor, agora, pag.id);
+  if (booking) require('../rotas/pagamento').aposPagamento(booking.id, valor);
+  return db.prepare('SELECT * FROM int_pagamentos WHERE externo_id=?').get(pi.id);
 }
 
 // ---------------------------------------------------------------- Webhook
@@ -129,9 +201,8 @@ function marcarPago(sessao) {
   } else {
     db.prepare("UPDATE int_pagamentos SET estado='pago', valor=?, atualizado_em=? WHERE id=?").run(valor, agora, pag.id);
   }
-  if (booking) {
-    db.prepare('UPDATE bookings SET paid = paid + ?, updated_at=? WHERE id=?').run(valor, agora, booking.id);
-  }
+  // Soma ao "Já pago" e, pago tudo, confirma a marcação que aguardava pagamento.
+  if (booking) require('../rotas/pagamento').aposPagamento(booking.id, valor);
   return booking ? `pago ${valor} ${m} (${booking.code})` : 'pago, sem marcação correspondente';
 }
 
@@ -144,6 +215,9 @@ function tratar(evento) {
       return obj.payment_status === 'paid' ? marcarPago(obj) : 'à espera do pagamento';
     case 'checkout.session.async_payment_succeeded':
       return marcarPago(obj);
+    // Pagamento feito na página /pagar (com cartão guardado).
+    case 'payment_intent.succeeded':
+      return obj.metadata && obj.metadata.booking_code && !obj.metadata.checkout ? (marcarIntentPago(obj), 'pago (site)') : 'ignorado';
     case 'checkout.session.expired':
     case 'checkout.session.async_payment_failed':
       db.prepare("UPDATE int_pagamentos SET estado='expirado', atualizado_em=? WHERE externo_id=? AND estado='aberto'")
@@ -184,4 +258,7 @@ function estado() {
   };
 }
 
-module.exports = { id: ID, ativo, estado, webhook, criarCheckout, podePagar, emFalta, moeda };
+module.exports = {
+  id: ID, ativo, estado, webhook, criarCheckout, podePagar, emFalta, moeda,
+  publicavel, noSite, clienteStripe, criarSetup, lerCartao, pagarComCartao, lerIntent, marcarIntentPago,
+};

@@ -8,10 +8,11 @@ const auth = require('../lib/auth');
 const U = require('../lib/util');
 const TR = require('../lib/traducoes');
 const CAT = require('../lib/catalogos');
+const fiscal = require('../lib/fiscal');
 const { HttpError } = U;
 
 const router = express.Router();
-const STATUSES = ['pedido', 'confirmado', 'em_curso', 'concluido', 'cancelado', 'expirado'];
+const STATUSES = ['pedido', 'aguarda_pagamento', 'confirmado', 'em_curso', 'concluido', 'cancelado', 'expirado'];
 // Estados que não ocupam a sala nem contam como receita.
 const LIVRES = "('cancelado','expirado')";
 
@@ -135,6 +136,51 @@ router.get('/bookings/:id', (req, res) => {
   res.json({ booking: withTimes(row) });
 });
 
+// Recibo da marcação em PDF (descarrega-se como anexo).
+router.get('/bookings/:id/recibo.pdf', (req, res) => {
+  const row = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(idParam(req));
+  const scope = scopeStudio(req);
+  if (!row || (scope && row.studio_id !== scope)) throw new HttpError(404, 'Marcação não encontrada.');
+  require('../lib/pdf-recibo').enviar(res, row);
+});
+
+// ------------------------------------------------------------ Faturas (internas)
+// Uma marcação tem no máximo uma fatura em vigor; as anuladas ficam no histórico.
+const FAT = require('../lib/faturas');
+const marcacaoNoAmbito = (req) => {
+  const row = db.prepare('SELECT b.id, r.studio_id FROM bookings b JOIN rooms r ON r.id=b.room_id WHERE b.id=?').get(idParam(req));
+  const scope = scopeStudio(req);
+  if (!row || (scope && row.studio_id !== scope)) throw new HttpError(404, 'Marcação não encontrada.');
+  return row;
+};
+const faturaNoAmbito = (req) => {
+  const f = FAT.obter(idParam(req));
+  const scope = scopeStudio(req);
+  if (!f || (scope && f.studio_id !== scope)) throw new HttpError(404, 'Fatura não encontrada.');
+  return f;
+};
+
+router.get('/bookings/:id/fatura', (req, res) => {
+  res.json(FAT.daMarcacao(marcacaoNoAmbito(req).id));
+});
+
+router.post('/bookings/:id/fatura', (req, res) => {
+  const f = FAT.emitir(marcacaoNoAmbito(req).id, req.body || {}, req.user.id);
+  res.status(201).json({ fatura: f });
+});
+
+router.get('/faturas/:id.pdf', (req, res) => {
+  const f = faturaNoAmbito(req);
+  const codigo = f.booking_id ? (db.prepare('SELECT code FROM bookings WHERE id=?').get(f.booking_id) || {}).code : '';
+  res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="fatura-${f.serie.replace(/\s+/g, '')}-${f.numero}.pdf"` });
+  require('../lib/pdf-fatura').gerar(res, f, getSettings(), codigo);
+});
+
+router.post('/faturas/:id/anular', (req, res) => {
+  faturaNoAmbito(req);
+  res.json({ fatura: FAT.anular(U.toInt(req.params.id), (req.body || {}).motivo) });
+});
+
 router.post('/bookings', (req, res) => {
   const n = normalizeBooking(req.body || {});
   assertRoomInScope(req, n.room_id);
@@ -177,16 +223,22 @@ router.put('/bookings/:id', (req, res) => {
 // Mudança rápida de estado (botões Confirmar / Recusar).
 router.patch('/bookings/:id/status', (req, res) => {
   const id = idParam(req);
-  const status = String((req.body || {}).status || '');
+  let status = String((req.body || {}).status || '');
   if (!STATUSES.includes(status)) throw new HttpError(400, 'Estado inválido.');
   const row = db.prepare('SELECT * FROM bookings WHERE id=?').get(id);
   if (!row) throw new HttpError(404, 'Marcação não encontrada.');
   assertInScope(req, row.room_id);
+  // Aceitar um pedido do site que tem valor por pagar não o confirma logo:
+  // fica "aguarda pagamento" e o cliente é avisado de que só falta pagar.
+  const aceite = status === 'confirmado' && row.status === 'pedido' && row.price > row.paid && !!row.client_id;
+  if (aceite) status = 'aguarda_pagamento';
   db.transaction(() => {
     assertNoConflict({ status, room_id: row.room_id, date: row.date, start: row.start_min, end: row.end_min }, id);
     db.prepare('UPDATE bookings SET status=?, updated_at=? WHERE id=?').run(status, new Date().toISOString(), id);
   })();
-  res.json({ booking: withTimes(db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(id)) });
+  const booking = withTimes(db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(id));
+  if (aceite) require('../lib/aviso-pagamento').avisar(booking, req).catch((e) => console.error('aviso de pagamento:', e.message));
+  res.json({ booking, aguarda_pagamento: aceite });
 });
 
 router.delete('/bookings/:id', (req, res) => {
@@ -396,11 +448,11 @@ router.get('/reports.pdf', (req, res) => {
   const r = computeReport(req);
   const settings = getSettings();
   const sid = r.scope || U.toInt(req.query.studio_id);
-  const sede = sid
-    ? db.prepare('SELECT name, city, address FROM studios WHERE id=?').get(sid)
-    : db.prepare('SELECT name, city, address FROM studios ORDER BY sort, id LIMIT 1').get();
-  const morada = sede ? [sede.address, sede.city].filter(Boolean).join(' · ') : '';
-  const contactos = [settings.phone && 'Tel: ' + settings.phone, settings.email, morada].filter(Boolean);
+  // O cabeçalho leva os dados do estúdio filtrado (ou do primeiro, a sede),
+  // os mesmos do recibo: nome legal, NIF, telefone, email e morada.
+  const estudio = sid
+    ? db.prepare('SELECT * FROM studios WHERE id=?').get(sid)
+    : db.prepare('SELECT * FROM studios ORDER BY sort, id LIMIT 1').get();
   const fmtD = (iso, curto) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${curto ? y.slice(2) : y}`; };
   const from = U.isValidDate(String(req.query.from || '')) ? String(req.query.from) : null;
   const to = U.isValidDate(String(req.query.to || '')) ? String(req.query.to) : null;
@@ -413,7 +465,7 @@ router.get('/reports.pdf', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="relatorio-${from || 'inicio'}_a_${to || 'hoje'}.pdf"`);
   res.setHeader('Content-Type', 'application/pdf');
   require('../lib/pdf-relatorio').gerar(res, r, {
-    business: settings, contactos, periodo, geradoEm, dominio, cur: settings.currency,
+    business: settings, estudio, periodo, geradoEm, dominio, cur: settings.currency,
   });
 });
 
@@ -499,11 +551,36 @@ function traducoes(b, campos) {
   return b.traducoes === undefined ? null : JSON.stringify(TR.limpar(b.traducoes, campos));
 }
 
+// Email do estúdio (para o recibo): vazio ou um endereço válido.
+function emailOuVazio(v) {
+  const e = U.clean(v, 120).toLowerCase();
+  if (e && !U.isEmail(e)) throw new HttpError(400, 'O email do estúdio não é válido.');
+  return e;
+}
+
+// Taxa de IVA do estúdio em %: vazio = por definir; senão entre 0 e 50.
+function taxaIva(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > 50) throw new HttpError(400, 'A taxa de IVA tem de ser um número entre 0 e 50.');
+  return Math.round(n * 100) / 100;
+}
+
+// Sem taxa de IVA mas com o sítio do estúdio: propõe-se a do país onde fica.
+async function completarFiscal(b) {
+  if (b.vat_rate != null || b.lat == null || b.lon == null) return b;
+  const f = await fiscal.detetar(b.lat, b.lon, { url: GEOCODER, agente: `studio-booking (${getSettings().business_name || 'estudio'})` });
+  if (f && f.taxa != null) Object.assign(b, { country_code: f.codigo, tax_name: f.imposto, vat_rate: f.taxa });
+  return b;
+}
+
 function studioBody(b) {
   const name = U.clean(b.name, 80);
   if (!name) throw new HttpError(400, 'Indique o nome do estúdio.');
   return {
     name, city: U.clean(b.city, 60), address: U.clean(b.address, 160), phone: U.clean(b.phone, 30),
+    legal_name: U.clean(b.legal_name, 120), nif: U.clean(b.nif, 30), email: emailOuVazio(b.email),
+    country_code: U.clean(b.country_code, 2).toLowerCase(), tax_name: U.clean(b.tax_name, 10) || 'IVA', vat_rate: taxaIva(b.vat_rate),
     lat: coord(b.lat, 90), lon: coord(b.lon, 180),
     description: U.clean(b.description, 400), hours: JSON.stringify(normalizeHours(b.hours)), active: flag(b.active),
     traducoes: traducoes(b, TR.CAMPOS.studios),
@@ -521,24 +598,25 @@ router.get('/studios', (req, res) => {
   res.json({
     studios: studios.map((s) => ({
       ...s, hours: parseHours(s.hours),
+      pais_nome: s.country_code ? fiscal.montar(s.country_code).pais : '',
       rooms: rooms.filter((r) => r.studio_id === s.id).map((r) => ({ ...r, bookings: counts[r.id] || 0 })),
     })),
   });
 });
 
-router.post('/studios', auth.requireManager, (req, res) => {
-  const b = studioBody(req.body || {});
+router.post('/studios', auth.requireManager, async (req, res) => {
+  const b = await completarFiscal(studioBody(req.body || {}));
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM studios').get().m;
-  const id = db.prepare(`INSERT INTO studios(name,city,address,phone,description,hours,lat,lon,traducoes,active,sort) VALUES(?,?,?,?,?,?,?,?,COALESCE(?, '{}'),?,?)`)
-    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, max + 1).lastInsertRowid;
+  const id = db.prepare(`INSERT INTO studios(name,city,address,phone,legal_name,nif,email,country_code,tax_name,vat_rate,description,hours,lat,lon,traducoes,active,sort) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?, '{}'),?,?)`)
+    .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, max + 1).lastInsertRowid;
   res.status(201).json({ id });
 });
 
-router.put('/studios/:id', auth.requireManager, (req, res) => {
+router.put('/studios/:id', auth.requireManager, async (req, res) => {
   const id = idParam(req);
-  const b = studioBody(req.body || {});
-  const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
-    .run(b.name, b.city, b.address, b.phone, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
+  const b = await completarFiscal(studioBody(req.body || {}));
+  const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, legal_name=?, nif=?, email=?, country_code=?, tax_name=?, vat_rate=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
+    .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
   if (!info.changes) throw new HttpError(404, 'Estúdio não encontrado.');
   res.json({ ok: true });
 });
@@ -811,6 +889,14 @@ router.post('/geocode', auth.requireManager, async (req, res) => {
     throw new HttpError(404, 'Não encontrámos esse sítio. Experimente escrever a cidade e o país.');
   }
   res.json({ lat, lon, nome: String(sitio.display_name || '').slice(0, 200) });
+});
+
+// País e taxa de IVA propostos para um sítio (as coordenadas do estúdio).
+router.get('/fiscal', auth.requireManager, async (req, res) => {
+  const lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new HttpError(400, 'Coordenadas inválidas.');
+  const f = await fiscal.detetar(lat, lon, { url: GEOCODER, agente: `studio-booking (${getSettings().business_name || 'estudio'})` });
+  res.json({ fiscal: f });
 });
 
 module.exports = router;

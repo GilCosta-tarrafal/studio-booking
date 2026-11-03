@@ -7,12 +7,20 @@
 // artistas, ou outra divulgação qualquer). Enquanto "aberto", o projeto aparece
 // no site e quem quiser participar deixa o seu contacto (int_inscricoes), que
 // volta ao painel para o produtor ver e dar seguimento.
+//
+// A "gravação prolongada" é diferente: um artista fica com uma sala durante um
+// período (ex.: três semanas, das 10:00 às 18:00). Não aparece no site; em vez
+// disso, o projeto cria um bloqueio por dia nessa sala e horário, e o estúdio
+// deixa de aceitar marcações aí. Se já houver uma marcação ativa que coincida,
+// o projeto não se guarda e o erro diz quais são, para as resolver primeiro.
 // ---------------------------------------------------------------------------
 const { db } = require('../lib/base');
 const { baixarCapa } = require('../lib/capas');
-const { HttpError } = require('../../backend/lib/util');
+const U = require('../../backend/lib/util');
+const { HttpError } = U;
 
-const TIPOS = ['talentos', 'album', 'outro'];
+const TIPOS = ['talentos', 'album', 'gravacao', 'outro'];
+const MAX_DIAS_GRAVACAO = 366;
 const ESTADOS = ['novo', 'contactado', 'aceite', 'arquivado'];
 
 const texto = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, max) : '');
@@ -26,8 +34,12 @@ function normalizar(d) {
   if (!titulo) throw erro('Indique o título do projeto.');
   const prazo = texto(d.prazo, 10);
   if (prazo && !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) throw erro('O prazo tem de ser no formato AAAA-MM-DD.');
+  const tipo = TIPOS.includes(d.tipo) ? d.tipo : 'outro';
+  const ordem = Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0;
+  if (tipo === 'gravacao') return { ...normalizarGravacao(d), titulo, ordem };
   return {
-    tipo: TIPOS.includes(d.tipo) ? d.tipo : 'outro',
+    tipo,
+    artista: '', room_id: null, data_inicio: '', data_fim: '', hora_inicio: null, hora_fim: null,
     titulo,
     resumo: texto(d.resumo, 200),
     descricao: texto(d.descricao, 2000),
@@ -37,6 +49,60 @@ function normalizar(d) {
     visivel: d.visivel === undefined ? 1 : (d.visivel ? 1 : 0),
     ordem: Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0,
   };
+}
+
+// Gravação prolongada: artista, sala, período e horário de cada dia.
+function normalizarGravacao(d) {
+  const artista = texto(d.artista, 120);
+  if (!artista) throw erro('Indique o artista da gravação.');
+  const room = db.prepare('SELECT id FROM rooms WHERE id=?').get(U.toInt(d.room_id));
+  if (!room) throw erro('Escolha a sala da gravação.');
+  const ini = texto(d.data_inicio, 10);
+  const fim = texto(d.data_fim, 10);
+  if (!U.isValidDate(ini) || !U.isValidDate(fim)) throw erro('Indique o primeiro e o último dia da gravação.');
+  if (fim < ini) throw erro('O último dia não pode ser antes do primeiro.');
+  if (U.daysBetween(ini, fim) + 1 > MAX_DIAS_GRAVACAO) throw erro(`Uma gravação prolongada pode durar no máximo ${MAX_DIAS_GRAVACAO} dias.`);
+  let hIni = 0;
+  let hFim = 1440;
+  if (!d.dia_inteiro) {
+    hIni = U.parseHM(String(d.hora_inicio || ''));
+    hFim = U.parseHM(String(d.hora_fim || ''));
+    if (hIni == null || hFim == null || hFim <= hIni) throw erro('Indique o horário da gravação (a hora de fim tem de ser depois da de início).');
+  }
+  return {
+    tipo: 'gravacao', artista, room_id: room.id, data_inicio: ini, data_fim: fim, hora_inicio: hIni, hora_fim: hFim,
+    resumo: texto(d.resumo, 200), descricao: texto(d.descricao, 2000), prazo: '',
+    capa_origem: eUrl(d.capa_origem) ? d.capa_origem : '',
+    aberto: 0, visivel: 0, // é um compromisso interno: não vai para o site
+  };
+}
+
+// Apaga os bloqueios do projeto e, se for uma gravação prolongada, volta a
+// criá-los (um por dia). Corre dentro da transação de quem guarda o projeto:
+// se houver conflito, nada fica guardado.
+function refazerBloqueios(id, p) {
+  db.prepare('DELETE FROM blocks WHERE projeto_id=?').run(id);
+  if (p.tipo !== 'gravacao') return 0;
+  const conflitos = db.prepare(
+    `SELECT b.code, b.client_name, b.date, b.start_min, b.end_min FROM bookings b
+      WHERE b.room_id=? AND b.date>=? AND b.date<=? AND b.status NOT IN ('cancelado','expirado')
+        AND b.start_min<? AND b.end_min>? ORDER BY b.date, b.start_min`
+  ).all(p.room_id, p.data_inicio, p.data_fim, p.hora_fim, p.hora_inicio);
+  if (conflitos.length) {
+    const dia = (iso) => iso.split('-').reverse().join('/');
+    const n = conflitos.length;
+    const lista = conflitos.slice(0, 5)
+      .map((c) => `${c.code} (${c.client_name}, ${dia(c.date)} ${U.fmtHM(c.start_min)}–${U.fmtHM(c.end_min)})`).join('; ');
+    const mais = n > 5 ? ` e mais ${n - 5}` : '';
+    const quantas = n === 1 ? 'já existe 1 marcação' : `já existem ${n} marcações`;
+    const essas = n === 1 ? 'essa marcação' : 'essas marcações';
+    throw erro(`Conflito de horário: ${quantas} nessa sala durante a gravação — ${lista}${mais}. Mude ou cancele ${essas} primeiro.`, 409);
+  }
+  const ins = db.prepare('INSERT INTO blocks(room_id,date,start_min,end_min,reason,projeto_id) VALUES(?,?,?,?,?,?)');
+  const motivo = ('Gravação prolongada: ' + p.artista).slice(0, 120);
+  let n = 0;
+  for (let d = p.data_inicio; d <= p.data_fim; d = U.addDays(d, 1)) { ins.run(p.room_id, d, p.hora_inicio, p.hora_fim, motivo, id); n++; }
+  return n;
 }
 
 function obter(id) {
@@ -59,7 +125,7 @@ function listarAdmin() {
 
 // Lista para o site: só os visíveis, com o essencial para o cartão.
 function listarPublico() {
-  return db.prepare('SELECT * FROM int_projetos WHERE visivel=1 ORDER BY ordem ASC, id DESC').all().map((p) => ({
+  return db.prepare("SELECT * FROM int_projetos WHERE visivel=1 AND tipo!='gravacao' ORDER BY ordem ASC, id DESC").all().map((p) => ({
     id: p.id,
     tipo: p.tipo,
     titulo: p.titulo,
@@ -86,12 +152,18 @@ async function aplicarCapa(id, url) {
 async function criar(dados) {
   const p = normalizar(dados);
   const agora = new Date().toISOString();
-  const r = db.prepare(
-    `INSERT INTO int_projetos(tipo,titulo,resumo,descricao,capa_origem,prazo,aberto,visivel,ordem,criado_em,atualizado_em)
-     VALUES(?,?,?,?,?,?,?,?,?,?,?)`
-  ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem, agora, agora);
-  const avisoCapa = await aplicarCapa(r.lastInsertRowid, p.capa_origem);
-  return { projeto: obter(r.lastInsertRowid), avisoCapa };
+  const id = db.transaction(() => {
+    const r = db.prepare(
+      `INSERT INTO int_projetos(tipo,titulo,resumo,descricao,capa_origem,prazo,aberto,visivel,ordem,
+                                artista,room_id,data_inicio,data_fim,hora_inicio,hora_fim,criado_em,atualizado_em)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem,
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, agora, agora);
+    refazerBloqueios(r.lastInsertRowid, p);
+    return r.lastInsertRowid;
+  })();
+  const avisoCapa = await aplicarCapa(id, p.capa_origem);
+  return { projeto: obter(id), avisoCapa };
 }
 
 async function editar(id, dados) {
@@ -99,16 +171,25 @@ async function editar(id, dados) {
   if (!atual) throw erro('Projeto não encontrado.', 404);
   const p = normalizar(dados);
   const agora = new Date().toISOString();
-  db.prepare(
-    `UPDATE int_projetos SET tipo=?, titulo=?, resumo=?, descricao=?, capa_origem=?, prazo=?, aberto=?, visivel=?, ordem=?, atualizado_em=? WHERE id=?`
-  ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem, agora, id);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE int_projetos SET tipo=?, titulo=?, resumo=?, descricao=?, capa_origem=?, prazo=?, aberto=?, visivel=?, ordem=?,
+              artista=?, room_id=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, atualizado_em=? WHERE id=?`
+    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem,
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, agora, id);
+    refazerBloqueios(id, p);
+  })();
   const avisoCapa = p.capa_origem !== atual.capa_origem ? await aplicarCapa(id, p.capa_origem) : null;
   return { projeto: obter(id), avisoCapa };
 }
 
 function apagar(id) {
-  // As inscrições vão atrás, pela chave estrangeira (ON DELETE CASCADE).
-  return db.prepare('DELETE FROM int_projetos WHERE id=?').run(id).changes;
+  // As inscrições vão atrás, pela chave estrangeira (ON DELETE CASCADE); os
+  // bloqueios de uma gravação prolongada saem aqui, e a sala fica livre.
+  return db.transaction(() => {
+    db.prepare('DELETE FROM blocks WHERE projeto_id=?').run(id);
+    return db.prepare('DELETE FROM int_projetos WHERE id=?').run(id).changes;
+  })();
 }
 
 // ---------------------------------------------------------------- Inscrições

@@ -215,6 +215,7 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 .tag[data-s="em_curso"] { --tag-bg: #102E20; --tag-ink: #8AD9AC; --tag-dot: #46B87C; }
 .tag[data-s="concluido"] { --tag-bg: #202020; --tag-ink: #B4B4B4; --tag-dot: #8A8A8A; }
 .tag[data-s="cancelado"] { --tag-bg: #2E1210; --tag-ink: #EFA79F; --tag-dot: #C85A4E; }
+.tag[data-s="aguarda_pagamento"] { --tag-bg: #2A1E3A; --tag-ink: #D3B8F5; --tag-dot: #A06CE0; }
 .tag[data-s="expirado"] { --tag-bg: #1E1E22; --tag-ink: #A9A9B4; --tag-dot: #6E6E7A; }
 /* No claro trocam-se por tons lavados do mesmo matiz, para as cores dos
    estados continuarem a dizer o mesmo. */
@@ -224,6 +225,7 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 :root[data-tema="claro"] .tag[data-s="em_curso"] { --tag-bg: #DFF2E7; --tag-ink: #14603C; }
 :root[data-tema="claro"] .tag[data-s="concluido"] { --tag-bg: #ECEDEF; --tag-ink: #4C5256; }
 :root[data-tema="claro"] .tag[data-s="cancelado"] { --tag-bg: #FBE6E3; --tag-ink: #8E2A20; }
+:root[data-tema="claro"] .tag[data-s="aguarda_pagamento"] { --tag-bg: #F1E8FC; --tag-ink: #5B2A91; }
 :root[data-tema="claro"] .tag[data-s="expirado"] { --tag-bg: #ECECEF; --tag-ink: #4A4A55; }
 
 /* ---------- Régua do dia ---------- */
@@ -339,3 +341,50 @@ input[readonly], textarea[readonly] { background: var(--mist); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- Campos de data em dia/mês/ano (ver /js/datas.js) ---------- */
+/* Caixa de texto "dd/mm/aaaa" com o botão do calendário dentro; o campo de
+   data original fica por baixo, invisível, a guardar o valor. */
+.data-pt { position: relative; display: block; width: 100%; min-width: 0; }
+.data-pt .data-pt-txt { width: 100%; padding-right: 46px; font-variant-numeric: tabular-nums; }
+.data-pt .data-pt-txt.invalido { border-color: var(--danger); }
+.data-pt-btn {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%); width: 36px; height: 36px;
+  display: grid; place-items: center; border: 0; border-radius: 9px; background: none; color: var(--muted); cursor: pointer;
+}
+.data-pt-btn:hover, .data-pt-btn[aria-expanded="true"] { background: var(--mist); color: var(--ink); }
+.data-pt-btn:disabled { cursor: default; opacity: .5; }
+.data-pt .data-pt-iso {
+  position: absolute; left: 12px; bottom: 0; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
+.data-pt-pop {
+  position: fixed; inset: auto; margin: 0; z-index: 1000; width: 296px; padding: 12px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .45); overflow: visible;
+}
+.data-pt-pop[hidden] { display: none; }
+:root[data-tema="claro"] .data-pt-pop { box-shadow: 0 14px 34px rgba(16, 24, 40, .14); }
+.data-pt-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.data-pt-tit { font-weight: 700; font-size: .95rem; }
+.data-pt-nav {
+  width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px;
+  background: none; color: var(--ink); cursor: pointer;
+}
+.data-pt-nav:hover { background: var(--mist); }
+.data-pt-grelha { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.data-pt-sem { text-align: center; font-size: .72rem; font-weight: 700; color: var(--muted); padding: 4px 0 6px; text-transform: capitalize; }
+.data-pt-dia {
+  height: 36px; border: 0; border-radius: 10px; background: none; color: var(--ink);
+  font: 500 .88rem/1 var(--body, inherit); font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.data-pt-dia:hover { background: var(--mist); }
+.data-pt-dia.fora { color: var(--muted); opacity: .55; }
+.data-pt-dia.hoje { box-shadow: inset 0 0 0 1.5px var(--amber); }
+.data-pt-dia.sel { background: var(--amber); color: #1A1204; font-weight: 700; opacity: 1; }
+.data-pt-dia:disabled { opacity: .25; cursor: default; background: none; }
+.data-pt-dia:focus-visible, .data-pt-nav:focus-visible, .data-pt-acao:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.data-pt-rodape { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.data-pt-acao { border: 0; background: none; color: var(--amber); font: 600 .85rem var(--body, inherit); padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+:root[data-tema="claro"] .data-pt-acao { color: var(--amber-deep); }
+.data-pt-acao:hover { background: var(--mist); }

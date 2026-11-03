@@ -8,7 +8,23 @@
   const { h, waLink } = S;
   const { app, api, toast, field, pageHead, openModal } = A;
 
-  const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['outro', 'Outro']];
+  const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['gravacao', 'Gravação prolongada (com artista)'], ['outro', 'Outro']];
+  const ddmm = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+  const hm = (min) => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+
+  // Salas agrupadas por estúdio, para escolher onde decorre a gravação.
+  function salaSelect(atual) {
+    const sel = h('select', { required: true, value: atual || '' },
+      h('option', { value: '' }, 'Escolha a sala'),
+      app.studios.map((s) => (s.rooms.length ? h('optgroup', { label: s.name },
+        s.rooms.filter((r) => r.active || r.id === atual).map((r) => h('option', { value: r.id }, r.name))) : null)));
+    sel.value = atual ? String(atual) : '';
+    return sel;
+  }
+  const nomeSala = (id) => {
+    for (const s of app.studios) { const r = s.rooms.find((x) => x.id === id); if (r) return `${s.name}, ${r.name}`; }
+    return '';
+  };
   const TIPO_NOME = Object.fromEntries(TIPOS);
   const ESTADOS = [['novo', 'Novo'], ['contactado', 'Contactado'], ['aceite', 'Aceite'], ['arquivado', 'Arquivado']];
   const ESTADO_NOME = Object.fromEntries(ESTADOS);
@@ -28,8 +44,49 @@
       ordem: h('input', { type: 'number', step: 1, value: p.ordem || 0 }),
       aberto: h('input', { type: 'checkbox', checked: p.aberto === undefined ? true : !!p.aberto }),
       visivel: h('input', { type: 'checkbox', checked: p.visivel === undefined ? true : !!p.visivel }),
+      // Gravação prolongada
+      artista: h('input', { type: 'text', maxlength: 120, value: p.artista || '' }),
+      sala: salaSelect(p.room_id),
+      de: h('input', { type: 'date', value: p.data_inicio || '' }),
+      ate: h('input', { type: 'date', value: p.data_fim || '' }),
+      diaInteiro: h('input', { type: 'checkbox', checked: p.tipo === 'gravacao' && p.hora_inicio === 0 && p.hora_fim === 1440 }),
+      hIni: h('input', { type: 'time', step: 900, value: p.hora_inicio != null && p.hora_fim !== 1440 ? hm(p.hora_inicio) : '10:00' }),
+      hFim: h('input', { type: 'time', step: 900, value: p.hora_fim != null && p.hora_fim !== 1440 ? hm(p.hora_fim) : '18:00' }),
     };
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+
+    // O que só faz sentido numa gravação prolongada, e o que só faz sentido
+    // numa convocatória pública (prazo, inscrições, site), troca com o tipo.
+    const horas = h('div', { class: 'grid-2' }, field('Das', f.hIni), field('Às', f.hFim));
+    const blocoGravacao = h('div', { class: 'projeto-gravacao' },
+      h('p', { class: 'notice info' }, 'Durante este período, a sala fica bloqueada nesse horário e o estúdio não aceita outras marcações. Se já houver uma marcação que coincida, o projeto não é guardado e o erro diz qual é.'),
+      h('div', { class: 'grid-2' }, field('Artista', f.artista), field('Sala', f.sala)),
+      h('div', { class: 'grid-2' }, field('Primeiro dia', f.de), field('Último dia', f.ate)),
+      h('label', { class: 'check' }, f.diaInteiro, 'O dia inteiro'),
+      horas);
+    const soPublico = [
+      h('div', { class: 'grid-2' },
+        field('Prazo (opcional)', f.prazo, { hint: 'Data limite para manifestar interesse.' }),
+        field('Ordem', f.ordem, { hint: 'Menor aparece primeiro no site.' })),
+      field('Imagem (link)', f.capa_origem, { hint: 'Copiada para o site. Vazio: fica o logo.' }),
+      h('div', { class: 'grid-2' },
+        h('label', { class: 'check' }, f.aberto, 'Aceita inscrições'),
+        h('label', { class: 'check' }, f.visivel, 'Mostrar no site')),
+    ];
+    const sub = h('p', { class: 'modal-sub' });
+    const sync = () => {
+      const g = f.tipo.value === 'gravacao';
+      blocoGravacao.hidden = !g;
+      for (const el of soPublico) el.hidden = g;
+      horas.hidden = f.diaInteiro.checked;
+      for (const el of [f.artista, f.de, f.ate, f.sala]) el.required = g;
+      sub.textContent = g
+        ? 'Um artista fica com uma sala durante um período. Não aparece no site: serve para bloquear a agenda.'
+        : 'Aparece na secção "Participa" do site enquanto estiver visível. Com "aceita inscrições" ligado, o público pode manifestar interesse.';
+    };
+    f.tipo.addEventListener('change', sync);
+    f.diaInteiro.addEventListener('change', sync);
+    f.de.addEventListener('change', () => { if (f.de.value && (!f.ate.value || f.ate.value < f.de.value)) f.ate.value = f.de.value; });
 
     openModal((close) => {
       const guardar = h('button', { class: 'btn', type: 'submit' }, 'Guardar');
@@ -42,6 +99,8 @@
             tipo: f.tipo.value, titulo: f.titulo.value, resumo: f.resumo.value, descricao: f.descricao.value,
             prazo: f.prazo.value, capa_origem: f.capa_origem.value, ordem: f.ordem.value,
             aberto: f.aberto.checked, visivel: f.visivel.checked,
+            artista: f.artista.value, room_id: f.sala.value, data_inicio: f.de.value, data_fim: f.ate.value,
+            dia_inteiro: f.diaInteiro.checked, hora_inicio: f.hIni.value, hora_fim: f.hFim.value,
           };
           try {
             const r = novo
@@ -56,28 +115,25 @@
         },
       },
       h('div', { class: 'grid-2' }, field('Tipo de projeto', f.tipo), field('Título', f.titulo)),
+      blocoGravacao,
       field('Resumo', f.resumo, { hint: 'Uma frase curta, mostrada no cartão do site.' }),
       field('Descrição', f.descricao, { hint: 'O texto completo do convite. Ex.: campanha para jovens com talento sem condições para gravar.' }),
-      h('div', { class: 'grid-2' },
-        field('Prazo (opcional)', f.prazo, { hint: 'Data limite para manifestar interesse.' }),
-        field('Ordem', f.ordem, { hint: 'Menor aparece primeiro no site.' })),
-      field('Imagem (link)', f.capa_origem, { hint: 'Copiada para o site. Vazio: fica o logo.' }),
-      h('div', { class: 'grid-2' },
-        h('label', { class: 'check' }, f.aberto, 'Aceita inscrições'),
-        h('label', { class: 'check' }, f.visivel, 'Mostrar no site')),
+      ...soPublico,
       err,
       h('div', { class: 'modal-foot' },
         h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Fechar'),
         guardar));
       return h('div', { class: 'modal-in' },
         h('div', { class: 'modal-head' }, h('h2', {}, novo ? 'Novo projeto' : 'Editar projeto')),
-        h('p', { class: 'modal-sub' }, 'Aparece na secção "Participa" do site enquanto estiver visível. Com "aceita inscrições" ligado, o público pode manifestar interesse.'),
+        sub,
         form);
     });
+    sync();
   }
 
   async function apagar(p, aoGuardar) {
-    if (!window.confirm(`Eliminar o projeto "${p.titulo}"? As inscrições recebidas também são apagadas.`)) return;
+    const aviso = p.tipo === 'gravacao' ? 'A sala volta a ficar livre nesses dias.' : 'As inscrições recebidas também são apagadas.';
+    if (!window.confirm(`Eliminar o projeto "${p.titulo}"? ${aviso}`)) return;
     try { await api(`/api/admin/integracoes/projetos/${p.id}`, { method: 'DELETE' }); toast('Projeto eliminado.'); if (aoGuardar) aoGuardar(); }
     catch (ex) { toast(ex.message, true); }
   }
@@ -133,7 +189,9 @@
   // ------------------------------------------------------------ Cartão do projeto
   function cartaoProjeto(p, recarregar) {
     const gestor = ehGestor();
-    const marcas = [
+    const gravacao = p.tipo === 'gravacao';
+    // Uma gravação prolongada nunca vai ao site: as marcas de site não se aplicam.
+    const marcas = gravacao ? [] : [
       !p.visivel && h('span', { class: 'tag off' }, 'Escondido'),
       !p.aberto && h('span', { class: 'tag' }, 'Fechado'),
     ].filter(Boolean);
@@ -145,12 +203,18 @@
           marcas),
         h('h2', {}, p.titulo),
         p.resumo && h('p', { class: 'projeto-resumo' }, p.resumo),
-        h('p', { class: 'hint' },
-          p.prazo ? 'Prazo: ' + S.fmtDateFull(p.prazo) + ' · ' : '',
-          p.inscricoes + (p.inscricoes === 1 ? ' inscrição' : ' inscrições'),
-          p.inscricoes_novas ? ' (' + p.inscricoes_novas + ' por ver)' : ''),
+        gravacao
+          ? h('p', { class: 'projeto-gravacao-info' },
+            h('strong', {}, p.artista), ' · ', nomeSala(p.room_id) || 'Sala removida', h('br'),
+            `${ddmm(p.data_inicio)} a ${ddmm(p.data_fim)} · `,
+            p.hora_inicio === 0 && p.hora_fim === 1440 ? 'o dia inteiro' : `das ${hm(p.hora_inicio)} às ${hm(p.hora_fim)}`,
+            ' · sala bloqueada')
+          : h('p', { class: 'hint' },
+            p.prazo ? 'Prazo: ' + S.fmtDateFull(p.prazo) + ' · ' : '',
+            p.inscricoes + (p.inscricoes === 1 ? ' inscrição' : ' inscrições'),
+            p.inscricoes_novas ? ' (' + p.inscricoes_novas + ' por ver)' : ''),
         h('div', { class: 'row-actions' },
-          h('button', { class: 'btn btn-sm', type: 'button', onclick: () => verInscricoes(p) },
+          !gravacao && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => verInscricoes(p) },
             'Ver inscrições', p.inscricoes_novas ? h('span', { class: 'badge', style: { marginLeft: '6px' } }, p.inscricoes_novas) : null),
           gestor && h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => editar(p, recarregar) }, 'Editar'),
           gestor && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => apagar(p, recarregar) }, 'Eliminar'))));

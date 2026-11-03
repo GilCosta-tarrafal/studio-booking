@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 const path = require('path');
 const fs = require('fs');
-const { db } = require('../../backend/lib/db');
+const { db, alargarCheck, acrescentaColuna } = require('../../backend/lib/db');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS int_definicoes (
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS int_lancamentos (
 -- e, enquanto "aberto", o público pode manifestar interesse (int_inscricoes).
 CREATE TABLE IF NOT EXISTS int_projetos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  tipo          TEXT NOT NULL DEFAULT 'outro' CHECK (tipo IN ('talentos','album','outro')),
+  tipo          TEXT NOT NULL DEFAULT 'outro' CHECK (tipo IN ('talentos','album','gravacao','outro')),
   titulo        TEXT NOT NULL,
   resumo        TEXT NOT NULL DEFAULT '',
   descricao     TEXT NOT NULL DEFAULT '',
@@ -102,6 +102,20 @@ CREATE TABLE IF NOT EXISTS int_inscricoes (
 );
 CREATE INDEX IF NOT EXISTS idx_int_inscricoes_projeto ON int_inscricoes(projeto_id);
 `);
+
+// Gravação prolongada: um artista fica com uma sala durante um período, e
+// nesse horário o estúdio não aceita outras marcações (ver rotas/projetos.js).
+alargarCheck('int_projetos', "('talentos','album','outro')", "('talentos','album','gravacao','outro')");
+acrescentaColuna('int_projetos', 'artista', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_projetos', 'room_id', 'INTEGER');
+acrescentaColuna('int_projetos', 'data_inicio', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_projetos', 'data_fim', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_projetos', 'hora_inicio', 'INTEGER');
+acrescentaColuna('int_projetos', 'hora_fim', 'INTEGER');
+
+// Pagamentos feitos na página /pagar: com que cartão (para o recibo).
+acrescentaColuna('int_pagamentos', 'cartao_marca', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_pagamentos', 'cartao_ultimos', "TEXT NOT NULL DEFAULT ''");
 
 // ---------------------------------------------------------------- Definições
 // O que o estúdio pode mudar no painel, em Integrações.

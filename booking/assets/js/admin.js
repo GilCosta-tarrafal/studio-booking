@@ -525,8 +525,9 @@
   // ---------------------------------------------------------- Lista de marcações (componente)
   async function quickStatus(b, status, onChange) {
     try {
-      await api(`/api/admin/bookings/${b.id}/status`, { method: 'PATCH', body: { status } });
-      toast(status === 'confirmado' ? 'Pedido confirmado.' : 'Pedido recusado.');
+      const r = await api(`/api/admin/bookings/${b.id}/status`, { method: 'PATCH', body: { status } });
+      toast(r.aguarda_pagamento ? 'Pedido aceite: o cliente foi avisado de que só falta pagar.'
+        : status === 'confirmado' ? 'Pedido confirmado.' : 'Pedido recusado.');
       refreshPending();
       onChange();
     } catch (e) { toast(e.message, true); }
@@ -555,7 +556,7 @@
   // ---------------------------------------------------------- Janela: marcação
   const STATUS_MSG = {
     pedido: 'a aguardar confirmação', confirmado: 'confirmada', em_curso: 'em curso',
-    concluido: 'concluída', cancelado: 'cancelada', expirado: 'expirada',
+    concluido: 'concluída', cancelado: 'cancelada', expirado: 'expirada', aguarda_pagamento: 'aceite, à espera do pagamento',
   };
 
   function allRooms() {
@@ -634,6 +635,11 @@
           window.open(url, '_blank', 'noopener');
         },
       }, 'Enviar por WhatsApp');
+      // Recibo em PDF (no formato do estúdio: dados em Estúdios › Dados para o recibo).
+      // Fatura interna: emitir, descarregar ou anular (ver faturaAcoes).
+      const faturaBox = booking && h('span', { class: 'fat-acoes' });
+      if (faturaBox) faturaAcoes(booking, faturaBox);
+      const recibo = booking && h('a', { class: 'btn btn-outline', href: `/api/admin/bookings/${booking.id}/recibo.pdf`, download: `recibo-${booking.code}.pdf` }, 'Recibo (PDF)');
       const del = booking && h('button', {
         class: 'btn btn-danger', type: 'button',
         onclick: async () => {
@@ -681,7 +687,7 @@
       h('div', { class: 'grid-2' }, field('Método de pagamento', f.payMethod), null),
       err,
       h('div', { class: 'modal-foot' },
-        h('div', { class: 'spacer' }, del, whats),
+        h('div', { class: 'spacer' }, del, whats, recibo, faturaBox),
         h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Fechar'),
         save));
 
@@ -691,6 +697,61 @@
       return h('div', { class: 'modal-in' },
         h('div', { class: 'modal-head' }, h('h2', {}, booking ? 'Marcação' : 'Nova marcação'), booking && statusTag(booking.status)),
         h('p', { class: 'modal-sub' }, sub), form);
+    });
+  }
+
+  // ---------------------------------------------------------- Fatura (interna)
+  // Uma marcação tem no máximo uma fatura em vigor. Sem ela: "Emitir fatura"
+  // (pede o NIF e a morada do cliente). Com ela: o PDF e "Anular fatura" — o
+  // número nunca se reaproveita; depois de anular pode emitir-se outra.
+  function faturaAcoes(booking, box) {
+    const desenhar = async () => {
+      let r;
+      try { r = await api(`/api/admin/bookings/${booking.id}/fatura`); } catch (_) { box.replaceChildren(); return; }
+      if (r.fatura) {
+        const f = r.fatura;
+        const anular = async () => {
+          const motivo = window.prompt(`Anular a fatura ${f.numero_texto}? Escreva o motivo:`);
+          if (!motivo) return;
+          try {
+            await api(`/api/admin/faturas/${f.id}/anular`, { method: 'POST', body: { motivo } });
+            toast('Fatura anulada.'); desenhar();
+          } catch (ex) { toast(ex.message, true); }
+        };
+        box.replaceChildren(
+          h('a', { class: 'btn btn-outline', href: `/api/admin/faturas/${f.id}.pdf`, download: `fatura-${f.serie.replace(' ', '')}-${f.numero}.pdf` }, `Fatura ${f.numero_texto} (PDF)`),
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: anular }, 'Anular fatura'));
+      } else if (!['pedido', 'cancelado', 'expirado'].includes(booking.status)) {
+        box.replaceChildren(h('button', { class: 'btn btn-outline', type: 'button', onclick: () => emitirFatura(booking, desenhar) }, 'Emitir fatura'));
+      } else box.replaceChildren();
+    };
+    desenhar();
+  }
+
+  function emitirFatura(booking, depois) {
+    openModal((close) => {
+      const nome = h('input', { type: 'text', maxlength: 120, required: true, value: booking.client_name || '' });
+      const nif = h('input', { type: 'text', maxlength: 20, inputmode: 'numeric', placeholder: 'Vazio: consumidor final' });
+      const morada = h('input', { type: 'text', maxlength: 200 });
+      const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+      const btn = h('button', { class: 'btn', type: 'submit' }, 'Emitir fatura');
+      return h('div', { class: 'modal-in' },
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Emitir fatura')),
+        h('p', { class: 'modal-sub' }, `Marcação ${booking.code}. A fatura fica com o número seguinte da série do ano e com a taxa de IVA do estúdio. É um documento interno, sem validade fiscal.`),
+        h('form', {
+          onsubmit: async (e) => {
+            e.preventDefault(); err.hidden = true; btn.disabled = true;
+            try {
+              const r = await api(`/api/admin/bookings/${booking.id}/fatura`, { method: 'POST', body: { cliente_nome: nome.value, cliente_nif: nif.value, cliente_morada: morada.value } });
+              close(); toast(`Fatura ${r.fatura.numero_texto} emitida.`); depois();
+            } catch (ex) { err.textContent = ex.message; err.hidden = false; btn.disabled = false; }
+          },
+        },
+        h('div', { class: 'grid-2' }, field('Nome na fatura', nome), field('NIF do cliente', nif)),
+        field('Morada do cliente', morada),
+        err,
+        h('div', { class: 'modal-foot' },
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'), btn)));
     });
   }
 
