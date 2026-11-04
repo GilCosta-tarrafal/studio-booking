@@ -4,13 +4,14 @@
   "description": "Site de marcações e painel de gestão para produtor com vários estúdios",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
+    "start": "node --env-file-if-exists=.env backend/server.js",
     "start:env": "node --env-file=.env backend/server.js",
-    "dev": "node --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=comum/assets/js/dicionario.js backend/server.js --pagamentos-demo",
+    "dev": "node --env-file-if-exists=.env --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=comum/assets/js/dicionario.js backend/server.js --pagamentos-demo",
     "test": "node test/api.test.js && node test/integracoes.test.js",
     "test:integracoes": "node test/integracoes.test.js",
     "backup": "node backend/scripts/backup.js",
-    "test:frontend": "node test/frontend.test.js"
+    "test:frontend": "node test/frontend.test.js",
+    "testar-email": "node --env-file-if-exists=.env backend/scripts/testar-email.js"
   },
   "engines": {
     "node": ">=22"
@@ -21,6 +22,7 @@
     "@anthropic-ai/sdk": "^1.4.0",
     "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
+    "nodemailer": "^10.3.1",
     "pdfkit": "^0.20.2"
   },
   "devDependencies": {

@@ -197,10 +197,12 @@ router.post('/bookings', requireClient, bookingLimiter, (req, res) => {
   });
 
   const criada = create();
-  if (status === 'aguarda_pagamento') {
-    require('../lib/aviso-pagamento').avisar({ ...criada, start: U.fmtHM(criada.start_min), end: U.fmtHM(criada.end_min) }, req)
-      .catch((e) => console.error('aviso de pagamento:', e.message));
-  }
+  // O cliente recebe sempre a referência no email da conta: no aviso de
+  // pagamento, se ficar à espera dele; senão, num email só com a referência.
+  const aviso = require('../lib/aviso-pagamento');
+  const dados = { ...criada, start: U.fmtHM(criada.start_min), end: U.fmtHM(criada.end_min) };
+  (status === 'aguarda_pagamento' ? aviso.avisar(dados, req) : aviso.referencia(dados, req))
+    .catch((e) => console.error('aviso ao cliente:', e.message));
   res.status(201).json({ ok: true, booking: publicBooking(criada) });
 });
 

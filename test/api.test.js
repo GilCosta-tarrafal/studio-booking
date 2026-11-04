@@ -100,10 +100,19 @@ function futureWeekday(offset = 3) {
   clientCookie = conta.cookie;
 
   const payload = (o = {}) => ({ room_id: room1, date: day, start: '10:00', duration_minutes: 120, title: 'Single novo', ...o });
+  // Apanha os emails que o servidor manda (sem fornecedor, iriam só para o registo).
+  const notify = require('../backend/lib/notify');
+  const enviarOriginal = notify.sendEmail;
+  const emails = [];
+  notify.sendEmail = async (m) => { emails.push(m); return { sent: false, channel: 'email', provider: 'teste' }; };
   r = await call('POST', '/api/public/bookings', { body: payload() });
   ok(r.status === 201 && r.json.booking.status === 'pedido' && /^[A-Z2-9]{6}$/.test(r.json.booking.code), 'cria pedido (estado "pedido", código de 6 letras)');
   ok(r.json.booking.price === 5000, 'preço = 2500 × 2 h');
   const code = r.json.booking.code;
+  await new Promise((res) => setTimeout(res, 50));
+  notify.sendEmail = enviarOriginal;
+  const mail = emails.find((m) => m.to === 'ana@teste.cv');
+  ok(mail && mail.subject.includes(code) && mail.text.includes('Referência da marcação: ' + code), 'o cliente recebe a referência da marcação no email da conta');
 
   r = await call('POST', '/api/public/bookings', { body: payload() });
   ok(r.status === 409, 'mesmo horário → 409');
