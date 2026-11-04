@@ -798,6 +798,16 @@ body { padding-top: var(--altura-cabecalho); }
 }
 :root[data-tema="claro"] .proj-card { background: rgba(0, 0, 0, .025); }
 .proj-capa { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
+/* Várias imagens: empilhadas no mesmo sítio; a ativa aparece por cima. */
+.proj-slide { position: relative; aspect-ratio: 16 / 9; overflow: hidden; }
+.proj-slide-img { position: absolute; inset: 0; height: 100%; opacity: 0; transition: opacity 1.2s ease; }
+.proj-slide-img.ativa { opacity: 1; }
+.proj-pontos { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 6px; }
+.proj-ponto { width: 9px; height: 9px; padding: 0; border: 1px solid rgba(255, 255, 255, .8); border-radius: 50%;
+  background: rgba(0, 0, 0, .35); cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); transition: background .2s, transform .2s; }
+.proj-ponto.ativo { background: #fff; transform: scale(1.15); }
+.proj-ponto:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .proj-slide-img, .proj-ponto { transition: none; } }
 .proj-capa-vazia {
   display: grid; place-items: center; color: var(--muted);
   background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
@@ -820,6 +830,30 @@ body { padding-top: var(--altura-cabecalho); }
   padding: 0; background: var(--surface); color: var(--ink); overflow: auto;
 }
 .proj-dlg::backdrop { background: rgba(0, 0, 0, .64); }
+/* Janela do projeto (ao carregar no cartão): imagem por cima, a toda a largura. */
+.proj-dlg-largo { width: min(640px, 94vw); }
+.proj-dlg-img { margin: -22px -24px 16px; }
+.proj-dlg-img .proj-capa, .proj-dlg-img .proj-slide { border-radius: 0; }
+.proj-dlg-desc { margin: 0 0 12px; color: var(--ink); line-height: 1.55; white-space: pre-wrap; }
+.proj-dlg-in > .proj-form-foot { margin-top: 18px; }
+/* Artigos à venda: preço, unidades que restam e escolha da quantidade. */
+.proj-preco-linha { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 2px 0 0; }
+.proj-preco { font: 800 1.25rem/1.1 var(--display); color: var(--ink); }
+.proj-restam { color: var(--muted); font-size: .86rem; }
+.proj-compra { display: grid; gap: 12px; margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, .03); }
+.proj-qtd { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.proj-qtd-ctl { display: flex; align-items: center; gap: 6px; }
+.proj-qtd-ctl input { width: 4.2em; text-align: center; }
+.proj-qtd-btn { min-width: 40px; font-size: 1.1rem; }
+.proj-total { font: 800 1.35rem/1.1 var(--display); }
+.proj-erro a { color: inherit; font-weight: 600; }
+/* O cartão abre a janela: mostra que se pode carregar. */
+.proj-card-abre { cursor: pointer; transition: border-color .15s, transform .15s; }
+.proj-card-abre:hover { border-color: var(--edge); transform: translateY(-2px); }
+.proj-card-abre:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+/* No cartão, a descrição fica em 3 linhas; toda, só na janela. */
+.proj-desc-curta { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+@media (prefers-reduced-motion: reduce) { .proj-card-abre { transition: none; } .proj-card-abre:hover { transform: none; } }
 .proj-dlg-in { padding: 22px 24px 24px; }
 .proj-dlg-head { margin-bottom: 4px; }
 .proj-dlg-head h3 { font: 800 1.5rem/1.15 var(--display); letter-spacing: -.02em; margin: 8px 0 0; }

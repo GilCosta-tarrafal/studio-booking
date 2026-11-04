@@ -6,12 +6,15 @@ const U = require('../../backend/lib/util');
 const { rateLimit } = require('../../backend/lib/ratelimit');
 const stripe = require('../fornecedores/stripe');
 const cambio = require('../fornecedores/cambio');
+const loja = require('./loja');
+const { requireClient } = require('../../backend/lib/conta-auth');
 const { paraSite } = require('./lancamentos');
 const projetos = require('./projetos');
 
 const router = express.Router();
 const pagarLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 10 });
 const interesseLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 8 });
+const compraLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20 });
 
 // O que está ligado, para o site saber que botões mostrar.
 router.get('/estado', (_req, res) => {
@@ -43,10 +46,20 @@ router.get('/cambio', (req, res) => {
   res.json({ ...info, taxas: Object.fromEntries(cambio.listar().map((r) => [r.moeda, r.taxa])) });
 });
 
+// Comprar um artigo à venda (projeto "vendas"): cria a encomenda, que reserva
+// as unidades, e devolve o código para a página de pagamento (/pagar?code=…).
+router.post('/encomendas', requireClient, compraLimiter, (req, res) => {
+  const b = req.body || {};
+  const e = loja.criar(req.client, b.projeto_id, b.quantidade);
+  res.status(201).json({ code: e.code, total: e.total, pagar: '/pagar?code=' + encodeURIComponent(e.code) });
+});
+
 // Projetos colaborativos visíveis, para a secção "Participa" do site.
 router.get('/projetos', (_req, res) => {
-  res.set('Cache-Control', 'public, max-age=60');
-  res.json({ projetos: projetos.listarPublico() });
+  // Sem cache: com artigos à venda, o stock tem de estar sempre certo.
+  res.set('Cache-Control', 'no-cache');
+  // A moeda, para o site mostrar o preço dos artigos à venda.
+  res.json({ projetos: projetos.listarPublico(), moeda: getSettings().currency || '' });
 });
 
 // Alguém, a partir do site, manifesta interesse num projeto.

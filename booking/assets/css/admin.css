@@ -1253,3 +1253,21 @@ body.bloqueado #toasts { display: none; }
 .img-estado:empty { display: none; }
 .img-estado.erro { color: var(--danger); }
 @media (max-width: 600px) { .img-linha { flex-wrap: wrap; } .img-linha input { flex-basis: 100%; } }
+
+/* Várias imagens (campoImagens, em admin.js): miniaturas pela ordem do slide. */
+.imgs-lista { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.imgs-lista[hidden] { display: none; }
+.imgs-item { position: relative; width: 112px; display: grid; gap: 4px; }
+.imgs-item img, .imgs-link { width: 112px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); }
+.imgs-link { display: grid; place-items: center; color: var(--muted); font-size: .8rem; }
+.imgs-n { font-size: .74rem; color: var(--muted); }
+.imgs-acoes { display: flex; gap: 4px; }
+.imgs-acoes button { flex: 1; height: 26px; padding: 0; border: 1px solid var(--edge); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-size: .85rem; }
+.imgs-acoes button:disabled { opacity: .35; cursor: default; }
+.imgs-acoes button:hover:not(:disabled) { background: var(--mist); }
+.imgs-acoes .imgs-tirar:hover { color: var(--danger); }
+
+/* Link da música (Música › Nova música): o que se leu do link. */
+.link-lido:empty { display: none; }
+.link-lido.ok { color: var(--free-deep); }
+.link-lido.mau { color: var(--danger); }

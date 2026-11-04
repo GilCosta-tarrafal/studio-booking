@@ -105,13 +105,29 @@ CREATE INDEX IF NOT EXISTS idx_int_inscricoes_projeto ON int_inscricoes(projeto_
 
 // Gravação prolongada: um artista fica com uma sala durante um período, e
 // nesse horário o estúdio não aceita outras marcações (ver rotas/projetos.js).
-alargarCheck('int_projetos', "('talentos','album','outro')", "('talentos','album','gravacao','outro')");
+// (Cada alargamento reconhece-se pelo valor que juntou — a "marca" —, para não
+// se repetir depois de a lista crescer outra vez.)
+alargarCheck('int_projetos', "('talentos','album','outro')", "('talentos','album','gravacao','outro')", '', "'gravacao'");
+// Publicidade: um anúncio do estúdio (promoção, evento, parceria) mostrado na
+// secção "Participa" do site, com ou sem inscrições.
+alargarCheck('int_projetos', "('talentos','album','gravacao','outro')", "('talentos','album','gravacao','publicidade','outro')", '', "'publicidade'");
+// Vendas: um artigo da gravadora à venda no site (ver rotas/loja.js), com o
+// preço de cada unidade (na moeda do site, como bookings.price) e quantas há.
+// Esgotado (stock 0), sai do site.
+alargarCheck('int_projetos', "('talentos','album','gravacao','publicidade','outro')", "('talentos','album','gravacao','publicidade','vendas','outro')", '', "'vendas'");
+acrescentaColuna('int_projetos', 'preco', 'INTEGER');
+acrescentaColuna('int_projetos', 'stock', 'INTEGER');
 acrescentaColuna('int_projetos', 'artista', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_projetos', 'room_id', 'INTEGER');
 acrescentaColuna('int_projetos', 'data_inicio', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_projetos', 'data_fim', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_projetos', 'hora_inicio', 'INTEGER');
 acrescentaColuna('int_projetos', 'hora_fim', 'INTEGER');
+// Várias imagens por projeto (slide no cartão do site): a lista indicada no
+// painel (links ou imagens enviadas) e a lista já copiada para o site, em JSON.
+// capa_origem/capa continuam a ser a primeira.
+acrescentaColuna('int_projetos', 'capas_origem', "TEXT NOT NULL DEFAULT '[]'");
+acrescentaColuna('int_projetos', 'capas', "TEXT NOT NULL DEFAULT '[]'");
 
 // Pagamentos feitos na página /pagar: com que cartão (para o recibo).
 acrescentaColuna('int_pagamentos', 'cartao_marca', "TEXT NOT NULL DEFAULT ''");
@@ -123,15 +139,17 @@ const DEFINICOES = {
   // A partir de quantas reproduções um lançamento passa a "sucesso" e entra
   // em "Saíram deste estúdio".
   sucesso_plays: 100000,
-  // Durante quantos dias depois de sair um lançamento continua nas novidades.
+  // (Antigo: dias como novidade. O carrossel já não depende disto — ficam os
+  // max_novidades mais recentes —, mas o valor guardado mantém-se.)
   novidade_dias: 60,
-  // Quantos lançamentos, no máximo, entram no carrossel de novidades.
-  max_novidades: 8,
+  // Quantos lançamentos, no máximo, entram no carrossel de novidades (até 5):
+  // ficam sempre os mais recentes; entra um novo, sai o mais antigo.
+  max_novidades: 5,
 };
 const LIMITES = {
   sucesso_plays: [1, 1e12],
   novidade_dias: [1, 3650],
-  max_novidades: [1, 30],
+  max_novidades: [1, 5],
 };
 
 function lerDefinicoes() {
@@ -139,6 +157,8 @@ function lerDefinicoes() {
   for (const r of db.prepare("SELECT chave, valor FROM int_definicoes WHERE chave NOT LIKE 'estado:%'").all()) {
     if (r.chave in DEFINICOES) out[r.chave] = Number(r.valor);
   }
+  // Um valor guardado antes de o limite descer (ex.: 8 novidades) fica no máximo de agora.
+  for (const [k, [min, max]] of Object.entries(LIMITES)) out[k] = Math.min(max, Math.max(min, out[k]));
   return out;
 }
 

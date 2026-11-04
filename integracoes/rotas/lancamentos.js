@@ -2,20 +2,20 @@
 // Lançamentos das plataformas, já no formato do site: novidades para o
 // carrossel do topo e sucessos para "Saíram deste estúdio".
 const { db, lerDefinicoes } = require('../lib/base');
-const U = require('../../backend/lib/util');
 
 const CAPA_SEM_IMAGEM = '/img/logo.png';
 
 function paraSite() {
   const def = lerDefinicoes();
-  const desde = U.addDays(U.nowLocal().date, -def.novidade_dias);
   const visiveis = "visivel=1 AND removido=0";
 
-  // Novidades: o que sai em breve e o que saiu há menos de novidade_dias dias.
+  // Novidades: os max_novidades (até 5) lançamentos mais recentes pela data de
+  // lançamento, a começar pelos que ainda vão sair. Entra um novo, sai o mais
+  // antigo; nenhum sai sem outro entrar no lugar.
   const novidades = db.prepare(
-    `SELECT * FROM int_lancamentos WHERE ${visiveis} AND data != '' AND substr(data,1,10) >= ?
+    `SELECT * FROM int_lancamentos WHERE ${visiveis} AND data != ''
       ORDER BY data DESC, id DESC LIMIT ?`
-  ).all(desde, def.max_novidades).map((l) => ({
+  ).all(def.max_novidades).map((l) => ({
     titulo: l.titulo,
     artista: l.artista,
     texto: l.texto || undefined,
@@ -35,7 +35,8 @@ function paraSite() {
     streams: l.plays,
   }));
 
-  return { novidades, sucessos };
+  // max_novidades: o site corta a lista junta (esta + novidades.js) no mesmo número.
+  return { novidades, sucessos, max_novidades: def.max_novidades };
 }
 
 module.exports = { paraSite };

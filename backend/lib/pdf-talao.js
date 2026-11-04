@@ -73,18 +73,27 @@ function desenhar(doc, r, ALT) {
   tracejado();
 
   // -------------------------------------------------- Dados
-  const m = r.marcacao;
   linha('RECIBO', r.numero);
   linha('DATA', quando(r.pago_em));
-  linha('ESTÚDIO', m.studio);
-  linha('SALA', m.room);
-  linha('MARCAÇÃO', m.code);
-  linha('SESSÃO', `${m.date.split('-').reverse().join('/')} ${m.start}-${m.end}`);
-  linha('CLIENTE', m.cliente);
-  tracejado();
-
-  linha(m.servico, dinheiro(r.valor, r.moeda));
-  linha('Duração', `${m.minutos / 60} h`);
+  if (r.compra) {
+    // Compra na loja do site (rotas/loja.js): o artigo e a quantidade.
+    const c = r.compra;
+    linha('COMPRA', c.code);
+    linha('CLIENTE', c.cliente);
+    tracejado();
+    linha(c.artigo, dinheiro(r.valor, r.moeda));
+    linha('Quantidade', `${c.quantidade} × ${dinheiro(c.preco_unit, r.moeda)}`);
+  } else {
+    const m = r.marcacao;
+    linha('ESTÚDIO', m.studio);
+    linha('SALA', m.room);
+    linha('MARCAÇÃO', m.code);
+    linha('SESSÃO', `${m.date.split('-').reverse().join('/')} ${m.start}-${m.end}`);
+    linha('CLIENTE', m.cliente);
+    tracejado();
+    linha(m.servico, dinheiro(r.valor, r.moeda));
+    linha('Duração', `${m.minutos / 60} h`);
+  }
   if (r.taxa != null) {
     linha('Base', dinheiro(r.base, r.moeda));
     linha(`${r.imposto_nome} ${nf.format(r.taxa).replace(',00', '')}%`, dinheiro(r.imposto, r.moeda));

@@ -70,7 +70,24 @@ function guardarEnviada(dados) {
   return PREFIXO + nome;
 }
 
+// Descarrega uma imagem de fora (a capa lida de um link de música) e guarda-a
+// como uma imagem enviada: o painel pode mostrá-la logo, antes de guardar.
+// Aceita vários endereços e fica com o primeiro que servir (no YouTube, a
+// imagem grande nem sempre existe).
+async function guardarDeFora(urls) {
+  let ultimo = 'sem imagem';
+  for (const url of [].concat(urls).filter(Boolean)) {
+    try {
+      const res = await pedir(url, { prazoMs: 15000 });
+      if (!res.ok) { ultimo = 'resposta ' + res.status; continue; }
+      if (Number(res.headers.get('content-length')) > MAX) { ultimo = 'mais de 5 MB'; continue; }
+      return guardarEnviada(Buffer.from(await res.arrayBuffer()));
+    } catch (e) { ultimo = e.message; }
+  }
+  throw new Error('Não foi possível trazer a capa (' + ultimo + ').');
+}
+
 // Origem de capa aceite num formulário: um link, ou uma imagem já enviada.
 const eOrigemCapa = (v) => eEnviada(v) || (typeof v === 'string' && /^https?:\/\/[^\s]+$/i.test(v) && v.length <= 1000);
 
-module.exports = { baixarCapa, guardarEnviada, eOrigemCapa, MAX };
+module.exports = { baixarCapa, guardarEnviada, guardarDeFora, eOrigemCapa, MAX };

@@ -66,6 +66,12 @@ const fora = http.createServer((req, res) => {
         result: 'success', base_code: b, time_last_update_unix: 1793750400,
         rates: { CVE: 1, EUR: 0.0090689, USD: 0.01015, AOA: 9.6378, 'x1': 5, BRL: 'nada' },
       }));
+    } else if (req.url === '/musica-og') {
+      // Uma página de música com as etiquetas de pré-visualização (Open Graph).
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }).end(`<!doctype html><html><head>
+        <meta property="og:site_name" content="Boomplay"><meta property="og:title" content="Berdiana &amp; Amigos | Boomplay">
+        <meta content="${FORA}/capa-og.png" property="og:image"><meta name="music:release_date" content="2026-10-30">
+        <meta name="music:musician_description" content="Alex Aks"></head><body></body></html>`);
     } else if (req.url.startsWith('/capa')) {
       res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG);
     } else if (req.url === '/texto') {
@@ -267,7 +273,25 @@ function futureWeekday(offset = 3) {
   ok(r.status === 200 && r.json.guardados === 3 && r.json.erros.length === 1, 'feed: 3 guardados, 1 com erro (sem id) e os outros seguem');
   ok(feedAutorizacao === 'Bearer token-feed', 'o feed é pedido com o token');
   r = await call('GET', '/api/integracoes/lancamentos');
-  ok(r.json.novidades.map((n) => n.titulo).join('|') === 'Ainda Não Saiu|Nova Faixa', 'novidades: a que vem a caminho e a de hoje; a de 2023 não');
+  ok(r.json.max_novidades === 5 && r.json.novidades.length <= 5, 'novidades: no máximo 5 slides');
+  ok(r.json.novidades.slice(0, 2).map((n) => n.titulo).join('|') === 'Ainda Não Saiu|Nova Faixa', 'novidades: as mais recentes primeiro (a que vem a caminho, depois a de hoje)');
+  // Entra uma nova, sai a mais antiga: ficam sempre as 5 mais recentes.
+  const criadas = [];
+  for (let i = 1; i <= 5; i++) {
+    const m = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { titulo: 'Rodar ' + i, data: U.addDays(hoje, -i) } });
+    criadas.push(m.json.lancamento.id);
+  }
+  const titulos = async () => (await call('GET', '/api/integracoes/lancamentos')).json.novidades.map((n) => n.titulo);
+  let nv = await titulos();
+  ok(nv.join('|') === 'Ainda Não Saiu|Nova Faixa|Rodar 1|Rodar 2|Rodar 3', 'com mais de 5, ficam as 5 mais recentes (as mais antigas, e a de 2023, saem)');
+  const nova = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { titulo: 'Acabou de sair', data: hoje } });
+  criadas.push(nova.json.lancamento.id);
+  nv = await titulos();
+  ok(nv.length === 5 && nv.includes('Acabou de sair') && !nv.includes('Rodar 3'), 'entra uma nova, sai a mais antiga das 5');
+  r = await call('PUT', '/api/admin/integracoes/definicoes', { cookie, body: { max_novidades: 8 } });
+  ok(r.status === 400 && /entre 1 e 5/.test(r.json.error), 'não se podem pôr mais de 5 slides');
+  for (const id of criadas) await call('DELETE', `/api/admin/integracoes/musica/${id}`, { cookie });
+  r = await call('GET', '/api/integracoes/lancamentos');
   ok(r.json.sucessos.map((n) => n.titulo).join('|') === 'Clássico|Nova Faixa', 'sucessos, do mais ouvido para o menos');
   ok(r.json.sucessos[0].capa === '/img/logo.png', 'capa que não é imagem fica de fora (e entra o logótipo)');
 
@@ -318,6 +342,27 @@ function futureWeekday(offset = 3) {
   ok(im.status === 401, 'enviar imagens exige sessão');
   r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'talentos', titulo: 'Com imagem do PC', capa_origem: caminhoImg } });
   ok(r.status === 200 || r.status === 201, 'criar projeto com a imagem enviada');
+  // Várias imagens: o cartão do site recebe a lista, pela ordem escolhida.
+  const img2 = (await enviarImg(Buffer.concat([PNG, Buffer.from([0])]), 'image/png')).json.caminho;
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'talentos', titulo: 'Slide', capas_origem: [img2, caminhoImg, img2, 'javascript:alert(1)'] } });
+  ok(r.status === 200 || r.status === 201, 'criar projeto com várias imagens');
+  const idSlide = r.json.projeto.id;
+  let slideP = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Slide');
+  ok(slideP.capas.length === 2 && slideP.capas[0] === img2 && slideP.capas[1] === caminhoImg && slideP.capa === img2, 'o site recebe as 2 imagens pela ordem (sem repetidas nem links inválidos); a primeira é a capa');
+  r = await call('PUT', `/api/admin/integracoes/projetos/${idSlide}`, { cookie, body: { tipo: 'talentos', titulo: 'Slide', capas_origem: [caminhoImg, img2] } });
+  slideP = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Slide');
+  ok(slideP.capas[0] === caminhoImg && slideP.capas[1] === img2, 'mudar a ordem no painel muda a ordem do slide');
+  r = await call('PUT', `/api/admin/integracoes/projetos/${idSlide}`, { cookie, body: { tipo: 'talentos', titulo: 'Slide', capas_origem: Array(15).fill(0).map((_, i) => 'https://exemplo.cv/i' + i + '.jpg') } });
+  ok(JSON.parse(r.json.projeto.capas_origem).length === 10, 'no máximo 10 imagens por projeto');
+  const umaSo = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Com imagem do PC');
+  ok(umaSo.capas.length === 1 && umaSo.capas[0] === caminhoImg, 'um projeto com uma só imagem (capa_origem, como antes) continua a funcionar');
+
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'publicidade', titulo: 'Promoção de verão', resumo: '20% nas gravações', aberto: false } });
+  ok(r.status === 200 || r.status === 201, 'criar um projeto do tipo Publicidade');
+  const pub = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Promoção de verão');
+  ok(pub && pub.tipo === 'publicidade' && pub.aberto === false, 'a publicidade aparece no site, na secção Participa (sem inscrições)');
+  r = await call('POST', `/api/integracoes/projetos/${pub.id}/interesse`, { body: { nome: 'Ana', email: 'ana@x.cv' } });
+  ok(r.status === 409, 'uma publicidade não recebe inscrições, nem pedidas à mão');
   const comImg = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Com imagem do PC');
   ok(comImg && comImg.capa === caminhoImg, 'o projeto mostra no site a imagem enviada do computador');
   r = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { titulo: 'Capa do PC', artista: 'X', capa_origem: caminhoImg } });
@@ -325,6 +370,22 @@ function futureWeekday(offset = 3) {
   r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'talentos', titulo: 'Caminho inventado', capa_origem: '/capas-integracao/../../backend/data/estudio.db' } });
   const inventado = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Caminho inventado');
   ok(inventado && !inventado.capa, 'um caminho que não é de uma imagem enviada é ignorado (fica o logo)');
+
+  console.log('\nMúsica a partir do link');
+  r = await call('POST', '/api/admin/integracoes/musica/ler-link', { cookie, body: { link: FORA + '/musica-og' } });
+  ok(r.status === 200 && r.json.titulo === 'Berdiana & Amigos' && r.json.artista === 'Alex Aks' && r.json.data === '2026-10-30' && r.json.data_do_link
+    && /^\/capas-integracao\/env-[a-f0-9]{20}\.png$/.test(r.json.capa) && r.json.plataforma === 'Boomplay', 'ler o link: título, artista, data de lançamento e capa (já copiada para o site)');
+  r = await call('POST', '/api/admin/integracoes/musica/ler-link', { cookie, body: { link: 'ftp://x' } });
+  ok(r.status === 400 && /http/.test(r.json.error), 'um link que não é http(s) é recusado com explicação');
+  r = await call('POST', '/api/admin/integracoes/musica/ler-link', { cookie, body: { link: FORA + '/nao-existe' } });
+  ok(r.status === 400 && /404/.test(r.json.error), 'uma página que não existe: erro claro');
+  r = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { link: FORA + '/musica-og' } });
+  ok(r.status === 200 && r.json.lancamento.titulo === 'Berdiana & Amigos' && r.json.lancamento.artista === 'Alex Aks'
+    && r.json.lancamento.data === '2026-10-30' && /^\/capas-integracao\/env-/.test(r.json.lancamento.capa), 'guardar só com o link: a música fica com título, artista, data e capa');
+  r = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { link: FORA + '/musica-og', titulo: 'Título meu' } });
+  ok(r.json.lancamento.titulo === 'Título meu', 'o que se escreve à mão não é trocado pelo do link');
+  const { limparTituloVideo } = require('../integracoes/lib/ler-link');
+  ok(limparTituloVideo('Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)', 'Rick Astley') === 'Never Gonna Give You Up', 'no YouTube, o título perde o nome do canal e o "(Official Video)"');
 
   console.log('\nTaxas de câmbio');
   r = await call('GET', '/api/admin/integracoes', { cookie });

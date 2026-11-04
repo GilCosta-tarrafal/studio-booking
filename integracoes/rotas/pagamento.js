@@ -20,6 +20,7 @@ const U = require('../../backend/lib/util');
 const { requireClient } = require('../../backend/lib/conta-auth');
 const { rateLimit } = require('../../backend/lib/ratelimit');
 const stripe = require('../fornecedores/stripe');
+const loja = require('./loja');
 
 const router = express.Router();
 const limitador = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
@@ -34,12 +35,15 @@ const PAGAVEIS = ['aguarda_pagamento', 'confirmado', 'em_curso'];
 const r2 = (n) => Math.round(n * 100) / 100;
 const emFalta = (b) => Math.max(0, (b.price || 0) - (b.paid || 0));
 
-// A marcação tem de ser da conta com sessão iniciada.
-function marcacao(req, code) {
+// O que se vai pagar com este código: uma marcação ou uma compra da loja
+// (ver rotas/loja.js), sempre desta conta.
+function alvo(req, code) {
   const c = U.clean(String(code || ''), 12).toUpperCase();
   const b = c ? db.prepare(BOOKING_SELECT + ' WHERE b.code=?').get(c) : null;
-  if (!b || b.client_id !== req.client.id) throw erro(req.t('api.marcacaoNaoEncontrada'), 404);
-  return b;
+  if (b && b.client_id === req.client.id) return { tipo: 'marcacao', b, code: c };
+  const e = c ? loja.daConta(req.client.id, c) : null;
+  if (e) return { tipo: 'encomenda', e, code: c };
+  throw erro(req.t('api.marcacaoNaoEncontrada'), 404);
 }
 const cliente = (req) => db.prepare('SELECT * FROM clients WHERE id=?').get(req.client.id);
 const cartoes = (clientId) => db.prepare('SELECT id, marca, ultimos, mes, ano, titular, demo FROM pag_cartoes WHERE client_id=? ORDER BY id DESC').all(clientId)
@@ -76,6 +80,11 @@ function aposPagamento(bookingId, valor) {
   }
 }
 
+// O recibo de um pagamento, seja de uma marcação ou de uma compra.
+function reciboDe(pagId, clientId) {
+  return recibo(pagId, clientId) || loja.recibo(db.prepare('SELECT * FROM int_pagamentos WHERE id=?').get(pagId), clientId);
+}
+
 // O que o recibo (talão) mostra, a partir de um pagamento.
 function recibo(pagId, clientId) {
   const p = db.prepare('SELECT * FROM int_pagamentos WHERE id=?').get(pagId);
@@ -105,8 +114,8 @@ router.get('/config', (_req, res) => {
 });
 
 router.post('/marcacao', (req, res) => {
-  const b = marcacao(req, (req.body || {}).code);
-  res.json({ resumo: resumo(b), cartoes: cartoes(req.client.id), modo: modo() });
+  const a = alvo(req, (req.body || {}).code);
+  res.json({ resumo: a.tipo === 'encomenda' ? loja.resumo(a.e) : resumo(a.b), cartoes: cartoes(req.client.id), modo: modo() });
 });
 
 router.post('/cartoes/setup', limitador, async (req, res) => {
@@ -144,34 +153,48 @@ router.delete('/cartoes/:id', (req, res) => {
 
 router.post('/pagar', limitador, async (req, res) => {
   const body = req.body || {};
-  const b = marcacao(req, body.code);
-  if (!PAGAVEIS.includes(b.status) || emFalta(b) <= 0) throw erro(req.t(emFalta(b) > 0 ? 'pagar.aindaNao' : 'pagar.nadaEmFalta'));
+  const a = alvo(req, body.code);
+  const b = a.b;
+  let valor;
+  if (a.tipo === 'marcacao') {
+    if (!PAGAVEIS.includes(b.status) || emFalta(b) <= 0) throw erro(req.t(emFalta(b) > 0 ? 'pagar.aindaNao' : 'pagar.nadaEmFalta'));
+    valor = emFalta(b);
+  } else {
+    if (a.e.estado === 'pago') throw erro(req.t('pagar.nadaEmFalta'));
+    if (a.e.estado !== 'aguarda_pagamento') throw erro('A reserva desta compra expirou e o artigo esgotou entretanto.', 409);
+    valor = a.e.total;
+  }
   const cartao = db.prepare('SELECT * FROM pag_cartoes WHERE id=? AND client_id=?').get(U.toInt(body.cartao_id), req.client.id);
   if (!cartao) throw erro('Escolha um cartão.');
   const agora = new Date().toISOString();
 
   if (modo() === 'demo' && cartao.demo) {
-    const valor = emFalta(b);
     const pagId = db.transaction(() => {
       const id = db.prepare(`INSERT INTO int_pagamentos(booking_id,booking_code,fornecedor,externo_id,valor,moeda,estado,criado_em,atualizado_em,cartao_marca,cartao_ultimos)
                              VALUES(?,?,'demo',?,?,?,'pago',?,?,?,?)`)
-        .run(b.id, b.code, 'demo_pi_' + crypto.randomBytes(6).toString('hex'), valor, getSettings().currency || '', agora, agora, cartao.marca, cartao.ultimos).lastInsertRowid;
-      aposPagamento(b.id, valor);
+        .run(b ? b.id : null, a.code, 'demo_pi_' + crypto.randomBytes(6).toString('hex'), valor, getSettings().currency || '', agora, agora, cartao.marca, cartao.ultimos).lastInsertRowid;
+      if (b) aposPagamento(b.id, valor); else loja.aposPagamento(a.code);
       return id;
     })();
-    return res.json({ estado: 'pago', recibo: recibo(pagId, req.client.id) });
+    return res.json({ estado: 'pago', recibo: reciboDe(pagId, req.client.id) });
   }
   if (modo() !== 'stripe' || cartao.demo) throw erro('Os pagamentos online não estão ligados.', 503);
 
   const customer = await stripe.clienteStripe(cliente(req));
+  // Uma compra vai ao Stripe com o mesmo formato de uma marcação (código, valor
+  // em falta e descrição); quando fica paga, marcarIntentPago trata da encomenda.
+  const aPagar = b || {
+    id: null, code: a.code, price: a.e.total, paid: 0,
+    studio_name: getSettings().business_name || 'Loja', room_name: `${a.e.quantidade} × ${a.e.titulo}`,
+  };
   let pi;
-  try { pi = await stripe.pagarComCartao({ booking: b, customer, pmId: cartao.externo_id, textoMoeda: getSettings().currency }); } catch (e) {
+  try { pi = await stripe.pagarComCartao({ booking: aPagar, customer, pmId: cartao.externo_id, textoMoeda: getSettings().currency }); } catch (e) {
     throw erro(e.message && /card|cartão|declin/i.test(e.message) ? 'O pagamento foi recusado: ' + e.message : req.t('pagar.falhou'), 402);
   }
   db.prepare('UPDATE int_pagamentos SET cartao_marca=?, cartao_ultimos=? WHERE externo_id=?').run(cartao.marca, cartao.ultimos, pi.id);
   if (pi.status === 'succeeded') {
     const pag = stripe.marcarIntentPago(pi);
-    return res.json({ estado: 'pago', recibo: recibo(pag.id, req.client.id) });
+    return res.json({ estado: 'pago', recibo: reciboDe(pag.id, req.client.id) });
   }
   if (pi.status === 'requires_action') return res.json({ estado: 'acao', client_secret: pi.client_secret, intent: pi.id });
   throw erro('O pagamento não foi aceite. Experimente outro cartão.', 402);
@@ -181,23 +204,23 @@ router.post('/pagar', limitador, async (req, res) => {
 // só diz qual pagamento verificar, não o que aconteceu).
 router.post('/confirmar', limitador, async (req, res) => {
   const body = req.body || {};
-  const b = marcacao(req, body.code);
+  const a = alvo(req, body.code);
   if (modo() !== 'stripe') throw erro('Os pagamentos online não estão ligados.', 503);
   const pi = await stripe.lerIntent(String(body.intent || ''));
-  if (!pi || !pi.metadata || pi.metadata.booking_code !== b.code) throw erro('Pagamento desconhecido.', 404);
+  if (!pi || !pi.metadata || pi.metadata.booking_code !== a.code) throw erro('Pagamento desconhecido.', 404);
   if (pi.status !== 'succeeded') throw erro('O pagamento não foi concluído.', 402);
   const pag = stripe.marcarIntentPago(pi);
-  res.json({ estado: 'pago', recibo: recibo(pag.id, req.client.id) });
+  res.json({ estado: 'pago', recibo: reciboDe(pag.id, req.client.id) });
 });
 
 router.get('/recibo/:id', (req, res) => {
-  const r = recibo(U.toInt(req.params.id), req.client.id);
+  const r = reciboDe(U.toInt(req.params.id), req.client.id);
   if (!r) throw erro('Recibo não encontrado.', 404);
   res.json({ recibo: r });
 });
 
 router.get('/recibo/:id/pdf', (req, res) => {
-  const r = recibo(U.toInt(req.params.id), req.client.id);
+  const r = reciboDe(U.toInt(req.params.id), req.client.id);
   if (!r) throw erro('Recibo não encontrado.', 404);
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="recibo-pagamento-${r.numero}.pdf"` });
   require('../../backend/lib/pdf-talao').gerar(res, r);

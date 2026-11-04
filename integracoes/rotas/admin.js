@@ -35,6 +35,7 @@ module.exports = (fornecedores) => {
 
   router.put('/definicoes', auth.requireOwner, (req, res) => {
     const invalida = gravarDefinicoes(req.body);
+    if (invalida === 'max_novidades') throw new U.HttpError(400, 'O número de slides de novidades tem de ser entre 1 e 5.');
     if (invalida) throw new U.HttpError(400, `${NOMES[invalida]} tem de ser um número inteiro positivo.`);
     res.json({ definicoes: lerDefinicoes() });
   });
@@ -53,6 +54,11 @@ module.exports = (fornecedores) => {
   // preso a um estúdio); ver a lista basta ter sessão.
   router.get('/musica', (_req, res) => {
     res.json({ lancamentos: musica.listar() });
+  });
+  // Colar o link de uma música: devolve o título, o artista, a data e a capa
+  // (já copiada para o site), para o formulário se preencher sozinho.
+  router.post('/musica/ler-link', auth.requireManager, async (req, res) => {
+    res.json(await musica.lerDoLink((req.body || {}).link));
   });
   router.post('/musica', auth.requireManager, async (req, res) => {
     const r = await musica.criar(req.body);
@@ -82,6 +88,10 @@ module.exports = (fornecedores) => {
   router.delete('/projetos/:id', auth.requireManager, (req, res) => {
     if (!projetos.apagar(U.toInt(req.params.id))) throw new U.HttpError(404, 'Projeto não encontrado.');
     res.json({ ok: true });
+  });
+  // Encomendas de um artigo à venda (rotas/loja.js), para combinar a entrega.
+  router.get('/projetos/:id/encomendas', (req, res) => {
+    res.json({ encomendas: require('./loja').listar(U.toInt(req.params.id)) });
   });
   router.get('/projetos/:id/inscricoes', (req, res) => {
     res.json({ inscricoes: projetos.listarInscricoes(U.toInt(req.params.id)) });

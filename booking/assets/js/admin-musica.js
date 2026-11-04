@@ -16,7 +16,8 @@
     const novo = !l;
     l = l || {};
     const f = {
-      titulo: h('input', { type: 'text', maxlength: 160, value: l.titulo || '', required: true }),
+      // Não é obrigatório aqui: só com o link, o título vem de lá.
+      titulo: h('input', { type: 'text', maxlength: 160, value: l.titulo || '' }),
       artista: h('input', { type: 'text', maxlength: 200, value: l.artista || '' }),
       data: h('input', { type: 'date', value: (l.data || '').slice(0, 10) }),
       link: h('input', { type: 'url', maxlength: 1000, placeholder: 'https://open.spotify.com/…', value: l.link || '' }),
@@ -30,6 +31,53 @@
     };
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
 
+    // Colar o link (Spotify, YouTube…) preenche o resto: título, artista, data
+    // de lançamento, capa e formato. Só se preenche o que está vazio ou o que
+    // veio de um link anterior; o que foi escrito à mão fica.
+    const lido = h('p', { class: 'hint link-lido', 'aria-live': 'polite' });
+    const lerBtn = h('button', { class: 'btn btn-outline btn-sm', type: 'button' }, 'Ler do link');
+    const doLink = new Set();
+    let ultimoLido = '';
+    const pôr = (campo, valor) => {
+      if (!valor || (f[campo].value && !doLink.has(campo))) return false;
+      f[campo].value = valor;
+      doLink.add(campo);
+      f[campo].dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    };
+    for (const k of ['titulo', 'artista', 'data']) f[k].addEventListener('input', (e) => { if (e.isTrusted) doLink.delete(k); });
+    async function lerLink(forcar) {
+      const url = f.link.value.trim();
+      if (!/^https?:\/\/\S+$/i.test(url) || (!forcar && url === ultimoLido)) return;
+      ultimoLido = url;
+      lerBtn.disabled = true;
+      lido.className = 'hint link-lido';
+      lido.textContent = 'A ler o link…';
+      try {
+        const r = await api('/api/admin/integracoes/musica/ler-link', { method: 'POST', body: { link: url } });
+        if (f.link.value.trim() !== url) return;   // entretanto mudou
+        const feitos = [];
+        if (pôr('titulo', r.titulo)) feitos.push('título');
+        if (pôr('artista', r.artista)) feitos.push('artista');
+        if (pôr('data', r.data)) feitos.push(r.data_do_link ? 'data de lançamento' : 'data (hoje: o link não a tem)');
+        if (r.capa && (!f.capa_origem.value || doLink.has('capa_origem'))) {
+          f.capa_origem.value = r.capa; doLink.add('capa_origem');
+          f.capa_origem.dispatchEvent(new Event('input', { bubbles: true }));
+          feitos.push('capa');
+        }
+        if (r.formato !== undefined && (doLink.has('formato') || !l.id)) { f.formato.value = r.formato || ''; doLink.add('formato'); }
+        lido.className = 'hint link-lido ok';
+        lido.textContent = `Lido do ${r.plataforma}` + (feitos.length ? ': ' + feitos.join(', ') + '.' : ' (os campos já estavam preenchidos).')
+          + (r.aviso ? ' A capa não veio: ' + r.aviso : '');
+      } catch (ex) {
+        lido.className = 'hint link-lido mau';
+        lido.textContent = ex.message;
+      } finally { lerBtn.disabled = false; }
+    }
+    lerBtn.addEventListener('click', () => lerLink(true));
+    f.link.addEventListener('change', () => lerLink(false));
+    f.link.addEventListener('paste', () => setTimeout(() => lerLink(false), 0));
+
     openModal((close) => {
       const guardar = h('button', { class: 'btn', type: 'submit' }, 'Guardar');
       const form = h('form', {
@@ -37,6 +85,9 @@
           e.preventDefault();
           err.hidden = true;
           guardar.disabled = true;
+          if (!f.titulo.value.trim() && !/^https?:\/\/\S+$/i.test(f.link.value.trim())) {
+            err.textContent = 'Cole o link da música, ou escreva o título.'; err.hidden = false; guardar.disabled = false; return;
+          }
           const body = {
             titulo: f.titulo.value, artista: f.artista.value, data: f.data.value,
             link: f.link.value, capa_origem: f.capa_origem.value, formato: f.formato.value,
@@ -54,11 +105,15 @@
           finally { guardar.disabled = false; }
         },
       },
+      h('div', { class: 'field link-musica' },
+        h('label', { for: 'musica-link' }, 'Link da música (Spotify, YouTube, Apple Music, SoundCloud…)'),
+        h('div', { class: 'img-linha' }, Object.assign(f.link, { id: 'musica-link' }), lerBtn),
+        lido,
+        h('p', { class: 'hint' }, 'Cole o link: o título, o artista, a data de lançamento e a capa vêm de lá. Basta isso para a novidade; os campos abaixo podem ser corrigidos à mão.')),
       h('div', { class: 'grid-2' }, field('Título', f.titulo), field('Artista', f.artista)),
       h('div', { class: 'grid-2' },
         field('Data de lançamento', f.data, { hint: 'Enquanto recente, aparece nas novidades. Vazio: não entra nas novidades.' }),
         field('Reproduções', f.plays, { hint: 'Passando o limite definido em Integrações, entra em "Saíram deste estúdio".' })),
-      field('Link (Spotify, YouTube, Instagram…)', f.link),
       campoImagem('Imagem da capa', f.capa_origem),
       h('div', { class: 'grid-2' }, field('Formato da imagem', f.formato)),
       field('Texto (opcional)', f.texto, { hint: 'Uma linha curta mostrada no slide de novidades.' }),

@@ -7,7 +7,9 @@
 // recentes e em "Saíram deste estúdio" quando passam o limite de reproduções.
 // ---------------------------------------------------------------------------
 const { db } = require('../lib/base');
-const { baixarCapa, eOrigemCapa } = require('../lib/capas');
+const { baixarCapa, eOrigemCapa, guardarDeFora } = require('../lib/capas');
+const { lerLink } = require('../lib/ler-link');
+const U = require('../../backend/lib/util');
 const { HttpError } = require('../../backend/lib/util');
 
 const FONTE = 'manual';
@@ -66,8 +68,40 @@ async function aplicarCapa(id, url) {
   }
 }
 
+// Lê o link da música e devolve o que se tirou de lá, com a capa já copiada
+// para o site (capa = caminho no site; serve de capa_origem). Sem data no
+// link, fica a de hoje: é uma novidade.
+async function lerDoLink(url) {
+  const r = await lerLink(url);
+  let capa = '';
+  let aviso = null;
+  if (r.capa) {
+    try { capa = await guardarDeFora(r.capas || r.capa); } catch (e) { aviso = e.message; }
+  }
+  return {
+    plataforma: r.plataforma, link: r.link, titulo: r.titulo, artista: r.artista,
+    data: r.data || U.nowLocal().date, data_do_link: !!r.data, formato: r.formato, capa, aviso,
+  };
+}
+
+// Guardar só com o link: o que faltar (título, artista, data, capa, formato)
+// vem do link. O que foi escrito à mão nunca é trocado.
+async function completarDoLink(d) {
+  d = { ...(d || {}) };
+  if (!eUrl(d.link) || (texto(d.titulo, 160) && d.capa_origem && d.data)) return { d, aviso: null };
+  const r = await lerDoLink(d.link);
+  if (!texto(d.titulo, 160)) d.titulo = r.titulo;
+  if (!texto(d.artista, 200)) d.artista = r.artista;
+  if (!d.data) d.data = r.data;
+  if (!d.capa_origem && r.capa) d.capa_origem = r.capa;
+  if (!d.formato && r.formato) d.formato = r.formato;
+  return { d, aviso: r.aviso };
+}
+
 async function criar(dados) {
-  const l = normalizar(dados);
+  // Só com o link, o resto vem de lá (se o link não se ler, o erro diz porquê).
+  const { d, aviso } = !texto((dados || {}).titulo, 160) && eUrl((dados || {}).link) ? await completarDoLink(dados) : { d: dados, aviso: null };
+  const l = normalizar(d);
   const agora = new Date().toISOString();
   const externo = 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   const r = db.prepare(
@@ -75,7 +109,7 @@ async function criar(dados) {
      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(FONTE, externo, l.titulo, l.artista, l.texto, l.capa_origem, l.link, l.data, l.formato,
     l.plays, l.plays === null ? null : agora, l.visivel, agora, agora);
-  const avisoCapa = await aplicarCapa(r.lastInsertRowid, l.capa_origem);
+  const avisoCapa = (await aplicarCapa(r.lastInsertRowid, l.capa_origem)) || aviso;
   return { lancamento: obter(r.lastInsertRowid), avisoCapa };
 }
 
@@ -98,4 +132,4 @@ function apagar(id) {
   return db.prepare('DELETE FROM int_lancamentos WHERE id=? AND fonte=?').run(id, FONTE).changes;
 }
 
-module.exports = { FONTE, listar, obter, criar, editar, apagar };
+module.exports = { FONTE, listar, obter, criar, editar, apagar, lerDoLink };

@@ -53,8 +53,7 @@
   function painelDefinicoes(def, isOwner) {
     const f = {
       sucesso_plays: h('input', { type: 'number', min: 1, step: 1, value: def.sucesso_plays, disabled: !isOwner }),
-      novidade_dias: h('input', { type: 'number', min: 1, max: 3650, value: def.novidade_dias, disabled: !isOwner }),
-      max_novidades: h('input', { type: 'number', min: 1, max: 30, value: def.max_novidades, disabled: !isOwner }),
+      max_novidades: h('input', { type: 'number', min: 1, max: 5, value: def.max_novidades, disabled: !isOwner }),
     };
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
     const submit = async (e) => {
@@ -69,10 +68,9 @@
     return h('form', { class: 'panel', onsubmit: submit },
       h('h2', {}, 'Lançamentos no site'),
       !isOwner && h('p', { class: 'notice info' }, 'Só o proprietário pode alterar estas definições.'),
-      h('div', { class: 'grid-3' },
+      h('div', { class: 'grid-2' },
         field('Sucesso a partir de (reproduções)', f.sucesso_plays, { hint: 'Passando daqui, o lançamento entra em "Saíram deste estúdio".' }),
-        field('Novidade durante (dias)', f.novidade_dias, { hint: 'Quanto tempo depois de sair continua no carrossel de novidades.' }),
-        field('Máximo de novidades', f.max_novidades, { hint: 'Os lançamentos escritos à mão em novidades.js somam-se a estes.' })),
+        field('Slides de novidades (máx. 5)', f.max_novidades, { hint: 'Ficam sempre os mais recentes pela data de lançamento: entra um novo, sai o mais antigo.' })),
       err,
       isOwner && h('div', { class: 'modal-foot' }, h('button', { class: 'btn', type: 'submit' }, 'Guardar')));
   }
@@ -82,7 +80,10 @@
       return h('section', { class: 'panel' }, h('h2', {}, 'Lançamentos recebidos'),
         h('p', { class: 'hint' }, 'Ainda não chegou nenhum lançamento da plataforma. Quando chegarem, aparecem aqui e no site.'));
     }
-    const limite = new Date(Date.now() - def.novidade_dias * 864e5).toISOString().slice(0, 10);
+    // Os que estão agora no slide: os max_novidades mais recentes (como no servidor).
+    const noSlide = new Set(lista.filter((l) => l.visivel && !l.removido && l.data)
+      .sort((a, b) => (b.data === a.data ? b.id - a.id : b.data.localeCompare(a.data)))
+      .slice(0, def.max_novidades).map((l) => l.id));
     const linha = (l) => {
       const visivel = h('input', { type: 'checkbox', checked: !!l.visivel, 'aria-label': 'Mostrar no site' });
       visivel.addEventListener('change', async () => {
@@ -94,7 +95,7 @@
       const marcas = [
         l.removido ? 'retirado pela plataforma' : null,
         l.plays !== null && l.plays >= def.sucesso_plays ? 'sucesso' : null,
-        l.data && l.data.slice(0, 10) >= limite ? 'novidade' : null,
+        noSlide.has(l.id) ? 'novidade (no slide)' : null,
       ].filter(Boolean);
       return h('tr', {},
         h('td', {}, l.capa ? h('img', { src: l.capa, alt: '', width: 40, height: 40, style: { borderRadius: '4px', objectFit: 'cover' } }) : '—'),

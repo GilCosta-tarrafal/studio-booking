@@ -180,6 +180,8 @@ function marcarIntentPago(pi) {
                 VALUES(?,?,?,?,?,?,'pago',?,?)`).run(booking ? booking.id : null, code || '', ID, pi.id, valor, m, agora, agora);
   } else db.prepare("UPDATE int_pagamentos SET estado='pago', valor=?, atualizado_em=? WHERE id=?").run(valor, agora, pag.id);
   if (booking) require('../rotas/pagamento').aposPagamento(booking.id, valor);
+  // Sem marcação com este código: pode ser uma compra da loja (rotas/loja.js).
+  else if (code) require('../rotas/loja').aposPagamento(code);
   return db.prepare('SELECT * FROM int_pagamentos WHERE externo_id=?').get(pi.id);
 }
 

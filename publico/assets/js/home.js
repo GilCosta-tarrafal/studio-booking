@@ -138,7 +138,12 @@
   function renderNovidades() {
     const seccao = document.getElementById('novidades');
     const pista = document.getElementById('novidades-pista');
-    const dados = (Array.isArray(window.NOVIDADES) ? window.NOVIDADES : []).filter((n) => n && n.titulo && n.capa);
+    // No máximo MAX_NOVIDADES slides (5): os mais recentes pela data de
+    // lançamento, juntando novidades.js e o que vem do painel. Entra um novo,
+    // sai o mais antigo.
+    const dados = (Array.isArray(window.NOVIDADES) ? window.NOVIDADES : []).filter((n) => n && n.titulo && n.capa)
+      .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
+      .slice(0, maxNovidades);
     if (!seccao || !pista || !dados.length) return;
 
     // Numa segunda passagem (a língua mudou) só se redesenham os slides: os
@@ -284,9 +289,13 @@
     return [...porChave.values()];
   }
 
+  // Quantos slides de novidades, no máximo (Integrações › Máximo de novidades).
+  let maxNovidades = 5;
+
   async function juntarLancamentos() {
     let r;
     try { r = await api('/api/integracoes/lancamentos'); } catch (_) { return; }
+    if (r.max_novidades > 0) maxNovidades = Math.min(5, r.max_novidades);
     if (r.novidades && r.novidades.length) {
       window.NOVIDADES = juntar(r.novidades, window.NOVIDADES)
         .sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));

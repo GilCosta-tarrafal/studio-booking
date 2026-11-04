@@ -19,13 +19,26 @@ const { baixarCapa, eOrigemCapa } = require('../lib/capas');
 const U = require('../../backend/lib/util');
 const { HttpError } = U;
 
-const TIPOS = ['talentos', 'album', 'gravacao', 'outro'];
+const TIPOS = ['talentos', 'album', 'gravacao', 'publicidade', 'vendas', 'outro'];
 const MAX_DIAS_GRAVACAO = 366;
 const ESTADOS = ['novo', 'contactado', 'aceite', 'arquivado'];
 
 const texto = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001F]/g, ' ').trim().slice(0, max) : '');
 const eUrl = (v) => typeof v === 'string' && /^https?:\/\/[^\s]+$/i.test(v) && v.length <= 1000;
 const erro = (m, s = 400) => new HttpError(s, m);
+const MAX_IMAGENS = 10;
+// A loja (encomendas e stock) carrega-se à primeira vez, para a tabela das
+// encomendas existir já com a dos projetos criada.
+const loja = () => require('./loja');
+const lerLista = (json) => { try { const v = JSON.parse(json || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
+
+// As imagens do projeto (links ou imagens enviadas do computador), pela ordem
+// em que aparecem no slide do site. Aceita a lista nova (capas_origem) ou, de
+// quem ainda mande só uma, capa_origem. Sem repetidas, no máximo MAX_IMAGENS.
+function origens(d) {
+  const lista = Array.isArray(d.capas_origem) ? d.capas_origem : (d.capa_origem ? [d.capa_origem] : []);
+  return [...new Set(lista.filter(eOrigemCapa))].slice(0, MAX_IMAGENS);
+}
 
 // ---------------------------------------------------------------- Projetos
 function normalizar(d) {
@@ -36,19 +49,37 @@ function normalizar(d) {
   if (prazo && !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) throw erro('O prazo tem de ser no formato AAAA-MM-DD.');
   const tipo = TIPOS.includes(d.tipo) ? d.tipo : 'outro';
   const ordem = Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0;
-  if (tipo === 'gravacao') return { ...normalizarGravacao(d), titulo, ordem };
+  if (tipo === 'gravacao') return { ...normalizarGravacao(d), titulo, ordem, preco: null, stock: null };
+  // Vendas: o preço de cada unidade e a quantidade à venda são obrigatórios.
+  let preco = null;
+  let stock = null;
+  if (tipo === 'vendas') {
+    preco = Number(d.preco);
+    stock = Number(d.stock);
+    if (d.preco === '' || d.preco == null || !Number.isInteger(preco) || preco <= 0) throw erro('Indique o preço do artigo (um número inteiro maior que zero).');
+    if (d.stock === '' || d.stock == null || !Number.isInteger(stock) || stock < 0 || stock > 1e6) throw erro('Indique a quantidade à venda (um número inteiro, 0 ou mais).');
+  }
   return {
+    preco, stock,
     tipo,
     artista: '', room_id: null, data_inicio: '', data_fim: '', hora_inicio: null, hora_fim: null,
     titulo,
     resumo: texto(d.resumo, 200),
     descricao: texto(d.descricao, 2000),
     prazo,
-    capa_origem: eOrigemCapa(d.capa_origem) ? d.capa_origem : '',
-    aberto: d.aberto === undefined ? 1 : (d.aberto ? 1 : 0),
+    ...comImagens(d),
+    // Uma publicidade é só um anúncio, e um artigo compra-se: sem inscrições.
+    aberto: tipo === 'publicidade' || tipo === 'vendas' ? 0 : d.aberto === undefined ? 1 : (d.aberto ? 1 : 0),
     visivel: d.visivel === undefined ? 1 : (d.visivel ? 1 : 0),
     ordem: Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0,
   };
+}
+
+// capa_origem fica com a primeira imagem (é a "capa" de sempre); capas_origem
+// guarda a lista toda, em JSON.
+function comImagens(d) {
+  const lista = origens(d);
+  return { capa_origem: lista[0] || '', capas_origem: JSON.stringify(lista) };
 }
 
 // Gravação prolongada: artista, sala, período e horário de cada dia.
@@ -72,7 +103,7 @@ function normalizarGravacao(d) {
   return {
     tipo: 'gravacao', artista, room_id: room.id, data_inicio: ini, data_fim: fim, hora_inicio: hIni, hora_fim: hFim,
     resumo: texto(d.resumo, 200), descricao: texto(d.descricao, 2000), prazo: '',
-    capa_origem: eOrigemCapa(d.capa_origem) ? d.capa_origem : '',
+    ...comImagens(d),
     aberto: 0, visivel: 0, // é um compromisso interno: não vai para o site
   };
 }
@@ -120,33 +151,50 @@ function listarAdmin() {
     ...p,
     inscricoes: mapa[p.id] ? mapa[p.id].total : 0,
     inscricoes_novas: mapa[p.id] ? mapa[p.id].novos : 0,
+    ...(p.tipo === 'vendas' ? { vendidas: loja().vendidas(p.id), disponivel: loja().disponivel(p) } : {}),
   }));
 }
 
 // Lista para o site: só os visíveis, com o essencial para o cartão.
+// Um artigo esgotado (stock 0) sai do site.
 function listarPublico() {
-  return db.prepare("SELECT * FROM int_projetos WHERE visivel=1 AND tipo!='gravacao' ORDER BY ordem ASC, id DESC").all().map((p) => ({
+  loja().expirar();
+  return db.prepare("SELECT * FROM int_projetos WHERE visivel=1 AND tipo!='gravacao' AND NOT (tipo='vendas' AND COALESCE(stock,0)<=0) ORDER BY ordem ASC, id DESC").all().map((p) => ({
     id: p.id,
     tipo: p.tipo,
     titulo: p.titulo,
     resumo: p.resumo || undefined,
     descricao: p.descricao || undefined,
     capa: p.capa || undefined,
+    // Todas as imagens (com mais de uma, o cartão do site faz um slide).
+    capas: imagensServidas(p),
+    // Vendas: o preço e quantas unidades se podem comprar agora.
+    ...(p.tipo === 'vendas' ? { preco: p.preco, disponivel: loja().disponivel(p) } : {}),
     prazo: p.prazo || undefined,
     aberto: !!p.aberto,
   }));
 }
 
-async function aplicarCapa(id, url) {
-  if (!url) { db.prepare('UPDATE int_projetos SET capa=? WHERE id=?').run('', id); return null; }
-  try {
-    const caminho = await baixarCapa(url, 'projeto-' + id);
-    db.prepare('UPDATE int_projetos SET capa=? WHERE id=?').run(caminho, id);
-    return null;
-  } catch (e) {
-    db.prepare('UPDATE int_projetos SET capa=? WHERE id=?').run('', id);
-    return e.message;
+// As imagens já copiadas para o site. Projetos antigos (de antes de haver
+// várias) só têm a capa.
+function imagensServidas(p) {
+  const lista = lerLista(p.capas);
+  return lista.length ? lista : (p.capa ? [p.capa] : []);
+}
+
+// Copia cada imagem para o disco do site (as enviadas do computador já lá
+// estão). Uma que falhe fica de fora e não impede as outras nem a gravação;
+// devolve o aviso, ou null se correram todas bem.
+async function aplicarCapas(id, lista) {
+  const servidas = [];
+  const falhas = [];
+  for (let i = 0; i < lista.length; i++) {
+    try {
+      servidas.push(await baixarCapa(lista[i], i === 0 ? 'projeto-' + id : `projeto-${id}-${i}`));
+    } catch (e) { falhas.push(`imagem ${i + 1}: ${e.message}`); }
   }
+  db.prepare('UPDATE int_projetos SET capa=?, capas=? WHERE id=?').run(servidas[0] || '', JSON.stringify(servidas), id);
+  return falhas.length ? falhas.join(' · ') : null;
 }
 
 async function criar(dados) {
@@ -154,15 +202,15 @@ async function criar(dados) {
   const agora = new Date().toISOString();
   const id = db.transaction(() => {
     const r = db.prepare(
-      `INSERT INTO int_projetos(tipo,titulo,resumo,descricao,capa_origem,prazo,aberto,visivel,ordem,
-                                artista,room_id,data_inicio,data_fim,hora_inicio,hora_fim,criado_em,atualizado_em)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem,
-      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, agora, agora);
+      `INSERT INTO int_projetos(tipo,titulo,resumo,descricao,capa_origem,capas_origem,prazo,aberto,visivel,ordem,
+                                artista,room_id,data_inicio,data_fim,hora_inicio,hora_fim,preco,stock,criado_em,atualizado_em)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.capas_origem, p.prazo, p.aberto, p.visivel, p.ordem,
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, agora, agora);
     refazerBloqueios(r.lastInsertRowid, p);
     return r.lastInsertRowid;
   })();
-  const avisoCapa = await aplicarCapa(id, p.capa_origem);
+  const avisoCapa = await aplicarCapas(id, lerLista(p.capas_origem));
   return { projeto: obter(id), avisoCapa };
 }
 
@@ -173,13 +221,16 @@ async function editar(id, dados) {
   const agora = new Date().toISOString();
   db.transaction(() => {
     db.prepare(
-      `UPDATE int_projetos SET tipo=?, titulo=?, resumo=?, descricao=?, capa_origem=?, prazo=?, aberto=?, visivel=?, ordem=?,
-              artista=?, room_id=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, atualizado_em=? WHERE id=?`
-    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.prazo, p.aberto, p.visivel, p.ordem,
-      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, agora, id);
+      `UPDATE int_projetos SET tipo=?, titulo=?, resumo=?, descricao=?, capa_origem=?, capas_origem=?, prazo=?, aberto=?, visivel=?, ordem=?,
+              artista=?, room_id=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, preco=?, stock=?, atualizado_em=? WHERE id=?`
+    ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.capas_origem, p.prazo, p.aberto, p.visivel, p.ordem,
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, agora, id);
     refazerBloqueios(id, p);
   })();
-  const avisoCapa = p.capa_origem !== atual.capa_origem ? await aplicarCapa(id, p.capa_origem) : null;
+  // Só se voltam a copiar as imagens se a lista mudou. (Um projeto antigo só
+  // tem capa_origem: conta como uma lista dessa imagem.)
+  const antes = lerLista(atual.capas_origem).length ? atual.capas_origem : JSON.stringify(atual.capa_origem ? [atual.capa_origem] : []);
+  const avisoCapa = p.capas_origem !== antes ? await aplicarCapas(id, lerLista(p.capas_origem)) : null;
   return { projeto: obter(id), avisoCapa };
 }
 
@@ -202,6 +253,8 @@ function listarInscricoes(projetoId) {
 function registarInteresse(projetoId, d, ip) {
   const projeto = obter(projetoId);
   if (!projeto || !projeto.visivel) throw erro('Projeto não encontrado.', 404);
+  if (projeto.tipo === 'publicidade') throw erro('Esta publicidade não recebe inscrições.', 409);
+  if (projeto.tipo === 'vendas') throw erro('Este artigo compra-se; não recebe inscrições.', 409);
   if (!projeto.aberto) throw erro('Este projeto já não aceita inscrições.', 409);
   d = d || {};
   const nome = texto(d.nome, 80);

@@ -1,4 +1,6 @@
-/* Página /pagar?code=…: pagar uma marcação que o estúdio já aceitou.
+/* Página /pagar?code=…: pagar uma marcação que o estúdio já aceitou, ou uma
+   compra da loja do site (artigos à venda em "Participa"; resumo.tipo ===
+   'encomenda'). O fluxo é o mesmo; muda só o que se descreve.
    Quatro ecrãs: a carteira de cartões (com "Adicionar cartão"), a janela do
    cartão novo, o resumo com os serviços, o IVA e o total ("Pagar agora") e,
    pago, o recibo em forma de talão com "Baixar PDF".
@@ -15,6 +17,7 @@
   const cur = () => est.resumo.moeda;
   const valor = (n) => money(n, cur());
   const dia = (iso) => iso.split('-').reverse().join('/');
+  const compra = () => est.resumo && est.resumo.tipo === 'encomenda';
   const MARCAS = { visa: 'VISA', mastercard: 'mastercard', amex: 'AMEX', discover: 'DISCOVER', diners: 'DINERS', jcb: 'JCB', unionpay: 'UnionPay' };
   // Cartões de teste aceites na demonstração (os mesmos do Stripe em teste).
   const TESTE = { '4242424242424242': 'visa', '5555555555554444': 'mastercard', '4000056655665556': 'visa' };
@@ -29,7 +32,7 @@
   function aviso(msg, comConsulta) {
     ecra(h('div', { class: 'pg-cartao-vazio pg-aviso' },
       h('p', {}, msg),
-      comConsulta && h('a', { class: 'btn btn-outline', href: '/consultar?code=' + encodeURIComponent(code) }, t('pg.verMarcacao'))));
+      comConsulta && !compra() && h('a', { class: 'btn btn-outline', href: '/consultar?code=' + encodeURIComponent(code) }, t('pg.verMarcacao'))));
   }
 
   // ---------------------------------------------------------- Arranque
@@ -90,7 +93,8 @@
     ecra(
       est.modo === 'demo' && h('p', { class: 'notice info pg-demo' }, t('pg.demo')),
       h('section', { class: 'pg-painel' },
-        h('header', { class: 'pg-cab' }, h('h2', {}, t('pg.cartoes')), h('span', { class: 'pg-ref' }, `${r.code} · ${r.studio} · ${dia(r.date)}`)),
+        h('header', { class: 'pg-cab' }, h('h2', {}, t('pg.cartoes')),
+          h('span', { class: 'pg-ref' }, compra() ? `${r.code} · ${r.quantidade} × ${r.artigo}` : `${r.code} · ${r.studio} · ${dia(r.date)}`)),
         pilha,
         remover),
       seguinte);
@@ -209,14 +213,21 @@
 
     ecra(
       h('button', { class: 'pg-link pg-voltar', type: 'button', onclick: carteira }, '← ' + t('pg.voltar')),
-      h('section', { class: 'pg-painel pg-estado' },
-        h('div', { class: 'pg-estado-cab' }, h('span', { class: 'pg-visto', 'aria-hidden': 'true' }, '✓'),
-          h('div', {}, h('strong', {}, t('pg.aceite')), h('small', {}, t('pg.aceiteSub')))),
-        h('div', { class: 'pg-barra', role: 'img', 'aria-label': `${pct}%` }, h('span', { style: { width: Math.max(pct, 3) + '%' } })),
-        h('div', { class: 'pg-barra-leg' }, h('small', {}, `${t('pg.jaPago')} ${valor(r.ja_pago)}`), h('small', {}, `${t('pg.total')} ${valor(r.itens[0].valor)}`))),
+      compra()
+        // Compra: as unidades ficam reservadas enquanto se paga.
+        ? h('section', { class: 'pg-painel pg-estado' },
+          h('div', { class: 'pg-estado-cab' }, h('span', { class: 'pg-visto', 'aria-hidden': 'true' }, '✓'),
+            h('div', {}, h('strong', {}, t('pg.reservado')), h('small', {}, t('pg.reservadoSub', { min: r.reserva_min })))))
+        : h('section', { class: 'pg-painel pg-estado' },
+          h('div', { class: 'pg-estado-cab' }, h('span', { class: 'pg-visto', 'aria-hidden': 'true' }, '✓'),
+            h('div', {}, h('strong', {}, t('pg.aceite')), h('small', {}, t('pg.aceiteSub')))),
+          h('div', { class: 'pg-barra', role: 'img', 'aria-label': `${pct}%` }, h('span', { style: { width: Math.max(pct, 3) + '%' } })),
+          h('div', { class: 'pg-barra-leg' }, h('small', {}, `${t('pg.jaPago')} ${valor(r.ja_pago)}`), h('small', {}, `${t('pg.total')} ${valor(r.itens[0].valor)}`))),
       h('section', { class: 'pg-painel' },
-        linha(t('pg.codigo'), r.code), linha(t('pg.estudio'), r.studio), linha(t('pg.data'), dia(r.date)),
-        linha(t('pg.sala'), r.room), linha(t('pg.horario'), `${r.start}–${r.end}`),
+        compra()
+          ? [linha(t('pg.codigo'), r.code), linha(t('pg.artigo'), r.artigo), linha(t('pg.quantidade'), `${r.quantidade} × ${valor(r.preco_unit)}`)]
+          : [linha(t('pg.codigo'), r.code), linha(t('pg.estudio'), r.studio), linha(t('pg.data'), dia(r.date)),
+            linha(t('pg.sala'), r.room), linha(t('pg.horario'), `${r.start}–${r.end}`)],
         h('hr'),
         r.itens.map((i) => h('div', { class: 'pg-linha pg-item' }, h('span', {}, i.descricao, h('small', {}, i.detalhe)), h('strong', {}, valor(i.valor)))),
         r.ja_pago > 0 && linha(t('pg.jaPago'), '− ' + valor(r.ja_pago), 'suave'),
@@ -260,7 +271,7 @@
   }
 
   function recibo(r) {
-    const e = r.empresa, m = r.marcacao;
+    const e = r.empresa, m = r.marcacao, c = r.compra;
     const quando = new Date(r.pago_em).toLocaleString(S.I18N.locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const linha = (k, v, forte) => h('div', { class: 'tl-linha' + (forte ? ' forte' : '') }, h('span', {}, k), h('span', {}, v));
     ecra(
@@ -274,11 +285,15 @@
         h('p', { class: 'tl-titulo' }, t('pg.rTitulo').toUpperCase()),
         h('hr'),
         linha(t('pg.rRecibo').toUpperCase(), r.numero), linha(t('pg.data').toUpperCase(), quando.toUpperCase()),
-        linha(t('pg.estudio').toUpperCase(), m.studio), linha(t('pg.sala').toUpperCase(), m.room),
-        linha(t('pg.codigo').toUpperCase(), m.code), linha(t('pg.rSessao').toUpperCase(), `${dia(m.date)} ${m.start}-${m.end}`),
-        linha(t('pg.rCliente').toUpperCase(), m.cliente),
-        h('hr'),
-        linha(m.servico, valor(r.valor)), linha(t('pg.rDuracao'), `${m.minutos / 60} h`),
+        c
+          ? [linha(t('pg.rCompra').toUpperCase(), c.code), linha(t('pg.rCliente').toUpperCase(), c.cliente),
+            h('hr'),
+            linha(c.artigo, valor(r.valor)), linha(t('pg.quantidade'), `${c.quantidade} × ${valor(c.preco_unit)}`)]
+          : [linha(t('pg.estudio').toUpperCase(), m.studio), linha(t('pg.sala').toUpperCase(), m.room),
+            linha(t('pg.codigo').toUpperCase(), m.code), linha(t('pg.rSessao').toUpperCase(), `${dia(m.date)} ${m.start}-${m.end}`),
+            linha(t('pg.rCliente').toUpperCase(), m.cliente),
+            h('hr'),
+            linha(m.servico, valor(r.valor)), linha(t('pg.rDuracao'), `${m.minutos / 60} h`)],
         r.taxa != null && linha(t('pg.rBase'), valor(r.base)),
         r.taxa != null && linha(`${r.imposto_nome} ${String(r.taxa).replace('.', ',')}%`, valor(r.imposto)),
         h('hr'),
@@ -293,7 +308,8 @@
         h('p', { class: 'tl-obrigado' }, t('pg.obrigado', { nome: e.nome }))),
       h('div', { class: 'pg-acoes' },
         h('a', { class: 'btn btn-lg', href: `/api/pagamento/recibo/${r.id}/pdf`, download: `recibo-pagamento-${r.numero}.pdf` }, t('pg.baixar')),
-        h('a', { class: 'btn btn-outline btn-lg', href: '/consultar?code=' + encodeURIComponent(m.code) }, t('pg.verMarcacao'))));
+        c ? h('a', { class: 'btn btn-outline btn-lg', href: '/#projetos' }, t('pg.voltarLoja'))
+          : h('a', { class: 'btn btn-outline btn-lg', href: '/consultar?code=' + encodeURIComponent(m.code) }, t('pg.verMarcacao'))));
   }
 
   iniciar();

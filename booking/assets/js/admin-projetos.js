@@ -6,9 +6,9 @@
   const S = window.Studio;
   const A = window.Admin;
   const { h, waLink } = S;
-  const { app, api, toast, field, campoImagem, pageHead, openModal } = A;
+  const { app, api, toast, field, campoImagens, pageHead, openModal } = A;
 
-  const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['gravacao', 'Gravação prolongada (com artista)'], ['outro', 'Outro']];
+  const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['gravacao', 'Gravação prolongada (com artista)'], ['publicidade', 'Publicidade'], ['vendas', 'Vendas (artigo à venda)'], ['outro', 'Outro']];
   const ddmm = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
   const hm = (min) => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
 
@@ -40,8 +40,15 @@
       resumo: h('input', { type: 'text', maxlength: 200, value: p.resumo || '' }),
       descricao: h('textarea', { maxlength: 2000 }, p.descricao || ''),
       prazo: h('input', { type: 'date', value: p.prazo || '' }),
-      capa_origem: h('input', { type: 'url', maxlength: 1000, placeholder: 'https://…/imagem.jpg', value: p.capa_origem || '' }),
+      // Várias imagens: a lista guardada ou, num projeto antigo, a única que tinha.
+      imagens: campoImagens('Imagens', (() => {
+        try { const l = JSON.parse(p.capas_origem || '[]'); if (Array.isArray(l) && l.length) return l; } catch (_) { /* antiga */ }
+        return p.capa_origem ? [p.capa_origem] : [];
+      })()),
       ordem: h('input', { type: 'number', step: 1, value: p.ordem || 0 }),
+      // Vendas: preço de cada unidade e quantas há (as duas obrigatórias).
+      preco: h('input', { type: 'number', min: 1, step: 1, value: p.preco == null ? '' : p.preco, placeholder: 'Ex.: 1500' }),
+      stock: h('input', { type: 'number', min: 0, step: 1, value: p.stock == null ? '' : p.stock, placeholder: 'Ex.: 50' }),
       aberto: h('input', { type: 'checkbox', checked: p.aberto === undefined ? true : !!p.aberto }),
       visivel: h('input', { type: 'checkbox', checked: p.visivel === undefined ? true : !!p.visivel }),
       // Gravação prolongada
@@ -55,6 +62,11 @@
     };
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
 
+    const vendidas = p.vendidas || 0;
+    const blocoVendas = h('div', { class: 'projeto-vendas' },
+      h('div', { class: 'grid-2' },
+        field(`Preço (${app.settings.currency || ''}) *`, f.preco, { hint: 'De cada unidade, com o IVA incluído.' }),
+        field('Quantidade à venda *', f.stock, { hint: vendidas ? `Já se venderam ${vendidas}. Quando chegar a 0, o artigo sai do site.` : 'Quando chegar a 0, o artigo sai do site.' })));
     // O que só faz sentido numa gravação prolongada, e o que só faz sentido
     // numa convocatória pública (prazo, inscrições, site), troca com o tipo.
     const horas = h('div', { class: 'grid-2' }, field('Das', f.hIni), field('Às', f.hFim));
@@ -68,21 +80,28 @@
       h('div', { class: 'grid-2' },
         field('Prazo (opcional)', f.prazo, { hint: 'Data limite para manifestar interesse.' }),
         field('Ordem', f.ordem, { hint: 'Menor aparece primeiro no site.' })),
-      campoImagem('Imagem', f.capa_origem),
+      f.imagens,
+      blocoVendas,
       h('div', { class: 'grid-2' },
         h('label', { class: 'check' }, f.aberto, 'Aceita inscrições'),
         h('label', { class: 'check' }, f.visivel, 'Mostrar no site')),
     ];
     const sub = h('p', { class: 'modal-sub' });
     const sync = () => {
+      const v = f.tipo.value === 'vendas';
+      f.preco.required = v; f.stock.required = v;
       const g = f.tipo.value === 'gravacao';
       blocoGravacao.hidden = !g;
       for (const el of soPublico) el.hidden = g;
+      blocoVendas.hidden = !v;   // depois do ciclo: também está em soPublico
+      // Publicidade é só um anúncio, e um artigo compra-se: sem inscrições.
+      f.aberto.closest('label').hidden = f.tipo.value === 'publicidade' || v;
       horas.hidden = f.diaInteiro.checked;
       for (const el of [f.artista, f.de, f.ate, f.sala]) el.required = g;
       sub.textContent = g
         ? 'Um artista fica com uma sala durante um período. Não aparece no site: serve para bloquear a agenda.'
-        : 'Aparece na secção "Participa" do site enquanto estiver visível. Com "aceita inscrições" ligado, o público pode manifestar interesse.';
+        : v ? 'Um artigo da gravadora à venda no site. O cliente escolhe a quantidade e paga como numa marcação; quando acabar o stock, sai do site.'
+          : 'Aparece na secção "Participa" do site enquanto estiver visível. Com "aceita inscrições" ligado, o público pode manifestar interesse.';
     };
     f.tipo.addEventListener('change', sync);
     f.diaInteiro.addEventListener('change', sync);
@@ -97,7 +116,8 @@
           guardar.disabled = true;
           const body = {
             tipo: f.tipo.value, titulo: f.titulo.value, resumo: f.resumo.value, descricao: f.descricao.value,
-            prazo: f.prazo.value, capa_origem: f.capa_origem.value, ordem: f.ordem.value,
+            prazo: f.prazo.value, capas_origem: f.imagens.valor(), ordem: f.ordem.value,
+            preco: f.preco.value, stock: f.stock.value,
             aberto: f.aberto.checked, visivel: f.visivel.checked,
             artista: f.artista.value, room_id: f.sala.value, data_inicio: f.de.value, data_fim: f.ate.value,
             dia_inteiro: f.diaInteiro.checked, hora_inicio: f.hIni.value, hora_fim: f.hFim.value,
@@ -186,14 +206,47 @@
     });
   }
 
+  // ------------------------------------------------------------ Encomendas (vendas)
+  const ESTADO_ENC = { aguarda_pagamento: ['Por pagar', 'aguarda_pagamento'], pago: ['Paga', 'confirmado'], expirado: ['Expirou', 'expirado'] };
+  function verEncomendas(p) {
+    openModal((close) => {
+      const lista = h('ul', { class: 'insc-lista' }, h('li', { class: 'hint' }, 'A carregar…'));
+      (async () => {
+        try {
+          const { encomendas } = await api(`/api/admin/integracoes/projetos/${p.id}/encomendas`);
+          lista.replaceChildren(...(encomendas.length ? encomendas.map((e) => {
+            const [nome, s] = ESTADO_ENC[e.estado] || [e.estado, ''];
+            const wa = waLink(app.settings, e.cliente_tel);
+            return h('li', { class: 'insc' },
+              h('div', { class: 'insc-head' },
+                h('strong', {}, `${e.quantidade} × · ${S.money(e.total, app.settings.currency)}`),
+                h('span', { class: 'tag', 'data-s': s }, nome)),
+              h('p', { class: 'insc-msg' }, h('strong', {}, e.cliente_nome || '—'), ' · referência ', h('code', {}, e.code),
+                ' · ', S.fmtDateFull((e.pago_em || e.criado_em).slice(0, 10))),
+              h('div', { class: 'insc-contactos' },
+                e.cliente_tel && (wa ? h('a', { href: wa, target: '_blank', rel: 'noopener' }, e.cliente_tel) : h('span', {}, e.cliente_tel)),
+                e.cliente_email && h('a', { href: 'mailto:' + e.cliente_email }, e.cliente_email)));
+          }) : [h('li', { class: 'hint' }, 'Ainda não há encomendas deste artigo.')]));
+        } catch (ex) { lista.replaceChildren(h('li', { class: 'notice error' }, ex.message)); }
+      })();
+      return h('div', { class: 'modal-in' },
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Encomendas'), h('span', { class: 'tag' }, 'Vendas')),
+        h('p', { class: 'modal-sub' }, `${p.titulo} · ${p.vendidas || 0} vendidos · ${p.stock || 0} em stock. Contacte quem comprou para combinar a entrega.`),
+        lista,
+        h('div', { class: 'modal-foot' }, h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Fechar')));
+    });
+  }
+
   // ------------------------------------------------------------ Cartão do projeto
   function cartaoProjeto(p, recarregar) {
     const gestor = ehGestor();
     const gravacao = p.tipo === 'gravacao';
     // Uma gravação prolongada nunca vai ao site: as marcas de site não se aplicam.
+    const vendas = p.tipo === 'vendas';
     const marcas = gravacao ? [] : [
       !p.visivel && h('span', { class: 'tag off' }, 'Escondido'),
-      !p.aberto && h('span', { class: 'tag' }, 'Fechado'),
+      vendas ? !(p.stock > 0) && h('span', { class: 'tag', 'data-s': 'cancelado' }, 'Esgotado')
+        : p.tipo !== 'publicidade' && !p.aberto && h('span', { class: 'tag' }, 'Fechado'),
     ].filter(Boolean);
     return h('section', { class: 'panel projeto-card' },
       p.capa && h('img', { class: 'projeto-capa', src: p.capa, alt: '', width: 84, height: 84 }),
@@ -209,12 +262,18 @@
             `${ddmm(p.data_inicio)} a ${ddmm(p.data_fim)} · `,
             p.hora_inicio === 0 && p.hora_fim === 1440 ? 'o dia inteiro' : `das ${hm(p.hora_inicio)} às ${hm(p.hora_fim)}`,
             ' · sala bloqueada')
-          : h('p', { class: 'hint' },
-            p.prazo ? 'Prazo: ' + S.fmtDateFull(p.prazo) + ' · ' : '',
-            p.inscricoes + (p.inscricoes === 1 ? ' inscrição' : ' inscrições'),
-            p.inscricoes_novas ? ' (' + p.inscricoes_novas + ' por ver)' : ''),
+          : vendas
+            ? h('p', { class: 'hint' },
+              h('strong', {}, S.money(p.preco || 0, app.settings.currency)), ' cada · ',
+              `${p.stock || 0} em stock · ${p.vendidas || 0} vendidos`,
+              p.disponivel < (p.stock || 0) ? ` · ${(p.stock || 0) - p.disponivel} reservados (por pagar)` : '')
+            : h('p', { class: 'hint' },
+              p.prazo ? 'Prazo: ' + S.fmtDateFull(p.prazo) + ' · ' : '',
+              p.inscricoes + (p.inscricoes === 1 ? ' inscrição' : ' inscrições'),
+              p.inscricoes_novas ? ' (' + p.inscricoes_novas + ' por ver)' : ''),
         h('div', { class: 'row-actions' },
-          !gravacao && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => verInscricoes(p) },
+          vendas && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => verEncomendas(p) }, 'Ver encomendas'),
+          !gravacao && !vendas && p.tipo !== 'publicidade' && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => verInscricoes(p) },
             'Ver inscrições', p.inscricoes_novas ? h('span', { class: 'badge', style: { marginLeft: '6px' } }, p.inscricoes_novas) : null),
           gestor && h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => editar(p, recarregar) }, 'Editar'),
           gestor && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => apagar(p, recarregar) }, 'Eliminar'))));

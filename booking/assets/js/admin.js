@@ -60,6 +60,83 @@
   // como usaria um link. `input` é a caixa de texto que o formulário lê.
   const IMG_MAX = 5 * 1024 * 1024;
   const IMG_TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+  // Envia um ficheiro de imagem e devolve o caminho dele no site.
+  async function enviarImagem(f) {
+    if (!IMG_TIPOS.includes(f.type)) throw new Error(`${f.name}: escolha uma imagem JPG, PNG ou WebP.`);
+    if (f.size > IMG_MAX) throw new Error(`${f.name}: tem mais de 5 MB. Escolha uma mais pequena.`);
+    const res = await fetch('/api/admin/integracoes/imagens', {
+      method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': f.type, 'X-Requested-With': 'studio' }, body: f,
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Não foi possível enviar a imagem.');
+    return d.caminho;
+  }
+
+  // Várias imagens (projetos): miniaturas pela ordem do slide, com setas para
+  // mudar a ordem e × para tirar. Juntam-se do computador (várias de uma vez,
+  // ou arrastadas) ou por link. Devolve o elemento; .valor() dá a lista.
+  function campoImagens(label, iniciais = [], { max = 10 } = {}) {
+    let lista = iniciais.filter(Boolean).slice(0, max);
+    const ficheiro = h('input', { type: 'file', accept: IMG_TIPOS.join(','), multiple: true, hidden: true });
+    const link = h('input', { type: 'text', maxlength: 1000, placeholder: 'https://…/imagem.jpg', 'aria-label': 'Link de uma imagem' });
+    const juntarLink = h('button', { class: 'btn btn-outline btn-sm', type: 'button' }, 'Juntar link');
+    const botao = h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => ficheiro.click() }, 'Escolher do computador');
+    const grelha = h('ol', { class: 'imgs-lista', 'aria-label': 'Imagens, pela ordem do slide' });
+    const estado = h('p', { class: 'hint img-estado', 'aria-live': 'polite' });
+    const aviso = (txt, mau) => { estado.textContent = txt; estado.classList.toggle('erro', !!mau); };
+    const mover = (i, d) => { const j = i + d; [lista[i], lista[j]] = [lista[j], lista[i]]; pintar(); };
+    function pintar() {
+      grelha.replaceChildren(...lista.map((v, i) => h('li', { class: 'imgs-item' },
+        // Só se pré-visualiza o que já está no site (a política de segurança não
+        // deixa mostrar imagens de outros endereços antes de as copiar).
+        v.startsWith('/') ? h('img', { src: v, alt: `Imagem ${i + 1}` }) : h('span', { class: 'imgs-link', title: v }, 'link'),
+        h('span', { class: 'imgs-n' }, i === 0 ? '1 · capa' : String(i + 1)),
+        h('div', { class: 'imgs-acoes' },
+          h('button', { type: 'button', title: 'Mostrar antes', 'aria-label': `Mostrar a imagem ${i + 1} mais cedo no slide`, disabled: i === 0, onclick: () => mover(i, -1) }, '←'),
+          h('button', { type: 'button', title: 'Mostrar depois', 'aria-label': `Mostrar a imagem ${i + 1} mais tarde no slide`, disabled: i === lista.length - 1, onclick: () => mover(i, 1) }, '→'),
+          h('button', { type: 'button', class: 'imgs-tirar', title: 'Tirar', 'aria-label': `Tirar a imagem ${i + 1}`, onclick: () => { lista.splice(i, 1); pintar(); } }, '×')))));
+      grelha.hidden = !lista.length;
+      const cheio = lista.length >= max;
+      botao.disabled = cheio; juntarLink.disabled = cheio; link.disabled = cheio;
+    }
+    async function enviarVarios(ficheiros) {
+      const fs = [...(ficheiros || [])].slice(0, max - lista.length);
+      if (!fs.length) { if (ficheiros && ficheiros.length) aviso(`No máximo ${max} imagens.`, true); return; }
+      const erros = [];
+      botao.disabled = true;
+      for (let i = 0; i < fs.length; i++) {
+        aviso(`A enviar ${i + 1} de ${fs.length}…`);
+        try { lista.push(await enviarImagem(fs[i])); pintar(); } catch (ex) { erros.push(ex.message); }
+      }
+      botao.disabled = false; ficheiro.value = '';
+      pintar();
+      if (erros.length) aviso(erros.join(' '), true);
+      else aviso(fs.length === 1 ? 'Imagem enviada. Carregue em Guardar para a usar.' : `${fs.length} imagens enviadas. Carregue em Guardar para as usar.`);
+    }
+    ficheiro.addEventListener('change', () => enviarVarios(ficheiro.files));
+    const porLink = () => {
+      const v = link.value.trim();
+      if (!v) return;
+      if (!/^https?:\/\/\S+$/i.test(v)) { aviso('O link tem de começar por http:// ou https://.', true); return; }
+      if (!lista.includes(v)) lista.push(v);
+      link.value = ''; aviso('Link junto. Ao guardar, a imagem é copiada para o site.'); pintar();
+    };
+    juntarLink.addEventListener('click', porLink);
+    link.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); porLink(); } });
+    const caixa = h('div', { class: 'img-campo' }, grelha, h('div', { class: 'img-linha' }, link, juntarLink, botao), ficheiro);
+    caixa.addEventListener('dragover', (e) => { e.preventDefault(); caixa.classList.add('arrastar'); });
+    caixa.addEventListener('dragleave', () => caixa.classList.remove('arrastar'));
+    caixa.addEventListener('drop', (e) => { e.preventDefault(); caixa.classList.remove('arrastar'); enviarVarios(e.dataTransfer && e.dataTransfer.files); });
+    pintar();
+    const id = 'f' + ++uid;
+    link.id = id;
+    const el = h('div', { class: 'field' },
+      h('label', { for: id }, label), caixa, estado,
+      h('p', { class: 'hint' }, `Até ${max} imagens (JPG, PNG ou WebP, até 5 MB cada), do computador ou por link. Com mais de uma, o cartão do site passa-as em slide, de 15 em 15 segundos. Sem nenhuma, fica o logo.`));
+    el.valor = () => lista.slice();
+    return el;
+  }
+
   function campoImagem(label, input, { hint } = {}) {
     input.type = 'text';   // aceita um link ou o caminho de uma imagem enviada
     input.placeholder = 'https://…/imagem.jpg  ou escolha do computador';
@@ -79,18 +156,11 @@
     };
     async function enviar(f) {
       if (!f) return;
-      if (!IMG_TIPOS.includes(f.type)) { estado.textContent = 'Escolha uma imagem JPG, PNG ou WebP.'; estado.classList.add('erro'); return; }
-      if (f.size > IMG_MAX) { estado.textContent = 'A imagem tem mais de 5 MB. Escolha uma mais pequena.'; estado.classList.add('erro'); return; }
       estado.classList.remove('erro');
       estado.textContent = 'A enviar ' + f.name + '…';
       botao.disabled = true;
       try {
-        const res = await fetch('/api/admin/integracoes/imagens', {
-          method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': f.type, 'X-Requested-With': 'studio' }, body: f,
-        });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(d.error || 'Não foi possível enviar a imagem.');
-        input.value = d.caminho;
+        input.value = await enviarImagem(f);
         estado.textContent = f.name + ' enviada. Carregue em Guardar para a usar.';
         pintar();
       } catch (ex) {
@@ -884,7 +954,7 @@
   }
 
   window.Admin = {
-    app, ui, views, api, toast, field, campoImagem, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
+    app, ui, views, api, toast, field, campoImagem, campoImagens, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
     bookingItem, reloadRefs, refresh: route, refreshPending, boot, renderTopBar,
   };
 })();
