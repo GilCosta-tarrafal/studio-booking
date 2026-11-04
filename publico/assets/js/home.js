@@ -335,5 +335,18 @@
     await loadBoard();
     setInterval(loadBoard, 60000);
   }
+
+  // Links do cabeçalho para secções que só aparecem com conteúdo (serviços,
+  // músicas, projetos): cada link segue o "hidden" da sua secção.
+  function ligarNav() {
+    for (const a of document.querySelectorAll('.topnav a[data-secao]')) {
+      const sec = document.getElementById(a.dataset.secao);
+      if (!sec) continue;
+      const seguir = () => { a.hidden = sec.hidden; };
+      seguir();
+      new MutationObserver(seguir).observe(sec, { attributes: true, attributeFilter: ['hidden'] });
+    }
+  }
+  ligarNav();
   main();
 })();

@@ -15,8 +15,39 @@
       h('h2', {}, f.nome, ' ', h('span', { class: 'modo ' + (f.ativo ? 'remoto' : 'presencial') }, f.ativo ? 'ligado' : 'desligado')),
       h('table', { class: 'kv-table' }, h('tbody', {},
         f.detalhes.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
+      f.conversor && conversor(),
       f.sincronizavel && h('div', { class: 'row-actions' },
-        h('button', { class: 'btn btn-sm', type: 'button', onclick: () => aoSincronizar(f.id) }, 'Sincronizar agora')));
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: () => aoSincronizar(f.id) }, f.id === 'cambio' ? 'Atualizar agora' : 'Sincronizar agora')));
+  }
+
+  // Conversor de moedas (cartão "Taxas de câmbio"), com as taxas do dia.
+  function conversor() {
+    const base = (app.settings.currency || 'EUR').toUpperCase();
+    const valor = h('input', { type: 'number', min: 0, step: 'any', value: 100, 'aria-label': 'Valor' });
+    const de = h('input', { type: 'text', maxlength: 3, value: 'EUR', class: 'cf-code-in', 'aria-label': 'De (moeda)' });
+    const para = h('input', { type: 'text', maxlength: 3, value: base === 'EUR' ? 'USD' : base, class: 'cf-code-in', 'aria-label': 'Para (moeda)' });
+    const saida = h('p', { class: 'cambio-res', 'aria-live': 'polite' });
+    const fmt = (n) => Number(n).toLocaleString('pt-PT', { maximumFractionDigits: 4 });
+    let seq = 0;
+    const calcular = async () => {
+      const n = ++seq;
+      const q = new URLSearchParams({ valor: valor.value || 0, de: de.value.trim(), para: para.value.trim() });
+      try {
+        const r = await api('/api/integracoes/cambio?' + q);
+        if (n !== seq) return;
+        saida.textContent = `${fmt(r.valor)} ${r.de} = ${fmt(r.convertido)} ${r.para}  (1 ${r.de} = ${fmt(r.taxa)} ${r.para})`;
+        saida.classList.remove('erro');
+      } catch (ex) { if (n === seq) { saida.textContent = ex.message; saida.classList.add('erro'); } }
+    };
+    for (const el of [valor, de, para]) el.addEventListener('input', calcular);
+    const trocar = h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Trocar as moedas',
+      onclick: () => { [de.value, para.value] = [para.value, de.value]; calcular(); } }, '⇄');
+    calcular();
+    return h('div', { class: 'cambio' },
+      h('h3', {}, 'Converter'),
+      h('div', { class: 'cambio-linha' }, valor, de, trocar, para),
+      saida,
+      h('p', { class: 'hint' }, h('a', { href: 'https://www.exchangerate-api.com', target: '_blank', rel: 'noopener' }, 'Rates By Exchange Rate API')));
   }
 
   function painelDefinicoes(def, isOwner) {
@@ -106,7 +137,7 @@
       const sincronizar = async (id) => {
         try {
           const r = await api(`/api/admin/integracoes/${id}/sincronizar`, { method: 'POST' });
-          toast(`${r.guardados} lançamentos atualizados.` + (r.erros.length ? ` ${r.erros.length} com erros.` : ''), r.erros.length > 0);
+          toast(r.mensagem || `${r.guardados} lançamentos atualizados.` + (r.erros.length ? ` ${r.erros.length} com erros.` : ''), r.erros.length > 0);
           A.refresh();
         } catch (ex) { toast(ex.message, true); }
       };

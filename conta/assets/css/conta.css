@@ -77,3 +77,18 @@
   color: inherit;
 }
 .conta-link .conta-nome { font-weight: 500; }
+
+/* As minhas marcações: a referência fica em destaque, com botão para copiar. */
+#marcacoes h2 { margin: 0 0 .35rem; }
+.minhas-marcacoes { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+.mm-item { padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface-2); }
+.mm-ref { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.mm-rotulo { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
+.mm-codigo { font: 700 1.35rem/1 var(--display); letter-spacing: .12em; user-select: all; }
+.mm-ref .btn { margin-left: auto; }
+.mm-quando { margin: .6rem 0 0; font-weight: 600; }
+.mm-onde { margin: .15rem 0 0; color: var(--muted); font-size: .92rem; }
+.mm-fim { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .6rem; }
+.mm-valor { font-weight: 600; }
+.mm-ver { margin-left: auto; color: inherit; font-weight: 600; }
+.mm-vazio { color: var(--muted); }

@@ -453,6 +453,38 @@ function futureWeekday(offset = 3) {
   r = await call('GET', '/api/auth/me', { cookie: a.cookie });
   ok(r.status === 401, 'depois de sair, a sessão deixa de valer');
 
+  console.log('\nBloqueio por inatividade');
+  const sha = (t) => require('crypto').createHash('sha256').update(t).digest('hex');
+  let bl = await login('dono@teste.cv', 'nova-palavra-1');
+  const hashBl = sha(bl.cookie.split('=')[1]);
+  r = await call('GET', '/api/auth/me', { cookie: bl.cookie });
+  ok(r.json.user.locked === false && r.json.bloqueio_ms === 15 * 60 * 1000, 'sessão nova: livre, com bloqueio aos 15 minutos');
+  r = await call('POST', '/api/auth/ativo', { cookie: bl.cookie });
+  ok(r.status === 200, 'o painel avisa a atividade');
+  // 17 minutos sem atividade real: os pedidos automáticos não contam.
+  db.prepare('UPDATE sessions SET active_at=? WHERE token_hash=?').run(Date.now() - 17 * 60 * 1000, hashBl);
+  r = await call('GET', '/api/admin/pending-count', { cookie: bl.cookie });
+  ok(r.status === 423, 'parado há mais de 15 minutos: o painel responde 423 (bloqueado)');
+  r = await call('GET', '/api/admin/users', { cookie: bl.cookie });
+  ok(r.status === 423, 'bloqueado também nas rotas só do proprietário');
+  r = await call('GET', '/api/auth/me', { cookie: bl.cookie });
+  ok(r.status === 200 && r.json.user.locked === true, 'o painel sabe que a sessão está bloqueada');
+  r = await call('POST', '/api/auth/ativo', { cookie: bl.cookie });
+  ok(r.status === 423, 'mexer no rato não desbloqueia: é preciso a palavra-passe');
+  r = await call('POST', '/api/auth/desbloquear', { cookie: bl.cookie, body: { password: 'errada' } });
+  ok(r.status === 400 && /Restam 4/.test(r.json.error), 'palavra-passe errada: continua bloqueado (restam 4)');
+  r = await call('POST', '/api/auth/desbloquear', { cookie: bl.cookie, body: { password: 'nova-palavra-1' } });
+  ok(r.status === 200, 'com a palavra-passe certa, desbloqueia');
+  r = await call('GET', '/api/admin/pending-count', { cookie: bl.cookie });
+  ok(r.status === 200, 'e o painel volta a responder');
+  r = await call('POST', '/api/auth/bloquear', { cookie: bl.cookie });
+  r = await call('GET', '/api/admin/pending-count', { cookie: bl.cookie });
+  ok(r.status === 423, 'o painel também pode bloquear-se de imediato');
+  for (let i = 0; i < 5; i++) r = await call('POST', '/api/auth/desbloquear', { cookie: bl.cookie, body: { password: 'errada' } });
+  ok(r.status === 401, '5 erros seguidos terminam a sessão');
+  r = await call('GET', '/api/auth/me', { cookie: bl.cookie });
+  ok(r.status === 401, 'e a sessão deixa de valer');
+
   console.log('\nLimites de pedidos');
   process.env.NODE_ENV = 'production';
   let last = 0;

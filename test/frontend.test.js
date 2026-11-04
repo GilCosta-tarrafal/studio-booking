@@ -69,6 +69,9 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(/Seg–Sex\s*09:00–21:00/.test(d.getElementById('footer-hours').textContent), 'horário resumido no rodapé "Seg–Sex 09:00–21:00"');
   ok(d.querySelectorAll('.single').length > 0 && !d.getElementById('destaques').hidden, 'carrossel dos singles visível');
   ok(d.querySelector('h1').textContent.includes('Tempo de estúdio'), 'título do herói');
+  const navTopo = [...d.querySelectorAll('.topnav a')].filter((a) => !a.hidden).map((a) => a.textContent);
+  ok(['Serviços', 'Músicas', 'Como funciona', 'Contactos', 'Consultar marcação', 'Marcar sessão'].every((x) => navTopo.includes(x)), 'cabeçalho: ' + navTopo.join(' · '));
+  ok(d.querySelector('.topnav a[href="#projetos"]').hidden === d.getElementById('projetos').hidden, 'o link Participa segue a secção (só aparece com projetos)');
   w.close();
 
   // Marcar exige conta. Cria-se uma e guarda-se o cookie de sessão no jar, para
@@ -236,6 +239,20 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   d.getElementById('lookup-form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => !d.getElementById('lookup-error').hidden, 'erro de consulta');
   ok(/Não encontrámos/.test(d.getElementById('lookup-error').textContent), 'telefone errado: mensagem de erro');
+  w.close();
+
+  // O cliente não precisa de guardar o código: fica na conta.
+  console.log('\nAs minhas marcações (conta do cliente)');
+  dom = await open('/conta', jar); w = dom.window; d = w.document;
+  await waitFor(() => d.querySelector('#lista-marcacoes .mm-codigo'), 'lista de marcações na conta');
+  ok(!d.getElementById('marcacoes').hidden && [...d.querySelectorAll('.mm-codigo')].some((c) => c.textContent === code), 'a conta mostra a referência da marcação');
+  ok([...d.querySelectorAll('.mm-ref .btn')].every((b) => b.textContent === 'Copiar'), 'cada referência tem o botão "Copiar"');
+  ok(d.querySelector('.mm-ver').getAttribute('href') === '/consultar?code=' + code, 'e um link para ver a marcação');
+  w.close();
+  dom = await open('/consultar?code=' + code, jar); w = dom.window; d = w.document;
+  await waitFor(() => !d.getElementById('result').hidden, 'marcação aberta sozinha');
+  ok(!d.getElementById('suas').hidden && d.querySelector('.sua-marcacao strong').textContent === code, 'em Consultar, com sessão, aparecem as marcações da conta');
+  ok(/Ana Silva/.test(d.getElementById('result-details').textContent), 'vindo da conta, a marcação abre sem escrever o telefone');
   w.close();
 
   // criar 2 pedidos via API para o painel, cada um da sua conta de cliente
@@ -521,6 +538,8 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   const tipoP = dlgP.querySelector('select');
   ok([...tipoP.options].some((o) => o.value === 'gravacao' && /Gravação prolongada/.test(o.textContent)), 'o tipo "Gravação prolongada (com artista)" existe');
   ok(dlgP.querySelector('.projeto-gravacao').hidden, 'os campos da gravação começam escondidos');
+  const campoImg = dlgP.querySelector('.img-campo');
+  ok(campoImg && [...campoImg.querySelectorAll('.btn')].some((b) => b.textContent === 'Escolher do computador') && campoImg.querySelector('input[type=file]'), 'a imagem do projeto pode vir do computador (botão "Escolher do computador")');
   setVal(w, tipoP, 'gravacao', 'change');
   ok(!dlgP.querySelector('.projeto-gravacao').hidden && ![...dlgP.querySelectorAll('.check')].some((c) => !c.closest('[hidden]') && /Aceita inscrições|Mostrar no site/.test(c.textContent)), 'ao escolher gravação: artista, sala e período aparecem; inscrições e site saem');
   const campoP = (rot) => [...dlgP.querySelectorAll('.field')].find((c) => c.querySelector('label') && c.querySelector('label').textContent === rot);
@@ -595,6 +614,27 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   w.location.hash = '#/acesso';
   await waitFor(() => w.location.hash === '#/painel', 'equipa reencaminhada da gestão de acesso');
   ok(true, 'a equipa é levada ao painel se tentar abrir a gestão de acesso');
+
+  // Bloqueio por inatividade: 16 minutos sem mexer → pede a palavra-passe.
+  console.log('\nBloqueio por inatividade');
+  w.localStorage.setItem('painel.atividade', String(Date.now() - 16 * 60 * 1000));
+  d.dispatchEvent(new w.Event('visibilitychange'));
+  await waitFor(() => d.querySelector('.bloq'), 'ecrã de bloqueio');
+  ok(/Painel bloqueado/.test(d.querySelector('.bloq').textContent) && /15 minutos/.test(d.querySelector('.bloq').textContent), 'ao fim de 15 minutos parado, o painel bloqueia');
+  ok(d.getElementById('root').inert === true, 'o painel por trás fica inacessível');
+  await sleep(150);
+  let rb = await fetch(base + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
+  ok(rb.status === 423, 'o servidor também bloqueou a sessão');
+  setVal(w, d.querySelector('.bloq input[type=password]'), 'errada');
+  d.querySelector('.bloq form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => !d.querySelector('.bloq .notice.error').hidden, 'erro de palavra-passe');
+  ok(/incorreta/.test(d.querySelector('.bloq .notice.error').textContent), 'palavra-passe errada: continua bloqueado');
+  setVal(w, d.querySelector('.bloq input[type=password]'), staffPw);
+  d.querySelector('.bloq form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => !d.querySelector('.bloq'), 'desbloqueio');
+  ok(d.getElementById('root').inert === false, 'com a palavra-passe certa, o painel volta');
+  rb = await fetch(base + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
+  ok(rb.status === 200, 'e o servidor volta a responder');
 
   // O Meu Perfil: abre pelo menu do chip, guarda os dados e troca a palavra-passe.
   console.log('\nO Meu Perfil');

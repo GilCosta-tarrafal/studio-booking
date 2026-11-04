@@ -7,7 +7,7 @@
 // recentes e em "Saíram deste estúdio" quando passam o limite de reproduções.
 // ---------------------------------------------------------------------------
 const { db } = require('../lib/base');
-const { baixarCapa } = require('../lib/capas');
+const { baixarCapa, eOrigemCapa } = require('../lib/capas');
 const { HttpError } = require('../../backend/lib/util');
 
 const FONTE = 'manual';
@@ -35,7 +35,7 @@ function normalizar(d) {
     data,
     plays,
     link: eUrl(d.link) ? d.link : '',
-    capa_origem: eUrl(d.capa_origem) ? d.capa_origem : '',
+    capa_origem: eOrigemCapa(d.capa_origem) ? d.capa_origem : '',
     formato: d.formato === 'video' ? 'video' : '',
     visivel: d.visivel === undefined ? 1 : (d.visivel ? 1 : 0),
   };

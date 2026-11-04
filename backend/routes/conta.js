@@ -72,7 +72,9 @@ router.post('/login', loginLimiter, (req, res) => {
     const staff = db.prepare('SELECT * FROM users WHERE email=?').get(id.toLowerCase());
     if (staff && staff.active && auth.verifyPassword(password, staff.password_hash)) {
       auth.createSession(res, staff.id);
-      return res.json({ redirect: '/admin' });
+      // Com o painel noutra porta, o endereço é o completo (ver lib/portas.js).
+      const portas = require('../lib/portas');
+      return res.json({ redirect: (portas.separado() ? portas.url('painel', req) : '') + '/admin' });
     }
   }
 

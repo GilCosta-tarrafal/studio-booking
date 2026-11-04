@@ -11,7 +11,11 @@
   let routeSeq = 0;
   let pollTimer = null;
 
-  const api = (url, opts = {}) => S.api(url, { ...opts, onUnauthorized: showLogin });
+  // 423 = sessão bloqueada por inatividade (ver admin-bloqueio.js).
+  const api = (url, opts = {}) => S.api(url, { ...opts, onUnauthorized: showLogin }).catch((e) => {
+    if (e.status === 423 && window.AdminBloqueio) window.AdminBloqueio.mostrar();
+    throw e;
+  });
 
   // ---------------------------------------------------------- Preferências (tema e idioma)
   // Guardadas no navegador de quem usa o painel. O tema vale para todo o painel;
@@ -47,6 +51,69 @@
     control.id = id;
     return h('div', { class: 'field' + (opts.class ? ' ' + opts.class : '') },
       h('label', { for: id }, label), control, opts.hint && h('p', { class: 'hint' }, opts.hint));
+  }
+
+  // Campo de imagem (capa de uma música ou de um projeto): um link, ou um
+  // ficheiro do computador — pelo botão ou arrastado para cima do campo. O
+  // ficheiro é enviado logo para o servidor (POST /api/admin/integracoes/imagens)
+  // e o campo fica com o caminho dele no site; ao guardar, o servidor usa-o
+  // como usaria um link. `input` é a caixa de texto que o formulário lê.
+  const IMG_MAX = 5 * 1024 * 1024;
+  const IMG_TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+  function campoImagem(label, input, { hint } = {}) {
+    input.type = 'text';   // aceita um link ou o caminho de uma imagem enviada
+    input.placeholder = 'https://…/imagem.jpg  ou escolha do computador';
+    const ficheiro = h('input', { type: 'file', accept: IMG_TIPOS.join(','), hidden: true });
+    const botao = h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => ficheiro.click() }, 'Escolher do computador');
+    const limpar = h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Tirar a imagem' }, 'Tirar');
+    const previa = h('img', { class: 'img-previa', alt: 'Pré-visualização da imagem', hidden: true });
+    const estado = h('p', { class: 'hint img-estado', 'aria-live': 'polite' });
+    // Só se pré-visualiza o que está no próprio site (a política de segurança
+    // não deixa mostrar imagens de outros endereços antes de as copiar).
+    const pintar = () => {
+      const v = input.value.trim();
+      const local = v.startsWith('/');
+      previa.hidden = !local;
+      if (local) previa.src = v;
+      limpar.hidden = !v;
+    };
+    async function enviar(f) {
+      if (!f) return;
+      if (!IMG_TIPOS.includes(f.type)) { estado.textContent = 'Escolha uma imagem JPG, PNG ou WebP.'; estado.classList.add('erro'); return; }
+      if (f.size > IMG_MAX) { estado.textContent = 'A imagem tem mais de 5 MB. Escolha uma mais pequena.'; estado.classList.add('erro'); return; }
+      estado.classList.remove('erro');
+      estado.textContent = 'A enviar ' + f.name + '…';
+      botao.disabled = true;
+      try {
+        const res = await fetch('/api/admin/integracoes/imagens', {
+          method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': f.type, 'X-Requested-With': 'studio' }, body: f,
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'Não foi possível enviar a imagem.');
+        input.value = d.caminho;
+        estado.textContent = f.name + ' enviada. Carregue em Guardar para a usar.';
+        pintar();
+      } catch (ex) {
+        estado.textContent = ex.message; estado.classList.add('erro');
+      } finally { botao.disabled = false; ficheiro.value = ''; }
+    }
+    ficheiro.addEventListener('change', () => enviar(ficheiro.files[0]));
+    limpar.addEventListener('click', () => { input.value = ''; estado.textContent = ''; pintar(); });
+    input.addEventListener('input', () => { estado.textContent = ''; estado.classList.remove('erro'); pintar(); });
+    const caixa = h('div', { class: 'img-campo' }, h('div', { class: 'img-linha' }, input, botao, limpar), previa, ficheiro);
+    // Arrastar um ficheiro para cima do campo também serve.
+    caixa.addEventListener('dragover', (e) => { e.preventDefault(); caixa.classList.add('arrastar'); });
+    caixa.addEventListener('dragleave', () => caixa.classList.remove('arrastar'));
+    caixa.addEventListener('drop', (e) => {
+      e.preventDefault(); caixa.classList.remove('arrastar');
+      enviar(e.dataTransfer && e.dataTransfer.files[0]);
+    });
+    pintar();
+    const id = 'f' + ++uid;
+    input.id = id;
+    return h('div', { class: 'field' },
+      h('label', { for: id }, label), caixa, estado,
+      h('p', { class: 'hint' }, hint || 'Um link ou uma imagem do seu computador (JPG, PNG ou WebP, até 5 MB). Vazio: fica o logo.'));
   }
 
   function pageHead(title, ...tools) {
@@ -92,6 +159,7 @@
   function showLogin() {
     stopPolling();
     if (window.AdminSuporte) window.AdminSuporte.parar();   // botão de auriculares e chat
+    if (window.AdminBloqueio) window.AdminBloqueio.parar();  // bloqueio por inatividade
     app.user = null;
     Object.assign(notif, { items: [], unread: 0, avisado: false, pintar: null });
     // O ecrã de entrada é sempre escuro (fotografia + cartão escuro); o tema
@@ -446,7 +514,7 @@
         st && h('span', { class: 'main-foot-sep' }, ' · '),
         st && h('span', { class: 'main-foot-studio' }, st.name)),
       h('span', { class: 'main-foot-meta' },
-        h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
+        h('a', { href: app.siteUrl, target: '_blank', rel: 'noopener' }, 'Ver o site'),
         ' · © ' + new Date().getFullYear()));
   }
 
@@ -463,7 +531,7 @@
         label, k === 'marcacoes' && h('span', { class: 'badge', id: 'pending-badge', hidden: !app.pending, 'aria-label': 'pedidos por confirmar' }, app.pending)))),
       h('div', { class: 'side-foot' },
         h('p', { class: 'who' }, `${app.user.name} (${roleLabel()})`),
-        h('a', { href: '/', target: '_blank', rel: 'noopener' }, 'Ver o site'),
+        h('a', { href: app.siteUrl, target: '_blank', rel: 'noopener' }, 'Ver o site'),
         // A palavra-passe troca-se pelo chip da barra de topo, igual para todos.
         h('button', { type: 'button', onclick: logout }, 'Sair')));
     // Todos os perfis (agente, administrador, responsável) ganham a mesma barra
@@ -518,6 +586,9 @@
     app.user = me.user;
     app.today = me.today;
     app.settings = me.settings;
+    app.siteUrl = me.site_url || '/';   // o site pode estar noutra porta
+    // Sessão já bloqueada por inatividade: pede a palavra-passe antes de carregar.
+    if (me.user.locked && window.AdminBloqueio) await window.AdminBloqueio.pedir(me.user, me.bloqueio_ms);
     try {
       await reloadRefs();
       app.pending = (await api('/api/admin/pending-count')).pending;
@@ -531,6 +602,7 @@
     route();
     loadNotifs();
     if (window.AdminSuporte) window.AdminSuporte.iniciar();   // ver admin-suporte.js
+    if (window.AdminBloqueio) window.AdminBloqueio.iniciar(me.bloqueio_ms);   // ver admin-bloqueio.js
   }
   window.addEventListener('hashchange', route);
 
@@ -812,7 +884,7 @@
   }
 
   window.Admin = {
-    app, ui, views, api, toast, field, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
+    app, ui, views, api, toast, field, campoImagem, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
     bookingItem, reloadRefs, refresh: route, refreshPending, boot, renderTopBar,
   };
 })();

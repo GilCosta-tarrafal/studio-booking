@@ -39,7 +39,7 @@
 
 <!-- Faixa de abertura: as mesmas fotografias em slides da entrada, agora só
      atrás do cabeçalho e do título. O formulário, por baixo, fica em fundo limpo. -->
-<div class="hero hero-curto on-dark">
+<div class="hero hero-curto hero-centro on-dark">
   <div class="hero-slides" aria-hidden="true">
     <div class="hero-slide"></div>
     <div class="hero-slide"></div>
@@ -53,6 +53,13 @@
 
 <main id="conteudo" class="container lookup">
   <div id="pagar-msg" class="notice info" role="status" hidden></div>
+
+  <!-- Com sessão de cliente iniciada: as marcações da conta, para escolher sem o código (ver lookup.js). -->
+  <section id="suas" class="lookup-card suas-marcacoes" hidden>
+    <h2 class="section-title" data-i18n="consultar.suas">As suas marcações</h2>
+    <p class="hint" data-i18n="consultar.suasLead">Tem sessão iniciada: escolha a marcação, sem escrever o código.</p>
+    <div id="suas-lista" class="suas-lista"></div>
+  </section>
 
   <form id="lookup-form" novalidate>
     <div class="field-row">

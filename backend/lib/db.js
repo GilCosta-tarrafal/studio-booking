@@ -313,6 +313,10 @@ acrescentaColuna('users', 'last_seen_at', 'TEXT');
 acrescentaColuna('users', 'password_changed_at', 'TEXT');
 // Última vez que a pessoa abriu o sininho: o que for mais recente está "por ler".
 acrescentaColuna('users', 'notif_seen_at', 'TEXT');
+// Bloqueio do painel por inatividade (ver lib/auth.js): última atividade real
+// da sessão (ms) e se está bloqueada à espera da palavra-passe.
+acrescentaColuna('sessions', 'active_at', 'INTEGER');
+acrescentaColuna('sessions', 'locked', 'INTEGER NOT NULL DEFAULT 0');
 // Conta de cliente que fez a marcação. Vazio (null) nas marcações antigas,
 // feitas antes de haver contas, e nas criadas pela equipa no painel. ON DELETE
 // SET NULL: apagar a conta não apaga o histórico de marcações do estúdio.

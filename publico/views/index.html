@@ -36,9 +36,15 @@
   <div class="container">
     <nav class="topbar" aria-label="Principal" data-i18n-attr="aria-label:nav.principal">
       <a class="brand" href="/"><img class="brand-mark" src="/img/logo.png" alt="" width="34" height="34"><span>{{NAME}}</span></a>
+      <!-- Os links com data-secao só aparecem quando essa secção tem conteúdo (ver home.js). -->
       <div class="topnav">
-        <a href="#servicos" data-i18n="nav.servicos">Serviços</a>
+        <a href="#servicos" data-secao="servicos" hidden data-i18n="nav.servicos">Serviços</a>
+        <a href="#destaques" data-secao="destaques" hidden data-i18n="nav.musicas">Músicas</a>
+        <a href="#projetos" data-secao="projetos" hidden data-i18n="nav.participa">Participa</a>
+        <a href="#como" class="nav-extra" data-i18n="nav.como">Como funciona</a>
+        <a href="#contactos" class="nav-extra" data-i18n="nav.contactos">Contactos</a>
         <a href="/consultar" data-i18n="nav.consultar">Consultar marcação</a>
+        <a class="btn btn-sm" href="/marcar" data-i18n="nav.marcar">Marcar sessão</a>
       </div>
       <div class="topacoes">
         {{PREFS}}
@@ -121,7 +127,7 @@
     </div>
   </section>
 
-  <section class="section section-fim" aria-labelledby="t-como">
+  <section class="section section-fim" id="como" aria-labelledby="t-como">
     <div class="container">
       <h2 id="t-como" data-i18n="como.titulo">Como funciona</h2>
       <ol class="steps">
@@ -150,7 +156,7 @@
       </ul>
     </nav>
 
-    <div>
+    <div id="contactos">
       <h3 data-i18n="rodape.contactos">Contactos</h3>
       <ul class="contact-list" id="contacts"><li class="fine" data-i18n="rodape.semContactos">Use o formulário de marcação para falar com o estúdio.</li></ul>
     </div>

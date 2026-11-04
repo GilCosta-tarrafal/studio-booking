@@ -15,7 +15,7 @@
 // o projeto não se guarda e o erro diz quais são, para as resolver primeiro.
 // ---------------------------------------------------------------------------
 const { db } = require('../lib/base');
-const { baixarCapa } = require('../lib/capas');
+const { baixarCapa, eOrigemCapa } = require('../lib/capas');
 const U = require('../../backend/lib/util');
 const { HttpError } = U;
 
@@ -44,7 +44,7 @@ function normalizar(d) {
     resumo: texto(d.resumo, 200),
     descricao: texto(d.descricao, 2000),
     prazo,
-    capa_origem: eUrl(d.capa_origem) ? d.capa_origem : '',
+    capa_origem: eOrigemCapa(d.capa_origem) ? d.capa_origem : '',
     aberto: d.aberto === undefined ? 1 : (d.aberto ? 1 : 0),
     visivel: d.visivel === undefined ? 1 : (d.visivel ? 1 : 0),
     ordem: Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0,
@@ -72,7 +72,7 @@ function normalizarGravacao(d) {
   return {
     tipo: 'gravacao', artista, room_id: room.id, data_inicio: ini, data_fim: fim, hora_inicio: hIni, hora_fim: hFim,
     resumo: texto(d.resumo, 200), descricao: texto(d.descricao, 2000), prazo: '',
-    capa_origem: eUrl(d.capa_origem) ? d.capa_origem : '',
+    capa_origem: eOrigemCapa(d.capa_origem) ? d.capa_origem : '',
     aberto: 0, visivel: 0, // é um compromisso interno: não vai para o site
   };
 }

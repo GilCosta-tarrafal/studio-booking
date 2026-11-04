@@ -6,7 +6,7 @@
   const S = window.Studio;
   const A = window.Admin;
   const { h, waLink } = S;
-  const { app, api, toast, field, pageHead, openModal } = A;
+  const { app, api, toast, field, campoImagem, pageHead, openModal } = A;
 
   const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['gravacao', 'Gravação prolongada (com artista)'], ['outro', 'Outro']];
   const ddmm = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
@@ -68,7 +68,7 @@
       h('div', { class: 'grid-2' },
         field('Prazo (opcional)', f.prazo, { hint: 'Data limite para manifestar interesse.' }),
         field('Ordem', f.ordem, { hint: 'Menor aparece primeiro no site.' })),
-      field('Imagem (link)', f.capa_origem, { hint: 'Copiada para o site. Vazio: fica o logo.' }),
+      campoImagem('Imagem', f.capa_origem),
       h('div', { class: 'grid-2' },
         h('label', { class: 'check' }, f.aberto, 'Aceita inscrições'),
         h('label', { class: 'check' }, f.visivel, 'Mostrar no site')),

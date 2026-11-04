@@ -5,6 +5,7 @@ const { db, getSettings, BOOKING_SELECT } = require('../../backend/lib/db');
 const U = require('../../backend/lib/util');
 const { rateLimit } = require('../../backend/lib/ratelimit');
 const stripe = require('../fornecedores/stripe');
+const cambio = require('../fornecedores/cambio');
 const { paraSite } = require('./lancamentos');
 const projetos = require('./projetos');
 
@@ -22,6 +23,24 @@ router.get('/lancamentos', (_req, res) => {
   // um lançamento novo demore a aparecer.
   res.set('Cache-Control', 'public, max-age=60');
   res.json(paraSite());
+});
+
+// Taxas de câmbio (atualizadas 1×/dia, ver fornecedores/cambio.js).
+//   /cambio                         -> todas as taxas, em relação à moeda base
+//   /cambio?valor=10&de=EUR&para=CVE -> o valor convertido
+router.get('/cambio', (req, res) => {
+  const info = cambio.info();
+  res.set('Cache-Control', 'public, max-age=600');
+  if (req.query.de || req.query.para || req.query.valor) {
+    const de = String(req.query.de || info.base).toUpperCase().slice(0, 3);
+    const para = String(req.query.para || info.base).toUpperCase().slice(0, 3);
+    const valor = req.query.valor === undefined ? 1 : Number(req.query.valor);
+    if (!Number.isFinite(valor)) throw new U.HttpError(400, 'Valor inválido.');
+    const t = cambio.taxa(de, para);
+    if (t === null) throw new U.HttpError(404, `Sem taxa de câmbio para ${de} → ${para}.`);
+    return res.json({ valor, de, para, taxa: t, convertido: valor * t, atualizado_em: info.atualizado_em });
+  }
+  res.json({ ...info, taxas: Object.fromEntries(cambio.listar().map((r) => [r.moeda, r.taxa])) });
 });
 
 // Projetos colaborativos visíveis, para a secção "Participa" do site.

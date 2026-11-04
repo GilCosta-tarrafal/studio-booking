@@ -199,6 +199,24 @@ No painel, em **Integrações**, o cartão **YouTube** mostra quantas músicas j
 
 ---
 
+## Taxas de câmbio
+
+Vai buscar as taxas de câmbio **uma vez por dia** (e logo ao arrancar, se as que tem forem de outro dia), para o sistema converter valores entre moedas quando for preciso. Está **ligada sem configurar nada**: usa o acesso aberto da [ExchangeRate-API](https://www.exchangerate-api.com) (`open.er-api.com`), gratuito, sem chave, com mais de 160 moedas (CVE, EUR, USD, AOA, BRL, XOF...).
+
+As taxas guardam-se em relação à moeda das Definições (a "base"). Se a moeda mudar, a próxima verificação (de hora a hora) vai buscar tudo de novo nessa base. No painel, em Integrações, vê-se a última atualização, as taxas principais, um conversor e o botão "Atualizar agora".
+
+Para converter:
+
+- **No backend:** `require('./integracoes').cambio.converter(100, 'EUR', 'CVE')` (devolve `null` se não houver taxa para uma das moedas).
+- **Pelo site ou pelo painel:** `GET /api/integracoes/cambio?valor=100&de=EUR&para=CVE` → `{ convertido, taxa, atualizado_em }`. Sem parâmetros, devolve todas as taxas do dia.
+
+Os termos do serviço pedem que, onde as taxas aparecem, se indique a fonte ("Rates By Exchange Rate API"); o conversor do painel já o faz.
+
+| Variável | Para quê |
+| --- | --- |
+| `CAMBIO=off` | Desliga a integração (servidores sem saída para a internet). |
+| `CAMBIO_API_URL` | Outro servidor compatível (ou um falso, nos testes). |
+
 ## Acrescentar outra integração
 
 1. Crie `fornecedores/<nome>.js`, que exporta:

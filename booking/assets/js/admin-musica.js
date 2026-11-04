@@ -6,7 +6,7 @@
   const S = window.Studio;
   const A = window.Admin;
   const { h } = S;
-  const { app, api, toast, field, pageHead, openModal } = A;
+  const { app, api, toast, field, campoImagem, pageHead, openModal } = A;
 
   const numero = (n) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-PT'));
   const ehGestor = () => !app.user.studio_id;
@@ -59,9 +59,8 @@
         field('Data de lançamento', f.data, { hint: 'Enquanto recente, aparece nas novidades. Vazio: não entra nas novidades.' }),
         field('Reproduções', f.plays, { hint: 'Passando o limite definido em Integrações, entra em "Saíram deste estúdio".' })),
       field('Link (Spotify, YouTube, Instagram…)', f.link),
-      h('div', { class: 'grid-2' },
-        field('Imagem da capa (link)', f.capa_origem, { hint: 'Copiada para o site. Vazio: fica o logo.' }),
-        field('Formato da imagem', f.formato)),
+      campoImagem('Imagem da capa', f.capa_origem),
+      h('div', { class: 'grid-2' }, field('Formato da imagem', f.formato)),
       field('Texto (opcional)', f.texto, { hint: 'Uma linha curta mostrada no slide de novidades.' }),
       h('label', { class: 'check' }, f.visivel, 'Mostrar no site'),
       err,

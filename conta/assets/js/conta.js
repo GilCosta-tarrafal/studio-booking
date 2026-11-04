@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { api, t, h, icone } = window.Studio;
+  const { api, t, h, icone, tr, fmtDate, money, statusTag } = window.Studio;
   const $ = (id) => document.getElementById(id);
 
   // Põe um botão de olho dentro de um campo de palavra-passe, para a ver em
@@ -42,6 +42,62 @@
     $('sessao-ola').textContent = t('conta.jaComSessao', { nome: cliente.name });
   }
 
+  // As marcações da conta, das mais recentes para as antigas, cada uma com a
+  // referência à vista e um botão para a copiar. Assim o cliente nunca perde o
+  // código: está sempre aqui enquanto tiver a conta.
+  let marcacoes = null;
+  let moeda = '';
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  async function copiar(code, botao) {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch (_) {
+      // Sem acesso à área de transferência (http sem ser localhost): seleciona o código.
+      const sel = window.getSelection();
+      const r = document.createRange();
+      r.selectNodeContents(botao.parentNode.querySelector('.mm-codigo'));
+      sel.removeAllRanges(); sel.addRange(r);
+      return;
+    }
+    botao.textContent = t('conta.copiado');
+    setTimeout(() => { botao.textContent = t('conta.copiar'); }, 1800);
+  }
+
+  function pintarMarcacoes() {
+    const ul = $('lista-marcacoes');
+    if (!marcacoes) return;
+    ul.replaceChildren();
+    if (!marcacoes.length) { ul.append(h('li', { class: 'mm-vazio' }, t('conta.semMarcacoes'))); return; }
+    for (const b of marcacoes) {
+      const copiarBtn = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: (e) => copiar(b.code, e.currentTarget) }, t('conta.copiar'));
+      ul.append(h('li', { class: 'mm-item' },
+        h('div', { class: 'mm-ref' },
+          h('span', { class: 'mm-rotulo' }, t('conta.referencia')),
+          h('strong', { class: 'mm-codigo' }, b.code),
+          copiarBtn),
+        h('p', { class: 'mm-quando' }, cap(fmtDate(b.date)) + ' · ' + t('linha.horas', { de: b.start, ate: b.end })),
+        h('p', { class: 'mm-onde' }, tr(b, 'studio_name') + ' · ' + tr(b, 'room_name')
+          + (b.service_name ? ' · ' + tr(b, 'service_name') : '')),
+        h('div', { class: 'mm-fim' },
+          statusTag(b.status),
+          b.price > 0 && h('span', { class: 'mm-valor' }, money(b.price, moeda)),
+          h('a', { class: 'mm-ver', href: '/consultar?code=' + encodeURIComponent(b.code) }, t('conta.verMarcacao')))));
+    }
+  }
+
+  async function carregarMarcacoes() {
+    $('marcacoes').hidden = false;
+    try {
+      const [r, cfg] = await Promise.all([api('/api/public/my-bookings'), api('/api/public/config').catch(() => null)]);
+      if (cfg) moeda = cfg.business.currency;
+      marcacoes = r.bookings;
+      pintarMarcacoes();
+    } catch (e) {
+      $('lista-marcacoes').replaceChildren(h('li', { class: 'mm-vazio' }, e.message));
+    }
+  }
+
   // Alterna entre os painéis de entrar, criar conta e recuperar.
   function verAba(qual) {
     erro('');
@@ -73,6 +129,9 @@
     try {
       const me = await api('/api/conta/me');
       mostrarSessao(me.client);
+      carregarMarcacoes();
+      document.addEventListener('lingua', pintarMarcacoes);
+      if (location.hash === '#marcacoes') $('marcacoes').scrollIntoView();
       $('btn-sair').addEventListener('click', () => enviar($('btn-sair'), async () => {
         await api('/api/conta/logout', { method: 'POST' });
         location.reload();

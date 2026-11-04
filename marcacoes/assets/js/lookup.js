@@ -100,6 +100,36 @@
     }
   }
 
+  // Cliente com sessão iniciada: mostra as marcações da conta. Carregar numa
+  // preenche o código e o telefone da conta e consulta — sem ter de guardar o
+  // código. Sem sessão, fica só o formulário de sempre.
+  let minhas = null;
+  function pintarMinhas() {
+    if (!minhas || !minhas.lista.length) return;
+    $('suas').hidden = false;
+    $('suas-lista').replaceChildren(...minhas.lista.map((b) => h('button', {
+      type: 'button', class: 'sua-marcacao', onclick: () => abrirMinha(b.code),
+    },
+      h('strong', {}, b.code),
+      h('span', {}, cap(fmtDate(b.date, 'short')) + ' · ' + b.start + ' · ' + tr(b, 'studio_name')),
+      statusTag(b.status))));
+  }
+  function abrirMinha(code) {
+    $('code').value = code;
+    $('phone').value = minhas.phone;
+    $('lookup-form').requestSubmit();
+  }
+  async function carregarMinhas() {
+    try {
+      const [me, r] = await Promise.all([api('/api/conta/me'), api('/api/public/my-bookings')]);
+      minhas = { phone: me.client.phone, lista: r.bookings };
+    } catch (_) { return; } // sem sessão de cliente
+    pintarMinhas();
+    // Vindo da conta (?code=...): se a marcação é desta conta, abre-a logo.
+    const pedido = $('code').value.trim().toUpperCase();
+    if (pedido && minhas.lista.some((b) => b.code === pedido)) abrirMinha(pedido);
+  }
+
   function mostrarRegresso() {
     if (regresso !== '1' && regresso !== '0') return;
     const m = $('pagar-msg');
@@ -134,6 +164,7 @@
     document.addEventListener('lingua', () => {
       window.Studio.renderRodape(ultimoCfg);
       mostrarRegresso();
+      pintarMinhas();
       if (!ultimo) return;
       const m = $('cancel-msg');
       const cancelada = !m.hidden;
@@ -143,6 +174,7 @@
     const code = new URLSearchParams(location.search).get('code');
     if (code) { $('code').value = code.slice(0, 12); $('phone').focus(); }
     mostrarRegresso();
+    carregarMinhas();
     try {
       pagamentos = (await api('/api/integracoes/estado')).pagamentos;
       if (ultimo) render(ultimo);

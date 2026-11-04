@@ -47,7 +47,7 @@
     <p id="sessao-ola"></p>
     <div class="actions">
       <a class="btn btn-amber" href="/marcar" data-i18n="nav.marcar">Marcar sessão</a>
-      <a class="btn btn-outline" href="/consultar" data-i18n="conta.minhasMarcacoes">As minhas marcações</a>
+      <a class="btn btn-outline" href="#marcacoes" data-i18n="conta.minhasMarcacoes">As minhas marcações</a>
       <button type="button" class="btn btn-outline" id="btn-sair" data-i18n="conta.sair">Sair</button>
     </div>
 
@@ -64,6 +64,13 @@
       <p class="submit-row"><button class="btn" type="submit" data-i18n="conta.alterarSenha">Alterar palavra-passe</button></p>
       <p class="notice ok" id="senha-ok" hidden data-i18n="conta.senhaAlterada">Palavra-passe alterada.</p>
     </form>
+  </section>
+
+  <!-- As marcações da conta, com a referência de cada uma (ver conta.js). -->
+  <section id="marcacoes" class="conta-cartao" hidden aria-live="polite">
+    <h2 data-i18n="conta.minhasMarcacoes">As minhas marcações</h2>
+    <p class="hint" data-i18n="conta.marcacoesLead">Todas as suas marcações ficam aqui guardadas, com a referência de cada uma. Não precisa de copiar o código.</p>
+    <ul id="lista-marcacoes" class="minhas-marcacoes"></ul>
   </section>
 
   <section id="formularios" class="conta-cartao" hidden>

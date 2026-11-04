@@ -148,6 +148,10 @@ body { padding-top: var(--altura-cabecalho); }
 .topnav { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
 .topnav a:not(.btn) { color: inherit; text-decoration: none; font-weight: 500; }
 .topnav a:not(.btn):hover { text-decoration: underline; text-underline-offset: 4px; }
+.topnav a[hidden] { display: none; }
+.topnav .btn-sm { margin-left: 4px; }
+/* Com o ecrã mais estreito, saem primeiro os links que também estão no rodapé. */
+@media (max-width: 1100px) { .topnav .nav-extra { display: none; } }
 
 .hero-grid {
   display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
@@ -461,6 +465,9 @@ body { padding-top: var(--altura-cabecalho); }
 .hero-curto > .container { padding-top: 40px; }
 .hero-curto h1 { font: 800 clamp(2rem, 4.5vw, 2.9rem)/1.05 var(--display); letter-spacing: -.02em; margin: 0 0 12px; }
 .hero-curto .lead { margin: 0; max-width: 46em; }
+/* Título e texto centrados (página Consultar marcação). */
+.hero-centro > .container { text-align: center; }
+.hero-centro .lead { margin-inline: auto; }
 
 .book { padding-bottom: 96px; }
 
@@ -638,6 +645,15 @@ body { padding-top: var(--altura-cabecalho); }
 
 .lookup { max-width: 640px; padding-bottom: 96px; }
 .lookup-card { margin-top: 32px; }
+/* Consultar com sessão de cliente: as marcações da conta, para escolher sem o código. */
+.suas-marcacoes { margin: 0 0 32px; }
+.suas-marcacoes .hint { margin-bottom: 12px; }
+.suas-lista { display: grid; gap: 8px; }
+.sua-marcacao { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.sua-marcacao:hover { border-color: var(--edge); background: var(--mist); }
+.sua-marcacao strong { font: 700 1.05rem var(--display); letter-spacing: .1em; }
+.sua-marcacao span:not(.tag) { flex: 1; color: var(--muted); font-size: .9rem; }
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 900px) {
@@ -764,12 +780,17 @@ body { padding-top: var(--altura-cabecalho); }
 }
 
 /* ---------- Projetos colaborativos ("Participa") ---------- */
-.projetos-sub { color: var(--muted); margin: -6px 0 22px; max-width: 60ch; }
+/* Título, texto e cartões centrados. Os cartões têm largura fixa e ficam lado
+   a lado, centrados como grupo: um só fica ao meio, dois ou três dividem a
+   linha, e os que não cabem passam para a linha de baixo, também ao meio. */
+.projetos h2 { text-align: center; }
+.projetos-sub { color: var(--muted); margin: -6px auto 22px; max-width: 60ch; text-align: center; }
 .projetos-grelha {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch;
   gap: 18px; margin: 0; padding: 0 0 8px; list-style: none;
 }
-@media (max-width: 560px) { .projetos-grelha { grid-template-columns: 1fr; } }
+.projetos-grelha > .proj-card { flex: 0 1 340px; min-width: 0; }
+@media (max-width: 560px) { .projetos-grelha > .proj-card { flex-basis: 100%; } }
 .proj-card {
   display: flex; flex-direction: column; overflow: hidden;
   border: 1px solid var(--line); border-radius: 14px;

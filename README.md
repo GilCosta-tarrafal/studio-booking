@@ -64,6 +64,8 @@ Variáveis de ambiente (ver `.env.example`):
 | `COOKIE_SECURE=1` | Ative quando o site estiver em HTTPS (deve estar sempre). |
 | `TRUST_PROXY=1` | Ative atrás do proxy do serviço, para os limites de pedidos verem o IP real. |
 | `PORT` | Porta (a maioria dos serviços define-a sozinha). |
+| `BLOQUEIO_MIN` | Minutos sem mexer até o painel se bloquear e pedir a palavra-passe. Por omissão `15`. |
+| `ADMIN_PORT` | Põe o painel numa porta só dele (ex.: `3006`): o site fica na `PORT` sem o painel, e o painel deixa de existir na porta do site. Sem ela, o painel fica em `/admin` na mesma porta. Com túnel ou domínio por porta, defina também `SITE_URL` e `PAINEL_URL`. |
 | `SMTP_USER`, `SMTP_PASS` | Envio de emails aos clientes (referência da marcação, pagamento, recuperar a palavra-passe) pelo Gmail: o endereço e uma palavra-passe de aplicação. Também há `RESEND_API_KEY` ou `BREVO_API_KEY`. Teste com `npm run testar-email -- voce@exemplo.com`. |
 | `ANTHROPIC_API_KEY` | Chave da API da Claude para o "Assistente IA" do painel (botão de auriculares). Sem ela, o assistente avisa que não está configurado; o chat da equipa funciona na mesma. |
 

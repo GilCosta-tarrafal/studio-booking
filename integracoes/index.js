@@ -21,8 +21,9 @@ const base = require('./lib/base');
 const stripe = require('./fornecedores/stripe');
 const gravadora = require('./fornecedores/gravadora');
 const youtube = require('./fornecedores/youtube');
+const cambio = require('./fornecedores/cambio');
 
-const FORNECEDORES = [stripe, gravadora, youtube];
+const FORNECEDORES = [stripe, gravadora, youtube, cambio];
 const porId = Object.fromEntries(FORNECEDORES.map((f) => [f.id, f]));
 
 // ---------------------------------------------------------------- Webhooks
@@ -55,4 +56,6 @@ module.exports = {
   iniciar, parar,
   PASTA_CAPAS: base.PASTA_CAPAS,
   FORNECEDORES,
+  // Para converter valores noutro sítio do backend: cambio.converter(valor, 'EUR', 'CVE').
+  cambio,
 };

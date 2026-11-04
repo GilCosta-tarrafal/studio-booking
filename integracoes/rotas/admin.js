@@ -5,6 +5,7 @@ const { db, lerDefinicoes, gravarDefinicoes } = require('../lib/base');
 const auth = require('../../backend/lib/auth');
 const U = require('../../backend/lib/util');
 const musica = require('./musica');
+const capas = require('../lib/capas');
 const projetos = require('./projetos');
 
 const NOMES = {
@@ -92,6 +93,17 @@ module.exports = (fornecedores) => {
     if (!projetos.apagarInscricao(U.toInt(req.params.id))) throw new U.HttpError(404, 'Inscrição não encontrada.');
     res.json({ ok: true });
   });
+
+  // Imagem escolhida no computador para a capa de uma música ou de um projeto.
+  // Vem em bruto (o próprio ficheiro, até 5 MB); devolve o caminho que se põe
+  // no campo da imagem, em vez de um link.
+  router.post('/imagens', auth.requireManager,
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: capas.MAX }),
+    (req, res) => {
+      try {
+        res.status(201).json({ caminho: capas.guardarEnviada(req.body) });
+      } catch (e) { throw new U.HttpError(400, e.message); }
+    });
 
   // Ir buscar agora, à mão, a um fornecedor que o saiba fazer (gravadora, youtube).
   router.post('/:fornecedor/sincronizar', async (req, res) => {

@@ -38,6 +38,8 @@ let feedAutorizacao = null;
 // isso não vem na resposta — como um vídeo mesmo privado ou apagado.
 const VIEWS = { BERDIANA111: 967000, SOYOUTUBE11: 250000 };
 const youtubePedidos = [];
+// Câmbio de mentira, no formato do open.er-api.com (1 CVE = taxa × moeda).
+const cambioPedidos = [];
 const fora = http.createServer((req, res) => {
   let corpo = '';
   req.on('data', (c) => { corpo += c; });
@@ -57,6 +59,13 @@ const fora = http.createServer((req, res) => {
       const items = (q.get('id') || '').split(',').filter((id) => VIEWS[id] !== undefined)
         .map((id) => ({ id, statistics: { viewCount: String(VIEWS[id]) } }));
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ items }));
+    } else if (req.url.startsWith('/cambio/latest/')) {
+      const b = req.url.split('/').pop();
+      cambioPedidos.push(b);
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({
+        result: 'success', base_code: b, time_last_update_unix: 1793750400,
+        rates: { CVE: 1, EUR: 0.0090689, USD: 0.01015, AOA: 9.6378, 'x1': 5, BRL: 'nada' },
+      }));
     } else if (req.url.startsWith('/capa')) {
       res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG);
     } else if (req.url === '/texto') {
@@ -71,6 +80,7 @@ const FORA = 'http://127.0.0.1:' + fora.address().port;
 process.env.STRIPE_API_URL = FORA;
 process.env.GRAVADORA_FEED_URL = FORA + '/feed';
 process.env.YOUTUBE_API_URL = FORA + '/youtube/v3';
+process.env.CAMBIO_API_URL = FORA + '/cambio';
 
 const { start } = require('../backend/server');
 const U = require('../backend/lib/util');
@@ -264,7 +274,7 @@ function futureWeekday(offset = 3) {
   r = await call('GET', '/api/admin/integracoes');
   ok(r.status === 401, 'painel das integrações exige sessão');
   r = await call('GET', '/api/admin/integracoes', { cookie });
-  ok(r.json.fornecedores.length === 3 && r.json.lancamentos.length === 3, 'o painel vê os fornecedores e os lançamentos');
+  ok(r.json.fornecedores.length === 4 && r.json.lancamentos.length === 3, 'o painel vê os fornecedores (com o câmbio) e os lançamentos');
 
   // ------------------------------------------------------------ YouTube
   console.log('\nYouTube (views)');
@@ -292,6 +302,49 @@ function futureWeekday(offset = 3) {
 
   r = await fetch(base + '/integracoes/webhooks/nao-existe', { method: 'POST', body: '{}' });
   ok(r.status === 404, 'webhook de integração desconhecida: 404');
+
+  console.log('\nImagens do computador');
+  const enviarImg = (dados, tipo, ck = cookie) => fetch(base + '/api/admin/integracoes/imagens', {
+    method: 'POST', headers: { 'Content-Type': tipo, 'X-Requested-With': 'studio', Cookie: ck }, body: dados,
+  }).then(async (x) => ({ status: x.status, json: await x.json() }));
+  let im = await enviarImg(PNG, 'image/png');
+  ok(im.status === 201 && /^\/capas-integracao\/env-[a-f0-9]{20}\.png$/.test(im.json.caminho), 'uma imagem do computador é enviada e fica no site');
+  const caminhoImg = im.json.caminho;
+  r = await fetch(base + caminhoImg);
+  ok(r.status === 200 && r.headers.get('content-type').startsWith('image/png'), 'e o site serve-a');
+  im = await enviarImg(Buffer.from('<script>alert(1)</script>'), 'image/png');
+  ok(im.status === 400 && /não é uma imagem/.test(im.json.error), 'um ficheiro que não é imagem (mesmo dizendo que é) é recusado');
+  im = await enviarImg(PNG, 'image/png', '');
+  ok(im.status === 401, 'enviar imagens exige sessão');
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'talentos', titulo: 'Com imagem do PC', capa_origem: caminhoImg } });
+  ok(r.status === 200 || r.status === 201, 'criar projeto com a imagem enviada');
+  const comImg = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Com imagem do PC');
+  ok(comImg && comImg.capa === caminhoImg, 'o projeto mostra no site a imagem enviada do computador');
+  r = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { titulo: 'Capa do PC', artista: 'X', capa_origem: caminhoImg } });
+  ok(r.status === 200 && r.json.lancamento.capa === caminhoImg && !r.json.aviso, 'uma música também aceita a capa enviada do computador');
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie, body: { tipo: 'talentos', titulo: 'Caminho inventado', capa_origem: '/capas-integracao/../../backend/data/estudio.db' } });
+  const inventado = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.titulo === 'Caminho inventado');
+  ok(inventado && !inventado.capa, 'um caminho que não é de uma imagem enviada é ignorado (fica o logo)');
+
+  console.log('\nTaxas de câmbio');
+  r = await call('GET', '/api/admin/integracoes', { cookie });
+  let cb = r.json.fornecedores.find((f) => f.id === 'cambio');
+  ok(cb && cb.ativo && cb.sincronizavel, 'o câmbio aparece nas integrações, ligado e sem precisar de chave');
+  r = await call('POST', '/api/admin/integracoes/cambio/sincronizar', { cookie });
+  ok(r.status === 200 && r.json.guardados === 4 && /4 moedas, em relação a CVE/.test(r.json.mensagem), 'atualizar agora: 4 moedas válidas guardadas, com base na moeda das Definições (CVE)');
+  ok(cambioPedidos[cambioPedidos.length - 1] === 'CVE', 'pede as taxas em relação a CVE');
+  r = await call('GET', '/api/integracoes/cambio?valor=10&de=EUR&para=CVE');
+  ok(r.status === 200 && Math.abs(r.json.convertido - 10 / 0.0090689) < 0.01, 'converte 10 EUR para CVE: ' + (r.json.convertido || 0).toFixed(2));
+  r = await call('GET', '/api/integracoes/cambio?valor=1000&de=AOA&para=EUR');
+  ok(r.status === 200 && Math.abs(r.json.convertido - 1000 / 9.6378 * 0.0090689) < 1e-6, 'converte entre duas moedas que não são a base (AOA → EUR)');
+  r = await call('GET', '/api/integracoes/cambio?valor=5&de=EUR&para=BRL');
+  ok(r.status === 404, 'moeda sem taxa (taxa inválida na resposta): 404 com explicação');
+  r = await call('GET', '/api/integracoes/cambio');
+  ok(r.json.base === 'CVE' && r.json.taxas.EUR === 0.0090689 && !('x1' in r.json.taxas), 'lista as taxas do dia, sem códigos inválidos');
+  ok(require('../integracoes').cambio.converter(100, 'USD', 'USD') === 100, 'o backend converte com cambio.converter()');
+  r = await call('GET', '/api/admin/integracoes', { cookie });
+  cb = r.json.fornecedores.find((f) => f.id === 'cambio');
+  ok(cb.conversor && cb.detalhes.some(([k, v]) => k === 'Taxas atuais' && /1 EUR = 110,2\d+ CVE/.test(v)), 'o painel mostra as taxas atuais e o conversor');
 
   console.log(`\n${passed} certos, ${failed} falhados`);
   server.close();

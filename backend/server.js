@@ -14,6 +14,8 @@ const TR = require('./lib/traducoes');
 const D = require('../comum/assets/js/dicionario.js');
 const integracoes = require('../integracoes');
 const chat = require('./routes/chat');
+const portas = require('./lib/portas');
+const http = require('http');
 
 const app = express();
 // Cinco pastas: o backend (aqui), o site público, o fluxo de marcação (marcar
@@ -50,6 +52,25 @@ app.use((_req, res, next) => {
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'X-Frame-Options': 'DENY',
   });
+  next();
+});
+
+// Site e painel em portas separadas (ver lib/portas.js). Cada pedido chega
+// marcado com a zona da porta por onde entrou (req.zona); numa porta só, não
+// há zona e nada disto se aplica.
+const DO_PAINEL = /^\/(admin|api\/admin|api\/auth)(\/|$)/;
+const PAGINAS_SITE = new Set(['/marcar', '/consultar', '/pagar', '/conta']);
+app.use((req, res, next) => {
+  if (!req.zona) return next();
+  if (req.zona === 'site' && DO_PAINEL.test(req.path)) {
+    // Na porta do site o painel não existe: nem a página nem a API.
+    return req.path.startsWith('/api/') ? res.status(404).json({ error: 'Não encontrado.' }) : res.status(404).type('text').send('Não encontrado.');
+  }
+  if (req.zona === 'painel') {
+    if (req.path === '/') return res.redirect(302, '/admin');
+    // Páginas do site abertas na porta do painel: leva-as para a porta do site.
+    if (PAGINAS_SITE.has(req.path)) return res.redirect(302, portas.url('site', req) + req.originalUrl);
+  }
   next();
 });
 
@@ -239,14 +260,35 @@ function start(port = process.env.PORT || 3005) {
   const inicial = Number(port);
   const procurarLivre = !process.env.PORT && inicial !== 0;
   let tentativa = inicial;
-  const server = app.listen(tentativa, host);
+  // Com ADMIN_PORT, o painel abre na sua própria porta (ver lib/portas.js).
+  const portaPainel = process.env.ADMIN_PORT ? Number(process.env.ADMIN_PORT) : null;
+  const comZona = (zona) => (req, res) => { req.zona = zona; app(req, res); };
+  const server = http.createServer(portaPainel ? comZona('site') : app);
+  let painel = null;
+  server.listen(tentativa, host);
   server.on('listening', () => {
     const p = server.address().port;
-    console.log('');
-    console.log(`  Site:    http://localhost:${p}`);
-    for (const ip of enderecosDaRede()) console.log(`  Rede:    http://${ip}:${p}`);
-    console.log(`  Painel:  http://localhost:${p}/admin`);
-    console.log('');
+    portas.definir('site', p);
+    const mostrar = () => {
+      console.log('');
+      console.log(`  Site:    http://localhost:${p}`);
+      for (const ip of enderecosDaRede()) console.log(`  Rede:    http://${ip}:${p}`);
+      const pp = painel ? painel.address().port : p;
+      console.log(`  Painel:  http://localhost:${pp}/admin`);
+      if (painel) for (const ip of enderecosDaRede()) console.log(`  Rede:    http://${ip}:${pp}/admin`);
+      console.log('');
+    };
+    if (!portaPainel) return mostrar();
+    if (portaPainel === p) throw new Error(`ADMIN_PORT (${portaPainel}) tem de ser diferente da porta do site.`);
+    painel = http.createServer(comZona('painel'));
+    painel.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`\n  A porta do painel (ADMIN_PORT=${portaPainel}) está ocupada por outro programa. Escolha outra no .env.\n`);
+        process.exit(1);
+      }
+      throw err;
+    });
+    painel.listen(portaPainel, host, () => { portas.definir('painel', painel.address().port); mostrar(); });
   });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && procurarLivre && tentativa < inicial + 20) {
@@ -258,7 +300,12 @@ function start(port = process.env.PORT || 3005) {
     }
     throw err;
   });
-  const shutdown = () => { integracoes.parar(); chat.fechar(); server.close(() => { db.close(); process.exit(0); }); };
+  const shutdown = () => {
+    integracoes.parar();
+    chat.fechar();
+    if (painel) painel.close();
+    server.close(() => { db.close(); process.exit(0); });
+  };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
   return server;

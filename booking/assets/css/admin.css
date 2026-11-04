@@ -1050,6 +1050,10 @@ body.admin .cf-card, body.admin .cf-links { -webkit-backdrop-filter: blur(14px);
 .cf-item-txt p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
 .cf-code { padding: 2px 8px; border-radius: 6px; background: var(--mist); color: var(--muted); font: 500 .74rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .03em; }
 .cf-code-in { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; text-transform: uppercase; }
+/* Nome e Código lado a lado: alinhados pelo topo e com a mesma altura (a
+   ajuda por baixo do Código não pode esticar o Nome). */
+.cf-linha { align-items: start; }
+.cf-linha input { height: 44px; }
 .cf-pill { padding: 2px 9px; border-radius: 999px; font: 700 .76rem/1.4 var(--body); }
 .cf-pill.ok { background: rgba(47, 179, 106, .16); color: #4CCB85; }
 .cf-pill.off { background: var(--mist); color: var(--muted); }
@@ -1206,3 +1210,46 @@ body.admin .tb-sel { border-radius: 999px; }
 @media (prefers-reduced-motion: reduce) {
   .sup-opcoes, .sup-painel, .sup-pensa i { animation: none; }
 }
+
+/* ---------- Bloqueio por inatividade (admin-bloqueio.js) ---------- */
+/* Cobre o painel inteiro e desfoca-o: o que estava à vista deixa de se ler. */
+.bloq { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px;
+  background: rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(14px) saturate(.9); backdrop-filter: blur(14px) saturate(.9);
+  animation: bloq-entra .2s ease-out; }
+body.bloqueado { overflow: hidden; }
+body.bloqueado #toasts { display: none; }
+.bloq-card { width: min(400px, 100%); display: grid; justify-items: center; gap: 10px; text-align: center; padding: 32px 28px;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 26px 70px rgba(0, 0, 0, .55); }
+.bloq-avatar { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--chrome-edge);
+  background: var(--chrome); color: var(--chrome-ink); font: 700 1.2rem var(--display); }
+.bloq-card h2 { margin: 6px 0 0; font: 800 1.35rem var(--display); }
+.bloq-quem { margin: 0; display: grid; font-weight: 600; }
+.bloq-quem span { color: var(--muted); font-weight: 400; font-size: .88rem; }
+.bloq-card .hint { margin-bottom: 6px; }
+.bloq-form { width: 100%; display: grid; gap: 10px; }
+.bloq-form input { width: 100%; text-align: center; }
+.bloq-sair { margin-top: 4px; border: 0; background: none; color: var(--muted); font: inherit; font-size: .88rem; text-decoration: underline; cursor: pointer; }
+.bloq-sair:hover { color: var(--ink); }
+@keyframes bloq-entra { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bloq { animation: none; } }
+
+/* Conversor de moedas (Integrações › Taxas de câmbio). */
+.cambio { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.cambio h3 { margin: 0 0 8px; font-size: 1rem; }
+.cambio-linha { display: grid; grid-template-columns: minmax(0, 1.4fr) 5.5em auto 5.5em; gap: 8px; align-items: center; max-width: 460px; }
+.cambio-linha input { height: 40px; }
+.cambio-res { margin: 10px 0 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cambio-res.erro { color: var(--danger); font-weight: 400; }
+
+/* Campo de imagem: link ou ficheiro do computador (campoImagem, em admin.js). */
+.img-campo { display: grid; gap: 8px; padding: 2px; border-radius: 10px; transition: background .15s, outline-color .15s; outline: 2px dashed transparent; outline-offset: 4px; }
+.img-campo.arrastar { outline-color: var(--focus); background: var(--mist); }
+.img-linha { display: flex; gap: 8px; align-items: center; }
+.img-linha input { flex: 1; min-width: 0; }
+.img-linha .btn { flex: none; white-space: nowrap; }
+.img-linha .btn[hidden] { display: none; }
+.img-previa { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.img-previa[hidden] { display: none; }
+.img-estado:empty { display: none; }
+.img-estado.erro { color: var(--danger); }
+@media (max-width: 600px) { .img-linha { flex-wrap: wrap; } .img-linha input { flex-basis: 100%; } }

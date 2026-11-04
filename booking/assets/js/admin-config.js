@@ -51,7 +51,7 @@
           } catch (ex) { err.textContent = ex.message; err.hidden = false; }
         },
       },
-      h('div', { class: 'grid-2' },
+      h('div', { class: 'grid-2 cf-linha' },
         field('Nome', nome),
         field('Código', codigo, { hint: novo ? 'Fica guardado nas marcações; depois não muda.' : 'O código não muda depois de criado.' })),
       field('Descrição', descricao),

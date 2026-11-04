@@ -40,7 +40,55 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', (req, res) => {
   if (!req.user) throw new HttpError(401, 'Sem sessão.');
-  res.json({ user: req.user, today: U.nowLocal().date, settings: getSettings() });
+  // site_url: para onde apontam os links "Ver o site" do painel (outra porta,
+  // se o painel tiver a sua; ver lib/portas.js).
+  const portas = require('../lib/portas');
+  // bloqueio_ms: ao fim de quanto tempo parado o painel se bloqueia; user.locked
+  // diz se já está bloqueado (ver lib/auth.js).
+  res.json({
+    user: req.user, today: U.nowLocal().date, settings: getSettings(), bloqueio_ms: auth.BLOQUEIO_MS,
+    site_url: portas.separado() ? portas.url('site', req) + '/' : '/',
+  });
+});
+
+// ---- Bloqueio por inatividade ----
+// O painel avisa quando há atividade real (no máximo uma vez por minuto) e
+// bloqueia a sessão quando passa o tempo sem mexer. Para desbloquear, a
+// palavra-passe da própria conta; 5 erros seguidos terminam a sessão.
+const SEM_SESSAO = 'Sessão expirada. Inicie sessão novamente.';
+const errosDesbloqueio = new Map();   // sessionHash -> erros seguidos
+
+router.post('/ativo', (req, res) => {
+  if (!req.user) throw new HttpError(401, SEM_SESSAO);
+  if (req.user.locked) throw new HttpError(423, 'O painel está bloqueado por inatividade.');
+  auth.marcarAtividade(req);
+  res.json({ ok: true });
+});
+
+router.post('/bloquear', (req, res) => {
+  if (!req.user) throw new HttpError(401, SEM_SESSAO);
+  auth.bloquear(req);
+  res.json({ ok: true });
+});
+
+router.post('/desbloquear', (req, res) => {
+  if (!req.user) throw new HttpError(401, SEM_SESSAO);
+  const password = String((req.body || {}).password || '');
+  const row = db.prepare('SELECT password_hash FROM users WHERE id=?').get(req.user.id);
+  if (!auth.verifyPassword(password, row.password_hash)) {
+    const erros = (errosDesbloqueio.get(req.sessionHash) || 0) + 1;
+    atividade.registar(req.user.id, 'error', 'Palavra-passe errada ao desbloquear o painel', { status: 400, ip: req.ip });
+    if (erros >= 5) {
+      errosDesbloqueio.delete(req.sessionHash);
+      auth.destroySession(req, res);
+      throw new HttpError(401, 'Demasiadas tentativas erradas. A sessão foi terminada; entre de novo.');
+    }
+    errosDesbloqueio.set(req.sessionHash, erros);
+    throw new HttpError(400, `Palavra-passe incorreta. Restam ${5 - erros} ${5 - erros === 1 ? 'tentativa' : 'tentativas'}.`);
+  }
+  errosDesbloqueio.delete(req.sessionHash);
+  auth.desbloquear(req);
+  res.json({ ok: true });
 });
 
 router.post('/password', auth.requireAuth, (req, res) => {
