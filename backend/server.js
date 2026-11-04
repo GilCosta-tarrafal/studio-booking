@@ -13,6 +13,7 @@ const prefs = require('./lib/prefs');
 const TR = require('./lib/traducoes');
 const D = require('../comum/assets/js/dicionario.js');
 const integracoes = require('../integracoes');
+const chat = require('./routes/chat');
 
 const app = express();
 // Cinco pastas: o backend (aqui), o site público, o fluxo de marcação (marcar
@@ -82,6 +83,9 @@ app.use('/api/admin', atividade.middleware);
 app.use('/api/admin/integracoes', auth.requireAuth, integracoes.admin);
 app.use('/api/admin/rbac', auth.requireAuth, auth.requireOwner, require('./routes/rbac'));
 app.use('/api/admin/catalogos', auth.requireAuth, require('./routes/catalogos'));
+// Botão de auriculares do painel: chat da equipa em tempo real e Assistente IA.
+app.use('/api/admin/chat', auth.requireAuth, chat.router);
+app.use('/api/admin/assistente', auth.requireAuth, require('./routes/assistente'));
 app.use('/api/admin', auth.requireAuth, require('./routes/admin'));
 app.use('/api', (req, res) => res.status(404).json({ error: req.t('api.naoEncontrado') }));
 
@@ -254,7 +258,7 @@ function start(port = process.env.PORT || 3005) {
     }
     throw err;
   });
-  const shutdown = () => { integracoes.parar(); server.close(() => { db.close(); process.exit(0); }); };
+  const shutdown = () => { integracoes.parar(); chat.fechar(); server.close(() => { db.close(); process.exit(0); }); };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
   return server;

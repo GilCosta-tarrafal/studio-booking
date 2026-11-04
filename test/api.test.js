@@ -25,7 +25,7 @@ const mapas = http.createServer((req, res) => {
   }
   const q = decodeURIComponent(u.searchParams.get('q') || '');
   if (/rebentar/i.test(q)) { res.writeHead(500).end('nao'); return; }
-  const achado = /assomada/i.test(q) ? [{ lat: '15.1000', lon: '-23.6833', display_name: 'Assomada, Santa Catarina, Cabo Verde' }]
+  const achado = /mindelo/i.test(q) ? [{ lat: '16.8901', lon: '-24.9804', display_name: 'Mindelo, São Vicente, Cabo Verde' }]
     : /paris/i.test(q) ? [{ lat: '48.8566', lon: '2.3522', display_name: 'Paris, France' }] : [];
   res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(achado));
 });
@@ -351,6 +351,61 @@ function futureWeekday(offset = 3) {
   const bk2 = (await call('GET', `/api/admin/bookings?studio_id=${st2.id}`, { cookie })).json.bookings[0];
   r = await call('GET', `/api/admin/bookings/${bk2.id}`, { cookie: ac });
   ok(r.status === 404, 'uma marcação de outro estúdio não existe para o agente (404)');
+  // Configura o seu estúdio e as suas salas — e só esses.
+  const meuSt = (await call('GET', '/api/admin/studios', { cookie: ac })).json.studios[0];
+  r = await call('PUT', `/api/admin/studios/${st2.id}`, { cookie: ac, body: { name: 'Pirata', hours: [null, null, null, null, null, null, null] } });
+  ok(r.status === 403, 'o agente não altera outro estúdio (403)');
+  r = await call('PUT', `/api/admin/studios/${st1.id}`, { cookie: ac, body: { ...meuSt, phone: '2601234' } });
+  ok(r.status === 200 && db.prepare('SELECT phone FROM studios WHERE id=?').get(st1.id).phone === '2601234', 'o agente altera o seu estúdio');
+  r = await call('DELETE', `/api/admin/studios/${st1.id}`, { cookie: ac });
+  ok(r.status === 403, 'o agente não elimina estúdios (403)');
+  r = await call('PUT', `/api/admin/rooms/${sala2}`, { cookie: ac, body: { name: 'Pirata', hourly_rate: 1 } });
+  ok(r.status === 404, 'uma sala de outro estúdio não existe para o agente (404)');
+  r = await call('POST', '/api/admin/rooms', { cookie: ac, body: { studio_id: st2.id, name: 'Pirata' } });
+  ok(r.status === 403, 'o agente não cria salas noutro estúdio (403)');
+  r = await call('POST', '/api/admin/rooms', { cookie: ac, body: { studio_id: st1.id, name: 'Sala do agente', hourly_rate: 500 } });
+  ok(r.status === 201, 'o agente cria salas no seu estúdio');
+  r = await call('DELETE', `/api/admin/rooms/${r.json.id}`, { cookie: ac });
+  ok(r.status === 200, 'e elimina-as');
+
+  console.log('\nChat da equipa e Assistente IA');
+  const donoId = (await call('GET', '/api/admin/chat', { cookie })).json.me;
+  r = await call('GET', '/api/admin/chat', { cookie: ac });
+  const comDono = r.json.contacts.find((c) => c.id === donoId);
+  ok(r.status === 200 && comDono && comDono.role === 'owner' && r.json.geral.channel === 'geral', 'o agente vê a conversa geral e o administrador nos contactos');
+  // Tempo real: o dono abre a ligação e recebe a mensagem do agente.
+  const ctrl = new AbortController();
+  const stream = await fetch(base + '/api/admin/chat/stream', { headers: { Cookie: cookie }, signal: ctrl.signal });
+  ok(stream.status === 200 && /text\/event-stream/.test(stream.headers.get('content-type')), 'a ligação em tempo real abre (SSE)');
+  const leitor = stream.body.getReader();
+  let recebido = '';
+  const chegou = (async () => {
+    const dec = new TextDecoder();
+    while (!/event: mensagem/.test(recebido)) { const { value, done } = await leitor.read(); if (done) break; recebido += dec.decode(value); }
+  })();
+  r = await call('POST', `/api/admin/chat/${comDono.channel}/messages`, { cookie: ac, body: { body: '  Olá, chefe!  ' } });
+  ok(r.status === 201 && r.json.message.body === 'Olá, chefe!', 'o agente escreve ao administrador');
+  await Promise.race([chegou, new Promise((res) => setTimeout(res, 3000))]);
+  ok(/event: mensagem/.test(recebido) && recebido.includes('Olá, chefe!'), 'a mensagem chega ao administrador em tempo real');
+  ctrl.abort();
+  r = await call('GET', '/api/admin/chat', { cookie });
+  ok(r.json.contacts.find((c) => c.channel === comDono.channel).unread === 1, 'fica 1 por ler para o administrador');
+  r = await call('GET', `/api/admin/chat/${comDono.channel}/messages`, { cookie });
+  ok(r.status === 200 && r.json.messages.length === 1, 'o administrador lê a conversa');
+  await call('POST', `/api/admin/chat/${comDono.channel}/read`, { cookie });
+  r = await call('GET', '/api/admin/chat', { cookie });
+  ok(r.json.contacts.find((c) => c.channel === comDono.channel).unread === 0, 'depois de abrir, deixa de estar por ler');
+  r = await call('GET', `/api/admin/chat/${comDono.channel}/messages`, { cookie: staff.cookie });
+  ok(r.status === 404, 'quem não está na conversa a dois não a lê (404)');
+  r = await call('POST', '/api/admin/chat/geral/messages', { cookie: staff.cookie, body: { body: 'Bom dia a todos' } });
+  ok(r.status === 201, 'qualquer pessoa da equipa escreve na conversa geral');
+  r = await call('POST', '/api/admin/chat/geral/messages', { cookie: ac, body: { body: '   ' } });
+  ok(r.status === 400, 'mensagem vazia recusada');
+  r = await call('POST', '/api/admin/assistente', { cookie: ac, body: { messages: [] } });
+  ok(r.status === 400, 'assistente: pergunta vazia recusada');
+  r = await call('POST', '/api/admin/assistente', { body: { messages: [{ role: 'user', content: 'Olá' }] } });
+  ok(r.status === 401, 'assistente: exige sessão');
+  ok(!db.prepare("SELECT 1 FROM user_activity WHERE detail LIKE '%/chat/%' OR detail LIKE '%/assistente%'").get(), 'conversar não enche a atividade do perfil');
 
   console.log('\nControlo de acesso (RBAC)');
   r = await call('GET', '/api/admin/rbac', { cookie });
@@ -422,9 +477,9 @@ function futureWeekday(offset = 3) {
   console.log('\nCoordenadas dos estúdios');
   const cfgEst = (await call('GET', '/api/public/config')).json.studios;
   const paris = cfgEst.find((x) => /Paris/.test(x.city));
-  const assomada = cfgEst.find((x) => /Assomada/.test(x.city));
+  const segundo = cfgEst.find((x) => x.name === 'Estúdio Suavita');
   ok(paris && Math.abs(paris.lat - 48.8566) < 0.01 && Math.abs(paris.lon - 2.3522) < 0.01, 'o primeiro estúdio fica em Paris');
-  ok(assomada && Math.abs(assomada.lat - 15.1) < 0.01 && Math.abs(assomada.lon + 23.6833) < 0.01, 'o segundo em Assomada, Cabo Verde');
+  ok(segundo && !segundo.city && segundo.lat == null && segundo.lon == null, 'o segundo (Estúdio Suavita) fica sem localização, que ainda não é pública');
 
   // A palavra-passe do dono já foi mudada acima, por isso entra-se com a nova.
   const ckDono = (await login('dono@teste.cv', 'nova-palavra-1')).cookie;
@@ -443,11 +498,11 @@ function futureWeekday(offset = 3) {
   console.log('\nProcurar coordenadas');
   r = await call('POST', '/api/admin/geocode', { cookie: ckDono, body: { q: 'ab' } });
   ok(r.status === 400, 'procura demasiado curta → 400');
-  r = await call('POST', '/api/admin/geocode', { body: { q: 'Assomada' } });
+  r = await call('POST', '/api/admin/geocode', { body: { q: 'Mindelo' } });
   ok(r.status === 401, 'a procura é só para quem tem sessão no painel');
-  r = await call('POST', '/api/admin/geocode', { cookie: ckDono, body: { q: 'Assomada, Cabo Verde' } });
-  ok(r.status === 200 && Math.abs(r.json.lat - 15.1) < 0.01 && Math.abs(r.json.lon + 23.68) < 0.01,
-    'encontra Assomada: ' + (r.json && r.json.nome));
+  r = await call('POST', '/api/admin/geocode', { cookie: ckDono, body: { q: 'Mindelo, Cabo Verde' } });
+  ok(r.status === 200 && Math.abs(r.json.lat - 16.89) < 0.01 && Math.abs(r.json.lon + 24.98) < 0.01,
+    'encontra Mindelo: ' + (r.json && r.json.nome));
   r = await call('POST', '/api/admin/geocode', { cookie: ckDono, body: { q: 'sitio-que-nao-existe' } });
   ok(r.status === 404 && /encontrámos/.test(r.json.error), 'sítio desconhecido → 404 com explicação');
   r = await call('POST', '/api/admin/geocode', { cookie: ckDono, body: { q: 'rebentar' } });
@@ -679,19 +734,19 @@ function futureWeekday(offset = 3) {
   // Faturas internas: o IVA vem da localização do estúdio; numeração seguida
   // por série do ano; uma fatura em vigor por marcação; anular não liberta o número.
   console.log('\nIVA pela localização e faturas');
-  r = await call('GET', '/api/admin/fiscal?lat=15.1&lon=-23.68', { cookie: dono });
-  ok(r.status === 200 && r.json.fiscal.codigo === 'cv' && r.json.fiscal.taxa === 15 && r.json.fiscal.fonte === 'mapa', 'Assomada → Cabo Verde, IVA 15% (pelo serviço de mapas)');
+  r = await call('GET', '/api/admin/fiscal?lat=14.93&lon=-23.51', { cookie: dono });
+  ok(r.status === 200 && r.json.fiscal.codigo === 'cv' && r.json.fiscal.taxa === 15 && r.json.fiscal.fonte === 'mapa', 'Praia → Cabo Verde, IVA 15% (pelo serviço de mapas)');
   r = await call('GET', '/api/admin/fiscal?lat=37.74&lon=-25.67', { cookie: dono });
   ok(r.json.fiscal.codigo === 'pt' && r.json.fiscal.regiao === 'Açores' && r.json.fiscal.taxa === 16, 'Ponta Delgada → Portugal (Açores), IVA 16%');
   r = await call('GET', '/api/admin/fiscal?lat=48.86&lon=2.35', { cookie: dono });
   ok(r.json.fiscal.codigo === 'fr' && r.json.fiscal.taxa === 20, 'Paris → França, IVA 20%');
   ok(require('../backend/lib/fiscal').aproximar(16.89, -24.98).codigo === 'cv', 'sem serviço de mapas, a tabela local reconhece Cabo Verde (São Vicente)');
-  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, vat_rate: '' } });
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 14.93, lon: -23.51, vat_rate: '' } });
   let estF = db.prepare('SELECT country_code, tax_name, vat_rate FROM studios WHERE id=?').get(estR.id);
   ok(r.status === 200 && estF.country_code === 'cv' && estF.vat_rate === 15, 'guardar o estúdio sem taxa: fica com a do país onde está (15%)');
-  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, country_code: 'cv', vat_rate: '8' } });
+  r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 14.93, lon: -23.51, country_code: 'cv', vat_rate: '8' } });
   ok(db.prepare('SELECT vat_rate FROM studios WHERE id=?').get(estR.id).vat_rate === 8, 'a taxa proposta pode ser corrigida à mão');
-  await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 15.1, lon: -23.68, country_code: 'cv', vat_rate: '15' } });
+  await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 14.93, lon: -23.51, country_code: 'cv', vat_rate: '15' } });
 
   const ano = U.nowLocal().date.slice(0, 4);
   const novaMarc = (code, status) => db.prepare(`INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,client_phone,status,price,paid,created_at,updated_at)
@@ -699,7 +754,7 @@ function futureWeekday(offset = 3) {
   const mF = novaMarc('FATTS1', 'confirmado'), mP = novaMarc('FATTS2', 'pedido');
   r = await call('POST', `/api/admin/bookings/${mP}/fatura`, { cookie: dono, body: {} });
   ok(r.status === 400, 'um pedido por confirmar não se fatura');
-  r = await call('POST', `/api/admin/bookings/${mF}/fatura`, { cookie: dono, body: { cliente_nif: '123456789', cliente_morada: 'Assomada' } });
+  r = await call('POST', `/api/admin/bookings/${mF}/fatura`, { cookie: dono, body: { cliente_nif: '123456789', cliente_morada: 'Praia' } });
   const fat1 = r.json.fatura;
   ok(r.status === 201 && fat1.serie === 'FT ' + ano && fat1.numero_texto.startsWith('FT ' + ano + '/'), 'emitir: fatura da série do ano (' + (fat1 && fat1.numero_texto) + ')');
   ok(fat1.total === 1150 && fat1.base === 1000 && fat1.imposto === 150 && fat1.taxa === 15, 'o valor inclui o IVA: 1150 = 1000 + 150 (15%)');
@@ -748,6 +803,8 @@ function futureWeekday(offset = 3) {
   ok(r.status === 200 && r.json.estado === 'pago' && r.json.recibo.cartao.ultimos === '4242' && r.json.recibo.demo === true, 'pagar: pago, com recibo');
   const depois = db.prepare('SELECT status, paid, price FROM bookings WHERE id=?').get(idP);
   ok(depois.status === 'confirmado' && depois.paid === depois.price, 'pago tudo: a marcação fica confirmada');
+  const notifP = (await call('GET', '/api/admin/notificacoes', { cookie: dono })).json.items.find((n) => n.kind === 'recebido');
+  ok(!!notifP && notifP.title === 'Pagamento recebido' && notifP.unread && /CVE$/.test(notifP.text), 'o pagamento entra no sininho do painel (por ler, com o cliente e o valor)');
   const recP = r.json.recibo;
   ok(!!recP.empresa.nome && recP.empresa.nif === '987654321', 'o recibo tem os dados da empresa e do estúdio');
   pdf = await fetch(base + `/api/pagamento/recibo/${recP.id}/pdf`, { headers: { Cookie: clientCookie } });

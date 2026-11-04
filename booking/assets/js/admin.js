@@ -91,6 +91,7 @@
   // ---------------------------------------------------------- Sessão
   function showLogin() {
     stopPolling();
+    if (window.AdminSuporte) window.AdminSuporte.parar();   // botão de auriculares e chat
     app.user = null;
     Object.assign(notif, { items: [], unread: 0, avisado: false, pintar: null });
     // O ecrã de entrada é sempre escuro (fotografia + cartão escuro); o tema
@@ -178,9 +179,10 @@
   // A terceira coluna é quem vê a secção: '' = todos; 'manager' = proprietário
   // ou equipa sem estúdio (um agente não mexe na configuração geral); 'owner' =
   // só o proprietário. Ver os guardas do backend (requireManager/requireOwner).
+  // Em Estúdios o agente só vê (e configura) o seu.
   const NAV = [
     ['dashboard', 'Dashboard', ''], ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''], ['relatorios', 'Relatórios', ''],
-    ['estudios', 'Estúdios', 'manager'], ['servicos', 'Serviços', 'manager'],
+    ['estudios', 'Estúdios', ''], ['servicos', 'Serviços', 'manager'],
     ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'],
     ['utilizadores', 'Utilizadores', 'owner'], ['acesso', 'Gestão de acesso', 'owner'], ['configuracoes', 'Configurações', 'manager'],
   ];
@@ -265,6 +267,7 @@
     hoje: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'],
     pagamento: ['M3 7h18v10H3z', 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', 'M6 10h.01', 'M18 14h.01'],
     seguranca: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', 'M12 9v4', 'M12 16h.01'],
+    recebido: ['M3 7h18v10H3z', 'M3 11h18', 'M8 15l2 2 4-4'],
   };
   const SINO = ['M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20a2 2 0 0 0 4 0'];
 
@@ -316,10 +319,18 @@
   async function loadNotifs() {
     try {
       const r = await api('/api/admin/notificacoes');
+      const antes = new Set(notif.items.filter((n) => n.unread).map((n) => n.id));
       notif.items = r.items;
       notif.unread = r.unread;
       if (notif.pintar) notif.pintar();
       if (!notif.avisado && r.unread) toast(r.unread === 1 ? 'Tem 1 notificação por ler.' : `Tem ${r.unread} notificações por ler.`);
+      else if (notif.avisado) {
+        // Com o painel aberto: avisa do que chegou desde a última verificação
+        // (um pagamento recebido, um pedido novo…).
+        const novas = r.items.filter((n) => n.unread && !antes.has(n.id));
+        if (novas.length === 1) toast(`${novas[0].title}: ${novas[0].text}`);
+        else if (novas.length > 1) toast(`Tem ${novas.length} notificações novas.`);
+      }
       notif.avisado = true;
     } catch (_) { /* o sininho fica como estava */ }
   }
@@ -519,6 +530,7 @@
     startPolling();
     route();
     loadNotifs();
+    if (window.AdminSuporte) window.AdminSuporte.iniciar();   // ver admin-suporte.js
   }
   window.addEventListener('hashchange', route);
 

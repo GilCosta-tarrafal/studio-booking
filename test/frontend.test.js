@@ -143,7 +143,8 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(!d.querySelector('#passo-2 #summary') && !!d.querySelector('#passo-3 #summary'), 'e o resumo do pedido com eles');
 
   ok(/Paris/.test(d.querySelectorAll('#studios .choice')[0].textContent)
-    && /Assomada/.test(d.querySelectorAll('#studios .choice')[1].textContent), 'Paris num cartão, Assomada no outro');
+    && /Estúdio Suavita/.test(d.querySelectorAll('#studios .choice')[1].textContent)
+    && !/Cabo Verde/.test(d.querySelectorAll('#studios .choice')[1].textContent), 'Paris num cartão; o Estúdio Suavita no outro, sem localização');
   ok(!d.querySelector('#studios svg'), 'os cartões de estúdio já não levam globo');
 
   const room = d.querySelectorAll('input[name=room]')[0];
@@ -652,7 +653,12 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   [...d.querySelectorAll('.tb-lang-menu .tb-menu-item')][1].click();
   await waitFor(() => [...d.querySelectorAll('.side .nav')].some((a) => /^Marcações/.test(a.textContent)), 'menu de volta ao português');
   ok(true, 'voltar a Português repõe os textos originais');
-  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Estúdios|Serviços|Integrações|Utilizadores|Gestão de acesso/.test(a.textContent)), 'o agente não vê as secções de gestor');
+  ok(![...d.querySelectorAll('.side .nav')].some((a) => /Serviços|Integrações|Utilizadores|Gestão de acesso/.test(a.textContent)), 'o agente não vê as secções de gestor');
+  ok([...d.querySelectorAll('.side .nav')].some((a) => /Estúdios/.test(a.textContent)), 'o agente vê Estúdios (só o seu)');
+  ok(d.querySelector('.sup-fab'), 'o botão de auriculares aparece no painel');
+  d.querySelector('.sup-fab').click();
+  ok([...d.querySelectorAll('.sup-opcao-txt')].map((b) => b.textContent).join('|') === 'Assistente IA|Chat — Agentes', 'os auriculares abrem Assistente IA e Chat — Agentes');
+  d.querySelector('.sup-fab').click();
   w.close();
 
   // ---- Cabeçalho preso ao topo ----

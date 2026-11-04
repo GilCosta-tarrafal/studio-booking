@@ -68,6 +68,12 @@ function aposPagamento(bookingId, valor) {
   const agora = new Date().toISOString();
   db.prepare('UPDATE bookings SET paid = paid + ?, updated_at=? WHERE id=?').run(valor, agora, bookingId);
   db.prepare("UPDATE bookings SET status='confirmado', updated_at=? WHERE id=? AND status='aguarda_pagamento' AND paid >= price").run(agora, bookingId);
+  // O cliente fica a saber que o pagamento entrou (o painel vê-o no sininho).
+  const b = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(bookingId);
+  if (b) {
+    require('../../backend/lib/aviso-pagamento').confirmado({ ...b, start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min) }, valor)
+      .catch((e) => console.error('aviso de pagamento recebido:', e.message));
+  }
 }
 
 // O que o recibo (talão) mostra, a partir de um pagamento.

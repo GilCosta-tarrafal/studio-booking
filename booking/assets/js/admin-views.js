@@ -587,7 +587,7 @@
       h('label', { class: 'check' }, f.active, 'Visível no site e aberto a marcações'),
       err,
       h('div', { class: 'modal-foot' },
-        !isNew && h('div', { class: 'spacer' }, h('button', { class: 'btn btn-danger', type: 'button', onclick: remove }, 'Eliminar estúdio')),
+        !isNew && !app.user.studio_id && h('div', { class: 'spacer' }, h('button', { class: 'btn btn-danger', type: 'button', onclick: remove }, 'Eliminar estúdio')),
         h('button', { class: 'btn', type: 'submit' }, isNew ? 'Criar estúdio' : 'Guardar estúdio')));
   }
 
@@ -717,13 +717,18 @@
     title: 'Estúdios',
     async render(box) {
       await A.reloadRefs();
-      const newPanel = h('details', { class: 'studio-panel', open: true, hidden: true },
-        h('summary', {}, 'Novo estúdio'), h('div', { class: 'studio-body' }, studioForm(null)));
-      box.append(pageHead('Estúdios e salas', h('button', {
-        class: 'btn', type: 'button',
-        onclick: () => { newPanel.hidden = false; newPanel.open = true; newPanel.scrollIntoView({ block: 'start' }); newPanel.querySelector('input').focus(); },
-      }, 'Novo estúdio')));
-      box.append(newPanel);
+      // O agente só vê o seu estúdio (o backend já filtra) e não cria estúdios.
+      if (app.user.studio_id) {
+        box.append(pageHead('O meu estúdio e salas'));
+      } else {
+        const newPanel = h('details', { class: 'studio-panel', open: true, hidden: true },
+          h('summary', {}, 'Novo estúdio'), h('div', { class: 'studio-body' }, studioForm(null)));
+        box.append(pageHead('Estúdios e salas', h('button', {
+          class: 'btn', type: 'button',
+          onclick: () => { newPanel.hidden = false; newPanel.open = true; newPanel.scrollIntoView({ block: 'start' }); newPanel.querySelector('input').focus(); },
+        }, 'Novo estúdio')));
+        box.append(newPanel);
+      }
       if (!app.studios.length) box.append(h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Ainda não há estúdios. Crie o primeiro com o botão acima.')));
       app.studios.forEach((s, idx) => {
         box.append(h('details', { class: 'studio-panel', open: idx === 0 },

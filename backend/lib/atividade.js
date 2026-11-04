@@ -46,8 +46,8 @@ function descrever(method, path, falhou = false) {
 // resultado (código HTTP) e quanto tempo demorou. As leituras não entram.
 function middleware(req, res, next) {
   if (!req.user || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  // Abrir o sininho não é uma alteração.
-  if (req.path === '/notificacoes/vistas') return next();
+  // Abrir o sininho, conversar no chat ou perguntar ao assistente não são alterações.
+  if (req.path === '/notificacoes/vistas' || /^\/(chat|assistente)(\/|$)/.test(req.path)) return next();
   const t0 = Date.now();
   const caminho = req.originalUrl.split('?')[0];
   res.on('finish', () => {

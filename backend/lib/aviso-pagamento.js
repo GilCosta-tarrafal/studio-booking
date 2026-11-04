@@ -33,4 +33,24 @@ async function avisar(b, req) {
   return Promise.all(envios);
 }
 
-module.exports = { avisar, siteUrl };
+// Depois de o pagamento entrar: confirma ao cliente que a marcação ficou
+// confirmada (e quanto pagou), com o link para consultar a marcação.
+async function confirmado(b, valor, req) {
+  const s = getSettings();
+  const dia = b.date.split('-').reverse().join('/');
+  const link = `${siteUrl(req)}/consultar?code=${encodeURIComponent(b.code)}`;
+  const texto = [
+    `Olá ${b.client_name},`,
+    '',
+    `Recebemos o seu pagamento de ${valor} ${s.currency || ''} da marcação ${b.code}.`,
+    `A marcação está confirmada: ${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}.`,
+    '',
+    `Consulte a marcação e o recibo aqui: ${link}`,
+  ].join('\n');
+  const envios = [];
+  if (b.client_email) envios.push(notify.sendEmail({ to: b.client_email, subject: `Pagamento recebido — marcação ${b.code} confirmada`, text: texto }));
+  if (b.client_phone) envios.push(notify.sendSms({ to: b.client_phone, text: `${s.business_name || 'Estúdio'}: pagamento recebido. A marcação ${b.code} (${dia}, ${b.start}) está confirmada.` }));
+  return Promise.all(envios);
+}
+
+module.exports = { avisar, confirmado, siteUrl };

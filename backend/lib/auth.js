@@ -94,8 +94,9 @@ function requireOwner(req, _res, next) {
 }
 
 // Gestor = proprietário ou equipa sem estúdio atribuído. Um agente (equipa
-// presa a um estúdio) não mexe na configuração global — estúdios, salas,
-// serviços nem na procura de coordenadas.
+// presa a um estúdio) não mexe na configuração global — criar/eliminar
+// estúdios, serviços, catálogos. (O seu estúdio e as suas salas configura-os:
+// ver assertStudioInScope em routes/admin.js.)
 function requireManager(req, _res, next) {
   if (!req.user) return next(new HttpError(401, 'Sessão expirada. Inicie sessão novamente.'));
   if (req.user.studio_id) return next(new HttpError(403, 'Um agente de estúdio não pode alterar a configuração geral.'));

@@ -275,6 +275,27 @@ CREATE TABLE IF NOT EXISTS faturas (
 );
 CREATE INDEX IF NOT EXISTS idx_faturas_booking ON faturas(booking_id);
 `);
+
+// Chat da equipa (botão de auriculares do painel): uma conversa geral com toda
+// a equipa e conversas a dois ("dm:3-7", ids por ordem). chat_reads guarda até
+// onde cada pessoa já leu cada conversa, para os "por ler". Apagar um
+// utilizador não apaga o que escreveu: fica sem autor (null).
+db.exec(`
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel    TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_channel ON chat_messages(channel, id);
+CREATE TABLE IF NOT EXISTS chat_reads (
+  user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel  TEXT NOT NULL,
+  last_id  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, channel)
+);
+`);
 // O que o dono escreve noutras línguas (nome, descrição...). Ver lib/traducoes.js.
 for (const tabela of ['studios', 'rooms', 'services']) acrescentaColuna(tabela, 'traducoes', "TEXT NOT NULL DEFAULT '{}'");
 // Agentes de estúdio: um utilizador da equipa pode ficar preso a um estúdio
@@ -372,9 +393,9 @@ acrescentaColuna('blocks', 'projeto_id', 'INTEGER');
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
 // quando ainda estão tal e qual como saíram do molde ("Cidade A", sem
 // coordenadas): num estúdio a sério, o que o dono escreveu nunca se toca.
+// (O segundo estúdio de exemplo fica sem localização: ainda não é pública.)
 for (const [cidadeDemo, cidade, lat, lon] of [
   ['Cidade A', 'Paris, França', 48.8566, 2.3522],
-  ['Cidade B', 'Assomada, Cabo Verde', 15.1, -23.6833],
 ]) {
   db.prepare(
     `UPDATE studios SET city=?, lat=?, lon=?, address=''
@@ -388,9 +409,8 @@ for (const [cidadeDemo, cidade, lat, lon] of [
 // sem traduções nenhumas: o que o dono escreveu nunca se toca.
 const TEXTOS_EXEMPLO = {
   'Estúdio Central': { en: 'Central Studio', fr: 'Studio Central' },
-  'Estúdio Norte': { en: 'North Studio', fr: 'Studio Nord' },
+  'Estúdio Suavita': { en: 'Suavita Studio', fr: 'Studio Suavita' },
   'Paris, França': { en: 'Paris, France', fr: 'Paris, France' },
-  'Assomada, Cabo Verde': { en: 'Assomada, Cape Verde', fr: 'Assomada, Cap-Vert' },
   'Estúdio principal, com sala de gravação e cabine de voz.': {
     en: 'Main studio, with a recording room and a vocal booth.',
     fr: 'Studio principal, avec une salle d’enregistrement et une cabine voix.',
@@ -611,7 +631,8 @@ function seedIfEmpty() {
     const a = st.run('Estúdio Central', 'Paris, França', '', '', 'Estúdio principal, com sala de gravação e cabine de voz.', hours, 48.8566, 2.3522, 1).lastInsertRowid;
     rm.run(a, 'Sala de gravação', 'Sala grande para bandas e gravação de instrumentos.', 2500, 1);
     rm.run(a, 'Cabine de voz', 'Cabine tratada para voz e locução.', 1500, 2);
-    const b = st.run('Estúdio Norte', 'Assomada, Cabo Verde', '', '', 'Segundo estúdio, para produção e mistura.', hours, 15.1000, -23.6833, 2).lastInsertRowid;
+    // Sem cidade nem coordenadas: a localização deste estúdio ainda não é pública.
+    const b = st.run('Estúdio Suavita', '', '', '', 'Segundo estúdio, para produção e mistura.', hours, null, null, 2).lastInsertRowid;
     rm.run(b, 'Sala de produção', 'Produção, mistura e masterização.', 2000, 1);
     const sv = db.prepare('INSERT INTO services(name,description,remote_ok,sort) VALUES(?,?,?,?)');
     sv.run('Gravação', 'Sessão de gravação de voz ou instrumentos, com técnico.', 0, 1);

@@ -37,6 +37,11 @@ function assertInScope(req, roomId) {
   const scope = scopeStudio(req);
   if (scope && roomStudio(roomId) !== scope) throw new HttpError(404, 'Não encontrado.');
 }
+// Estúdio que o agente tenta configurar sem ser o seu: recusa com clareza.
+function assertStudioInScope(req, studioId) {
+  const scope = scopeStudio(req);
+  if (scope && U.toInt(studioId) !== scope) throw new HttpError(403, 'Esse estúdio não é o seu.');
+}
 // Sala escolhida num formulário fora do estúdio do agente: recusa com clareza.
 function assertRoomInScope(req, roomId) {
   const scope = scopeStudio(req);
@@ -277,7 +282,7 @@ router.get('/notificacoes', (req, res) => {
   for (const p of pedidos) {
     itens.push({
       id: 'pedido-' + p.id, kind: 'pedido', title: 'Novo pedido de marcação',
-      text: `${p.client_name} · ${p.studio} · ${p.date} às ${U.fmtHM(p.start_min)}`,
+      text: `${p.client_name} · ${p.date.slice(8)}/${p.date.slice(5, 7)} às ${U.fmtHM(p.start_min)}`,
       at: p.created_at, href: '#/marcacoes',
     });
   }
@@ -302,6 +307,20 @@ router.get('/notificacoes', (req, res) => {
       id: 'atraso-' + now.date, kind: 'pagamento',
       title: atraso.n === 1 ? '1 sessão concluída por pagar' : `${atraso.n} sessões concluídas por pagar`,
       text: `Falta receber ${Number(atraso.v).toLocaleString('pt-PT')} ${getSettings().currency}.`, at: inicioDia, href: '#/relatorios',
+    });
+  }
+
+  // Pagamentos recebidos (página /pagar ou Stripe) nos últimos 14 dias.
+  const pagos = db.prepare(
+    `SELECT p.id, p.valor, p.moeda, p.atualizado_em, p.cartao_marca, p.cartao_ultimos, p.fornecedor, b.code, b.client_name
+       FROM int_pagamentos p JOIN bookings b ON b.id=p.booking_id JOIN rooms r ON r.id=b.room_id
+      WHERE p.estado='pago' AND p.atualizado_em>=?${sf} ORDER BY p.atualizado_em DESC LIMIT 15`
+  ).all(new Date(Date.now() - 14 * 86400000).toISOString());
+  for (const p of pagos) {
+    itens.push({
+      id: 'pago-' + p.id, kind: 'recebido', title: 'Pagamento recebido',
+      text: `${p.client_name} · ${Number(p.valor).toLocaleString('pt-PT')} ${String(p.moeda || getSettings().currency || '').toUpperCase()}`,
+      at: p.atualizado_em, href: '#/marcacoes',
     });
   }
 
@@ -612,8 +631,11 @@ router.post('/studios', auth.requireManager, async (req, res) => {
   res.status(201).json({ id });
 });
 
-router.put('/studios/:id', auth.requireManager, async (req, res) => {
+// O agente configura o seu estúdio (dados, horário, recibo); criar ou eliminar
+// estúdios continua a ser só da gestão.
+router.put('/studios/:id', async (req, res) => {
   const id = idParam(req);
+  assertStudioInScope(req, id);
   const b = await completarFiscal(studioBody(req.body || {}));
   const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, legal_name=?, nif=?, email=?, country_code=?, tax_name=?, vat_rate=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
     .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
@@ -638,8 +660,10 @@ function roomBody(b) {
   };
 }
 
-router.post('/rooms', auth.requireManager, (req, res) => {
+// Salas: o agente gere as do seu estúdio.
+router.post('/rooms', (req, res) => {
   const studioId = U.toInt((req.body || {}).studio_id);
+  assertStudioInScope(req, studioId);
   if (!db.prepare('SELECT 1 FROM studios WHERE id=?').get(studioId)) throw new HttpError(400, 'Estúdio inválido.');
   const b = roomBody(req.body || {});
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM rooms WHERE studio_id=?').get(studioId).m;
@@ -648,7 +672,8 @@ router.post('/rooms', auth.requireManager, (req, res) => {
   res.status(201).json({ id });
 });
 
-router.put('/rooms/:id', auth.requireManager, (req, res) => {
+router.put('/rooms/:id', (req, res) => {
+  assertInScope(req, idParam(req));
   const b = roomBody(req.body || {});
   const info = db.prepare('UPDATE rooms SET name=?, description=?, hourly_rate=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
     .run(b.name, b.description, b.hourly_rate, b.traducoes, b.active, idParam(req));
@@ -656,8 +681,9 @@ router.put('/rooms/:id', auth.requireManager, (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/rooms/:id', auth.requireManager, (req, res) => {
+router.delete('/rooms/:id', (req, res) => {
   const id = idParam(req);
+  assertInScope(req, id);
   if (db.prepare('SELECT COUNT(*) n FROM bookings WHERE room_id=?').get(id).n) {
     throw new HttpError(409, 'Esta sala tem marcações. Desative-a em vez de a eliminar.');
   }
@@ -853,7 +879,7 @@ router.delete('/users/:id', auth.requireOwner, (req, res) => {
 const GEOCODER = process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org/search';
 let ultimaProcura = 0;
 
-router.post('/geocode', auth.requireManager, async (req, res) => {
+router.post('/geocode', async (req, res) => {
   if (process.env.GEOCODER === 'off') {
     throw new HttpError(503, 'A procura automática está desligada. Escreva as coordenadas ou cole o link do Google Maps.');
   }
@@ -892,7 +918,7 @@ router.post('/geocode', auth.requireManager, async (req, res) => {
 });
 
 // País e taxa de IVA propostos para um sítio (as coordenadas do estúdio).
-router.get('/fiscal', auth.requireManager, async (req, res) => {
+router.get('/fiscal', async (req, res) => {
   const lat = Number(req.query.lat), lon = Number(req.query.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new HttpError(400, 'Coordenadas inválidas.');
   const f = await fiscal.detetar(lat, lon, { url: GEOCODER, agente: `studio-booking (${getSettings().business_name || 'estudio'})` });

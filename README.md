@@ -64,6 +64,7 @@ Variáveis de ambiente (ver `.env.example`):
 | `COOKIE_SECURE=1` | Ative quando o site estiver em HTTPS (deve estar sempre). |
 | `TRUST_PROXY=1` | Ative atrás do proxy do serviço, para os limites de pedidos verem o IP real. |
 | `PORT` | Porta (a maioria dos serviços define-a sozinha). |
+| `ANTHROPIC_API_KEY` | Chave da API da Claude para o "Assistente IA" do painel (botão de auriculares). Sem ela, o assistente avisa que não está configurado; o chat da equipa funciona na mesma. |
 
 O nome de domínio e o HTTPS são configurados no serviço de alojamento.
 
