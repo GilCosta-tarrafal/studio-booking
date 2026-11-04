@@ -72,8 +72,8 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(slidesNov.length >= 1 && slidesNov.length <= 5, 'novidades: no máximo 5 slides (' + slidesNov.length + ')');
   ok(d.querySelector('h1').textContent.includes('Tempo de estúdio'), 'título do herói');
   const navTopo = [...d.querySelectorAll('.topnav a')].filter((a) => !a.hidden).map((a) => a.textContent);
-  ok(['Serviços', 'Músicas', 'Como funciona', 'Contactos', 'Consultar marcação', 'Marcar sessão'].every((x) => navTopo.includes(x)), 'cabeçalho: ' + navTopo.join(' · '));
-  ok(d.querySelector('.topnav a[href="#projetos"]').hidden === d.getElementById('projetos').hidden, 'o link Participa segue a secção (só aparece com projetos)');
+  ok(['Serviços', 'Músicas', 'Contactos', 'Consultar marcação'].every((x) => navTopo.includes(x)) && !d.querySelector('.topnav a[href="/marcar"]'), 'cabeçalho: ' + navTopo.join(' · ') + ' (sem o botão "Marcar sessão")');
+  ok(!d.querySelector('.topnav a[href="#projetos"]') && !d.querySelector('.topnav a[href="#como"]'), 'o cabeçalho já não tem "Participa" nem "Como funciona"');
   w.close();
 
   // Marcar exige conta. Cria-se uma e guarda-se o cookie de sessão no jar, para
