@@ -10,9 +10,8 @@
 // Cartões: com o Stripe ligado (STRIPE_SECRET_KEY + STRIPE_PUBLISHABLE_KEY)
 // as caixas do cartão são do Stripe e o número nunca chega aqui; guarda-se só
 // a marca, os 4 últimos dígitos e a validade. Para ver o fluxo sem Stripe há
-// o modo de demonstração — só com "npm run dev" (--pagamentos-demo) ou
-// PAGAMENTOS_DEMO=1, nunca por falta de chaves: aceita apenas cartões de
-// teste e não cobra nada.
+// o modo de demonstração — só em desenvolvimento (ver util.pagamentosDemo),
+// nunca por falta de chaves: aceita apenas cartões de teste e não cobra nada.
 // ---------------------------------------------------------------------------
 const express = require('express');
 const crypto = require('crypto');
@@ -26,7 +25,7 @@ const router = express.Router();
 const limitador = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
 const erro = (m, s = 400) => new U.HttpError(s, m);
 
-const demo = () => !stripe.noSite() && (process.argv.includes('--pagamentos-demo') || process.env.PAGAMENTOS_DEMO === '1');
+const demo = () => !stripe.noSite() && U.pagamentosDemo();
 const modo = () => (stripe.noSite() ? 'stripe' : demo() ? 'demo' : 'off');
 // Cartões de teste aceites na demonstração (os mesmos do Stripe em teste).
 const CARTOES_DEMO = { '4242424242424242': 'visa', '5555555555554444': 'mastercard', '4000056655665556': 'visa' };

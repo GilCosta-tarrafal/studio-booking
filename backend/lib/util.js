@@ -77,7 +77,16 @@ function isEmail(s) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 }
 
+// Pagamentos de demonstração (cartões de teste, nada cobrado): só em
+// desenvolvimento — "npm run dev" (corre com node --watch, que marca o processo
+// com WATCH_REPORT_DEPENDENCIES), a opção --pagamentos-demo ou PAGAMENTOS_DEMO=1.
+// Nunca se liga por faltarem as chaves do Stripe nem com NODE_ENV=production.
+function pagamentosDemo() {
+  if (process.env.NODE_ENV === 'production' && process.env.PAGAMENTOS_DEMO !== '1') return false;
+  return process.env.PAGAMENTOS_DEMO === '1' || process.argv.includes('--pagamentos-demo') || process.env.WATCH_REPORT_DEPENDENCIES === '1';
+}
+
 module.exports = {
   HttpError, TZ, nowLocal, isValidDate, addDays, weekday, daysBetween,
-  parseHM, fmtHM, digits, clean, toInt, isEmail,
+  parseHM, fmtHM, digits, clean, toInt, isEmail, pagamentosDemo,
 };
