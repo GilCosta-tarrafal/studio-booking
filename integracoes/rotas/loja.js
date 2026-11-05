@@ -12,7 +12,7 @@
 // unidades saem do stock; sem pagar, a reserva expira e as unidades voltam.
 // Com o stock a zero, o artigo sai do site.
 // ---------------------------------------------------------------------------
-const { db, getSettings, newCode } = require('../../backend/lib/db');
+const { db, getSettings, newCode, alargarCheck, acrescentaColuna } = require('../../backend/lib/db');
 const U = require('../../backend/lib/util');
 const { HttpError } = U;
 
@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS int_encomendas (
 );
 CREATE INDEX IF NOT EXISTS idx_int_encomendas_projeto ON int_encomendas(projeto_id, estado);
 `);
+// Reembolso de uma compra (rotas/reembolsos.js).
+alargarCheck('int_encomendas', "('aguarda_pagamento','pago','expirado')", "('aguarda_pagamento','pago','expirado','reembolsado')",
+  'CREATE INDEX IF NOT EXISTS idx_int_encomendas_projeto ON int_encomendas(projeto_id, estado);', "'reembolsado'");
+acrescentaColuna('int_encomendas', 'reembolsado_em', 'TEXT');
 
 const RESERVA_MIN = 30;
 const MAX_POR_COMPRA = 99;
@@ -190,10 +194,23 @@ function recibo(p, clientId) {
   };
 }
 
+// Compra reembolsada: deixa de contar como vendida e, se `devolverStock`, as
+// unidades voltam a estar à venda.
+function reembolsar(code, devolverStock) {
+  const e = porCodigo(code);
+  if (!e || e.estado !== 'pago') return e;
+  const agora = new Date().toISOString();
+  db.transaction(() => {
+    db.prepare("UPDATE int_encomendas SET estado='reembolsado', reembolsado_em=?, atualizado_em=? WHERE id=?").run(agora, agora, e.id);
+    if (devolverStock && e.projeto_id) db.prepare('UPDATE int_projetos SET stock=COALESCE(stock,0)+? WHERE id=?').run(e.quantidade, e.projeto_id);
+  })();
+  return porCodigo(code);
+}
+
 // Para o painel: as encomendas de um artigo, das mais recentes.
 function listar(projetoId) {
   expirar();
   return db.prepare('SELECT id, code, quantidade, total, cliente_nome, cliente_email, cliente_tel, estado, criado_em, pago_em FROM int_encomendas WHERE projeto_id=? ORDER BY id DESC LIMIT 200').all(projetoId);
 }
 
-module.exports = { criar, daConta, porCodigo, resumo, aposPagamento, recibo, disponivel, vendidas, listar, expirar, RESERVA_MIN };
+module.exports = { criar, daConta, porCodigo, resumo, aposPagamento, reembolsar, recibo, disponivel, vendidas, listar, expirar, RESERVA_MIN };

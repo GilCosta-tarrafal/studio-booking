@@ -493,8 +493,9 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   // Definições: agora só as definições e a palavra-passe (a gestão de
   // utilizadores mudou-se para a Gestão de acesso).
   w.location.hash = '#/definicoes';
-  await waitFor(() => d.querySelectorAll('form.panel').length === 2 && !d.querySelector('.user-card'), 'definições');
+  await waitFor(() => d.querySelectorAll('form.panel').length === 1 && d.querySelector('form.panel input[type=text]') && !d.querySelector('.user-card'), 'definições');
   ok(!d.querySelector('.user-card'), 'definições já não tem a gestão de utilizadores');
+  ok(![...d.querySelectorAll('form.panel h2')].some((e) => /palavra-passe/i.test(e.textContent)), 'definições já não tem "A minha palavra-passe" (está em O Meu Perfil)');
   const sf = d.querySelector('form.panel');
   const nameField = sf.querySelector('input[type=text]');
   nameField.value = 'Produções Teste';
@@ -510,6 +511,12 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(estadosCat.length === 7 && estadosCat.every((li) => li.querySelector('.cf-act.lock') && !li.querySelector('.cf-act.del')), 'estados de marcação: 7, todos do sistema (cadeado, sem apagar)');
   ok(estadosCat.some((li) => /Expirado/.test(li.textContent)) && !d.querySelector('.cf-add'), 'inclui "Expirado" e não deixa acrescentar estados');
   ok(d.querySelectorAll('.cf-group-t').length === 3, 'menu de Configurações com Geral, Catálogos e Integrações');
+  ok([...d.querySelectorAll('.cf-link')].some((a) => a.textContent === 'Estados de pagamento'), 'os catálogos incluem "Estados de pagamento"');
+  w.location.hash = '#/configuracoes?sec=estados_pagamento';
+  await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Estados de pagamento', 'estados de pagamento');
+  const estPagCat = [...d.querySelectorAll('.cf-item')];
+  ok(estPagCat.length === 4 && ['Pago', 'Pendente', 'Reembolsado', 'Falhou'].every((n) => estPagCat.some((li) => li.querySelector('strong').textContent === n))
+    && estPagCat.every((li) => li.querySelector('.cf-act.lock') && !li.querySelector('.cf-act.del')), 'estados de pagamento: Pago, Pendente, Reembolsado e Falhou, do sistema (cadeado)');
   w.location.hash = '#/configuracoes?sec=metodos_pagamento';
   await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Métodos de pagamento', 'métodos de pagamento');
   ok([...d.querySelectorAll('.cf-item strong')].some((e) => e.textContent === 'Transferência bancária'), 'métodos de pagamento já vêm preenchidos');

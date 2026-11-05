@@ -940,30 +940,6 @@
           !isNew && u.id !== meId && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar'))));
   }
 
-  function passwordPanel() {
-    const cur1 = h('input', { type: 'password', autocomplete: 'current-password' });
-    const n1 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8 });
-    const n2 = h('input', { type: 'password', autocomplete: 'new-password' });
-    const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
-    return h('form', {
-      class: 'panel panel-stack',
-      onsubmit: async (e) => {
-        e.preventDefault();
-        err.hidden = true;
-        if (n1.value !== n2.value) { err.textContent = 'As palavras-passe novas não coincidem.'; err.hidden = false; return; }
-        try {
-          await api('/api/auth/password', { method: 'POST', body: { current: cur1.value, next: n1.value } });
-          cur1.value = n1.value = n2.value = '';
-          toast('Palavra-passe alterada.');
-        } catch (ex) { err.textContent = ex.message; err.hidden = false; }
-      },
-    },
-    h('h2', {}, 'A minha palavra-passe'),
-    h('div', { class: 'grid-3' }, field('Atual', cur1), field('Nova', n1), field('Repetir a nova', n2)),
-    err,
-    h('div', { class: 'modal-foot' }, h('button', { class: 'btn', type: 'submit' }, 'Alterar palavra-passe')));
-  }
-
   views.definicoes = {
     title: 'Definições',
     async render(box) {
@@ -972,7 +948,6 @@
       app.settings = settings;
       box.append(pageHead('Definições'));
       box.append(settingsPanel(settings, isOwner));
-      box.append(passwordPanel());
     },
   };
 

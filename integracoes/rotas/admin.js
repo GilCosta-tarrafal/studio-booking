@@ -25,9 +25,16 @@ module.exports = (fornecedores) => {
       lancamentos: db.prepare(
         "SELECT id, fonte, titulo, artista, capa, link, data, plays, plays_em, visivel, removido FROM int_lancamentos ORDER BY data DESC, id DESC LIMIT 300"
       ).all(),
+      // Pagamentos de marcações e de compras da loja (estas sem booking_id: o
+      // código é o da encomenda), com o que é preciso para reembolsar.
       pagamentos: db.prepare(
-        `SELECT p.id, p.booking_code, p.booking_id, p.valor, p.moeda, p.estado, p.criado_em, p.atualizado_em, b.client_name
+        `SELECT p.id, p.booking_code, p.booking_id, p.valor, p.moeda, p.estado, p.fornecedor, p.criado_em, p.atualizado_em,
+                p.reembolsado_em, p.reembolso_motivo,
+                COALESCE(b.client_name, e.cliente_nome) AS client_name, b.status AS booking_status,
+                CASE WHEN p.booking_id IS NULL AND e.id IS NOT NULL THEN 'compra' ELSE 'marcacao' END AS tipo,
+                e.titulo AS artigo, e.quantidade
            FROM int_pagamentos p LEFT JOIN bookings b ON b.id = p.booking_id
+           LEFT JOIN int_encomendas e ON e.code = p.booking_code AND p.booking_id IS NULL
           ORDER BY p.id DESC LIMIT 50`
       ).all(),
     });
@@ -114,6 +121,14 @@ module.exports = (fornecedores) => {
         res.status(201).json({ caminho: capas.guardarEnviada(req.body) });
       } catch (e) { throw new U.HttpError(400, e.message); }
     });
+
+  // Reembolsar um pagamento online (ver rotas/reembolsos.js). Dinheiro: só a
+  // gestão (proprietário ou equipa sem estúdio), nunca um agente.
+  router.post('/pagamentos/:id/reembolsar', auth.requireManager, async (req, res) => {
+    const b = req.body || {};
+    res.json(await require('./reembolsos').reembolsar(req.params.id,
+      { motivo: b.motivo, cancelar: !!b.cancelar, devolverStock: !!b.devolver_stock }, req.user));
+  });
 
   // Ir buscar agora, à mão, a um fornecedor que o saiba fazer (gravadora, youtube).
   router.post('/:fornecedor/sincronizar', async (req, res) => {

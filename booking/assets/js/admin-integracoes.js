@@ -4,11 +4,18 @@
   const S = window.Studio;
   const A = window.Admin;
   const { h, money } = S;
-  const { app, views, api, toast, field, pageHead } = A;
+  const { app, views, api, toast, field, pageHead, openModal } = A;
 
   const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
   const numero = (n) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-PT'));
-  const ESTADO_PAG = { aberto: 'À espera', pago: 'Pago', expirado: 'Não concluído' };
+  // Nomes dos estados de pagamento: os do catálogo (Configurações › Estados de
+  // pagamento); estes ficam de reserva.
+  const ESTADO_PAG = { aberto: 'Pendente', pago: 'Pago', reembolsado: 'Reembolsado', expirado: 'Falhou' };
+  const nomeEstadoPag = (codigo) => {
+    const it = ((app.catalogos && app.catalogos.estados_pagamento) || []).find((i) => i.codigo === codigo);
+    return it ? it.nome : ESTADO_PAG[codigo] || codigo;
+  };
+  const COR_PAG = { pago: 'confirmado', aberto: 'aguarda_pagamento', reembolsado: 'cancelado', expirado: 'expirado' };
 
   function cartaoFornecedor(f, aoSincronizar) {
     return h('section', { class: 'panel' },
@@ -114,21 +121,71 @@
         h('tbody', {}, lista.map(linha)))));
   }
 
+  // Janela de reembolso: o valor, o motivo e o que fazer à marcação (cancelar)
+  // ou à compra (devolver as unidades ao stock).
+  function reembolsar(p) {
+    const cur = app.settings.currency;
+    const compra = p.tipo === 'compra';
+    const motivo = h('textarea', { maxlength: 300, rows: 3, placeholder: 'Ex.: o cliente desistiu; sessão cancelada pelo estúdio…' });
+    const cancelaveis = ['pedido', 'aguarda_pagamento', 'confirmado', 'em_curso'];
+    const extra = compra
+      ? h('input', { type: 'checkbox', checked: true })
+      : h('input', { type: 'checkbox', checked: cancelaveis.includes(p.booking_status), disabled: !cancelaveis.includes(p.booking_status) });
+    const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+    openModal((close) => {
+      const confirmar = h('button', { class: 'btn btn-danger', type: 'submit' }, 'Reembolsar ' + money(p.valor, cur));
+      return h('div', { class: 'modal-in' },
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Reembolsar pagamento')),
+        h('p', { class: 'modal-sub' }, compra ? `Compra ${p.booking_code} · ${p.quantidade} × ${p.artigo} · ${p.client_name || ''}` : `Marcação ${p.booking_code} · ${p.client_name || ''}`),
+        h('form', {
+          onsubmit: async (e) => {
+            e.preventDefault();
+            err.hidden = true;
+            confirmar.disabled = true;
+            try {
+              const r = await api(`/api/admin/integracoes/pagamentos/${p.id}/reembolsar`, {
+                method: 'POST', body: { motivo: motivo.value, cancelar: !compra && extra.checked, devolver_stock: compra && extra.checked },
+              });
+              close();
+              toast('Reembolso feito' + (r.stripe ? ': o valor volta ao cartão do cliente.' : '.') + (r.cancelada ? ' A marcação foi cancelada.' : '') + (r.stock_devolvido ? ' As unidades voltaram ao stock.' : ''));
+              A.refresh();
+            } catch (ex) { err.textContent = ex.message; err.hidden = false; confirmar.disabled = false; }
+          },
+        },
+        h('p', { class: 'notice info' }, p.fornecedor === 'stripe'
+          ? `O Stripe devolve ${money(p.valor, cur)} ao cartão do cliente (pode demorar alguns dias a aparecer). Não se pode desfazer.`
+          : 'Pagamento de demonstração: não houve dinheiro, por isso só fica marcado como reembolsado.'),
+        field('Motivo (opcional)', motivo, { hint: 'Fica registado e vai no email ao cliente.' }),
+        compra
+          ? h('label', { class: 'check' }, extra, `Devolver as ${p.quantidade} unidades ao stock (voltam a estar à venda)`)
+          : h('label', { class: 'check' }, extra, cancelaveis.includes(p.booking_status) ? 'Cancelar a marcação (o horário fica livre)' : 'A marcação já não se pode cancelar (já terminou ou foi cancelada)'),
+        h('p', { class: 'hint' }, compra ? 'A compra fica como reembolsada.' : 'O valor sai do "Já pago" da marcação.', ' O cliente recebe um email a avisar.'),
+        err,
+        h('div', { class: 'modal-foot' },
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+          confirmar)));
+    });
+  }
+
   function tabelaPagamentos(lista) {
     if (!lista.length) return null;
     const cur = app.settings.currency;
+    const gestor = !app.user.studio_id;
     return h('section', { class: 'panel' },
       h('h2', {}, 'Pagamentos online'),
-      h('p', { class: 'hint' }, 'Os pagos já estão somados ao "Já pago" da marcação. Reembolsos fazem-se no painel do Stripe; depois acerte o valor na marcação.'),
+      h('p', { class: 'hint' }, 'Marcações e compras da loja pagas no site. Os pagos já contam no "Já pago" da marcação (ou na compra). "Reembolsar" devolve o dinheiro ao cliente.'),
       h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
-        h('thead', {}, h('tr', {}, [['Marcação', ''], ['Cliente', ''], ['Valor', 'num'], ['Estado', ''], ['Atualizado', '']]
+        h('thead', {}, h('tr', {}, [['Referência', ''], ['Cliente', ''], ['Valor', 'num'], ['Estado', ''], ['Atualizado', ''], ['', '']]
           .map(([t, c]) => h('th', { scope: 'col', class: c }, t)))),
         h('tbody', {}, lista.map((p) => h('tr', {},
-          h('td', {}, p.booking_code || '—'),
+          h('td', {}, p.booking_code || '—', h('span', { class: 'sub' }, p.tipo === 'compra' ? `Compra · ${p.quantidade} × ${p.artigo}` : 'Marcação')),
           h('td', {}, p.client_name || '—'),
           h('td', { class: 'num' }, money(p.valor, cur)),
-          h('td', {}, ESTADO_PAG[p.estado] || p.estado),
-          h('td', {}, quando(p.atualizado_em))))))));
+          h('td', {}, h('span', { class: 'tag', 'data-s': COR_PAG[p.estado] || '' }, nomeEstadoPag(p.estado)),
+            p.estado === 'reembolsado' && p.reembolso_motivo ? h('span', { class: 'sub' }, p.reembolso_motivo) : null),
+          h('td', {}, quando(p.estado === 'reembolsado' && p.reembolsado_em ? p.reembolsado_em : p.atualizado_em)),
+          h('td', {}, gestor && p.estado === 'pago' && ['stripe', 'demo'].includes(p.fornecedor)
+            ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => reembolsar(p) }, 'Reembolsar') : null)))))));
   }
 
   views.integracoes = {

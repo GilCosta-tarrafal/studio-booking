@@ -32,6 +32,7 @@ process.env.YOUTUBE_MUSICAS_FILE = musicasFile;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
 const pedidosStripe = [];
+const reembolsosStripe = [];
 let feed = [];
 let feedAutorizacao = null;
 // Views que o "YouTube" de mentira devolve. O vídeo privado não está aqui, por
@@ -50,6 +51,11 @@ const fora = http.createServer((req, res) => {
       const id = 'cs_test_' + pedidosStripe.length;
       res.writeHead(200, { 'Content-Type': 'application/json' })
         .end(JSON.stringify({ id, url: 'https://checkout.stripe.com/c/pay/' + id }));
+    } else if (req.url.startsWith('/v1/checkout/sessions/') && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: req.url.split('/').pop(), payment_intent: 'pi_da_sessao' }));
+    } else if (req.url === '/v1/refunds' && req.method === 'POST') {
+      reembolsosStripe.push({ campos: Object.fromEntries(new URLSearchParams(corpo)), auth: req.headers.authorization });
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ id: 're_test_1', status: 'succeeded' }));
     } else if (req.url === '/feed') {
       feedAutorizacao = req.headers.authorization;
       res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ lancamentos: feed }));
@@ -209,6 +215,15 @@ function futureWeekday(offset = 3) {
 
   r = await call('GET', '/api/admin/integracoes', { cookie });
   ok(r.json.pagamentos[0].estado === 'pago' && r.json.pagamentos[0].valor === 4000, 'o pagamento aparece no painel como pago');
+
+  // Reembolso pelo Stripe: o dinheiro volta ao cartão; sai do "Já pago".
+  const pagStripe = r.json.pagamentos[0];
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagStripe.id}/reembolsar`, { cookie, body: { motivo: 'Sessão cancelada pelo estúdio' } });
+  ok(r.status === 200 && r.json.stripe && r.json.pagamento.estado === 'reembolsado' && r.json.pagamento.reembolso_externo === 're_test_1', 'reembolso pelo Stripe: o pagamento fica reembolsado');
+  ok(reembolsosStripe.length === 1 && reembolsosStripe[0].campos.payment_intent === 'pi_da_sessao' && reembolsosStripe[0].auth === 'Bearer sk_test_123', 'o Stripe recebe o pedido de reembolso do pagamento certo');
+  b = db.prepare('SELECT paid, status FROM bookings WHERE id=?').get(id);
+  ok(b.paid === 1000 && b.status !== 'cancelado', 'sai do "Já pago" (sem cancelar, porque não se pediu)');
+  r = await call('GET', '/api/admin/integracoes', { cookie });
 
   r = await stripeWebhook({ id: 'evt_3', type: 'customer.created', data: { object: {} } });
   ok(r.status === 200, 'eventos que não interessam são aceites e ignorados');

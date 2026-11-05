@@ -207,7 +207,7 @@
   }
 
   // ------------------------------------------------------------ Encomendas (vendas)
-  const ESTADO_ENC = { aguarda_pagamento: ['Por pagar', 'aguarda_pagamento'], pago: ['Paga', 'confirmado'], expirado: ['Expirou', 'expirado'] };
+  const ESTADO_ENC = { aguarda_pagamento: ['Por pagar', 'aguarda_pagamento'], pago: ['Paga', 'confirmado'], expirado: ['Expirou', 'expirado'], reembolsado: ['Reembolsada', 'cancelado'] };
   function verEncomendas(p) {
     openModal((close) => {
       const lista = h('ul', { class: 'insc-lista' }, h('li', { class: 'hint' }, 'A carregar…'));

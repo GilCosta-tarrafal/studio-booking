@@ -185,6 +185,20 @@ function marcarIntentPago(pi) {
   return db.prepare('SELECT * FROM int_pagamentos WHERE externo_id=?').get(pi.id);
 }
 
+// Devolve ao cartão o valor de um pagamento (todo). Os pagamentos do site são
+// PaymentIntents (pi_…); os de Checkout (cs_…) têm o PaymentIntent na sessão.
+// Devolve o id do reembolso no Stripe.
+async function reembolsar(pag) {
+  let pi = pag.externo_id;
+  if (pi.startsWith('cs_')) {
+    const sessao = await stripeGet('/v1/checkout/sessions/' + encodeURIComponent(pi));
+    pi = sessao && sessao.payment_intent;
+  }
+  if (!pi) throw new Error('Não foi possível encontrar este pagamento no Stripe.');
+  const r = await stripe('/v1/refunds', { payment_intent: pi, metadata: { booking_code: pag.booking_code } });
+  return r.id;
+}
+
 // ---------------------------------------------------------------- Webhook
 
 function marcarPago(sessao) {
@@ -262,5 +276,5 @@ function estado() {
 
 module.exports = {
   id: ID, ativo, estado, webhook, criarCheckout, podePagar, emFalta, moeda,
-  publicavel, noSite, clienteStripe, criarSetup, lerCartao, pagarComCartao, lerIntent, marcarIntentPago,
+  publicavel, noSite, clienteStripe, criarSetup, lerCartao, pagarComCartao, lerIntent, marcarIntentPago, reembolsar,
 };

@@ -59,6 +59,17 @@ const CATALOGOS = [
       ['expirado', 'Expirado', 'Ninguém confirmou o pedido até à hora da sessão. O horário fica livre.'],
     ],
   },
+  {
+    // Os códigos são os de int_pagamentos.estado (pagamentos online de
+    // marcações e da loja). Reembolsa-se em Integrações › Pagamentos online.
+    key: 'estados_pagamento', titulo: 'Estados de pagamento', desc: 'Os estados de um pagamento online. São do sistema: muda-se só a descrição. Para reembolsar, vá a Integrações › Pagamentos online.',
+    sistema: true, itens: [
+      ['pago', 'Pago', 'Pagamento confirmado e processado. Já conta no "Já pago" da marcação ou na compra.'],
+      ['aberto', 'Pendente', 'À espera da confirmação do pagamento.'],
+      ['reembolsado', 'Reembolsado', 'Valor devolvido ao cliente.'],
+      ['expirado', 'Falhou', 'Pagamento rejeitado, cancelado ou não concluído.'],
+    ],
+  },
 ];
 const PORCHAVE = new Map(CATALOGOS.map((c) => [c.key, c]));
 

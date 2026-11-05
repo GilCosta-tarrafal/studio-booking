@@ -904,6 +904,31 @@ function futureWeekday(offset = 3) {
   db.prepare('UPDATE int_encomendas SET atualizado_em=? WHERE code=?').run(new Date(Date.now() - 31 * 60 * 1000).toISOString(), r.json.code);
   tshirt = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.id === artigo.id);
   ok(tshirt && tshirt.disponivel === 1, 'uma reserva com mais de 30 minutos por pagar liberta a unidade');
+
+  console.log('\nEstados de pagamento e reembolsos');
+  r = await call('GET', '/api/admin/catalogos', { cookie: dono });
+  const estPag = r.json.catalogos.find((c) => c.key === 'estados_pagamento');
+  ok(estPag && estPag.itens.map((i) => i.nome).join('|') === 'Pago|Pendente|Reembolsado|Falhou' && estPag.itens.every((i) => i.sistema), 'catálogo "Estados de pagamento": Pago, Pendente, Reembolsado, Falhou (do sistema)');
+  const pagMarc = db.prepare("SELECT * FROM int_pagamentos WHERE booking_code=? AND estado='pago'").get(codeP);
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagMarc.id}/reembolsar`, { body: {} });
+  ok(r.status === 401, 'reembolsar exige sessão da equipa');
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagMarc.id}/reembolsar`, { cookie: ac, body: {} });
+  ok(r.status === 403, 'um agente de estúdio não reembolsa');
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagMarc.id}/reembolsar`, { cookie: dono, body: { motivo: 'Cliente desistiu', cancelar: true } });
+  ok(r.status === 200 && r.json.pagamento.estado === 'reembolsado' && r.json.pagamento.reembolso_motivo === 'Cliente desistiu' && r.json.cancelada, 'reembolsar o pagamento de uma marcação (e cancelá-la)');
+  const bReemb = db.prepare('SELECT status, paid FROM bookings WHERE code=?').get(codeP);
+  ok(bReemb.status === 'cancelado' && bReemb.paid === 0, 'o valor sai do "Já pago" e a marcação fica cancelada (horário livre)');
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagMarc.id}/reembolsar`, { cookie: dono, body: {} });
+  ok(r.status === 409, 'o mesmo pagamento não se reembolsa duas vezes');
+  const pagCompra = db.prepare("SELECT * FROM int_pagamentos WHERE booking_code=? AND estado='pago'").get(enc1);
+  const stockAntes = db.prepare('SELECT stock FROM int_projetos WHERE id=?').get(artigo.id).stock;
+  r = await call('POST', `/api/admin/integracoes/pagamentos/${pagCompra.id}/reembolsar`, { cookie: dono, body: { devolver_stock: true } });
+  ok(r.status === 200 && r.json.stock_devolvido, 'reembolsar uma compra');
+  ok(db.prepare('SELECT estado FROM int_encomendas WHERE code=?').get(enc1).estado === 'reembolsado'
+    && db.prepare('SELECT stock FROM int_projetos WHERE id=?').get(artigo.id).stock === stockAntes + 2, 'a compra fica reembolsada e as 2 unidades voltam ao stock');
+  r = await call('GET', '/api/admin/integracoes', { cookie: dono });
+  const naLista = r.json.pagamentos.find((p) => p.id === pagCompra.id);
+  ok(naLista && naLista.tipo === 'compra' && naLista.estado === 'reembolsado' && naLista.client_name === 'Ana Silva', 'a lista de pagamentos mostra a compra reembolsada e quem comprou');
   delete process.env.PAGAMENTOS_DEMO;
   db.prepare('DELETE FROM bookings WHERE id=?').run(idP);
   db.prepare('DELETE FROM bookings WHERE id=?').run(marcR);

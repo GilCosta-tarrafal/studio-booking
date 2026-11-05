@@ -129,6 +129,15 @@ acrescentaColuna('int_projetos', 'hora_fim', 'INTEGER');
 acrescentaColuna('int_projetos', 'capas_origem', "TEXT NOT NULL DEFAULT '[]'");
 acrescentaColuna('int_projetos', 'capas', "TEXT NOT NULL DEFAULT '[]'");
 
+// Reembolsos (rotas/reembolsos.js): um pagamento pago pode passar a
+// "reembolsado", com a data, o motivo e quem o fez.
+alargarCheck('int_pagamentos', "('aberto','pago','expirado')", "('aberto','pago','expirado','reembolsado')",
+  'CREATE INDEX IF NOT EXISTS idx_int_pagamentos_booking ON int_pagamentos(booking_id);', "'reembolsado'");
+acrescentaColuna('int_pagamentos', 'reembolsado_em', 'TEXT');
+acrescentaColuna('int_pagamentos', 'reembolso_motivo', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_pagamentos', 'reembolso_externo', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('int_pagamentos', 'reembolsado_por', 'INTEGER');
+
 // Pagamentos feitos na página /pagar: com que cartão (para o recibo).
 acrescentaColuna('int_pagamentos', 'cartao_marca', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_pagamentos', 'cartao_ultimos', "TEXT NOT NULL DEFAULT ''");
