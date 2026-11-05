@@ -905,6 +905,30 @@ function futureWeekday(offset = 3) {
   tshirt = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.id === artigo.id);
   ok(tshirt && tshirt.disponivel === 1, 'uma reserva com mais de 30 minutos por pagar liberta a unidade');
 
+  console.log('\nTipos de projeto (Participa)');
+  r = await call('GET', '/api/admin/catalogos', { cookie: dono });
+  const tiposP = r.json.catalogos.find((c) => c.key === 'tipos_participa');
+  ok(tiposP && tiposP.titulo === 'Tipos de projeto (Participa)' && !tiposP.sistema
+    && ['talentos', 'album', 'gravacao', 'publicidade', 'vendas', 'outro'].every((c) => tiposP.itens.some((i) => i.codigo === c && i.sistema)), 'catálogo com os 6 tipos do sistema (protegidos) e onde se podem acrescentar');
+  ok(r.json.catalogos.find((c) => c.key === 'tipos_projeto').titulo === 'Tipos de projeto (marcações)', 'o catálogo das marcações passa a dizer "(marcações)"');
+  r = await call('DELETE', `/api/admin/catalogos/tipos_participa/${tiposP.itens.find((i) => i.codigo === 'vendas').id}`, { cookie: dono });
+  ok(r.status === 400, 'um tipo do sistema não se apaga');
+  r = await call('POST', '/api/admin/catalogos/tipos_participa', { cookie: dono, body: { nome: 'Workshop', descricao: 'Formação no estúdio.' } });
+  ok(r.status === 201, 'criar um tipo novo: Workshop');
+  const idWorkshop = r.json.id;
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: { tipo: 'WORKSHOP', titulo: 'Workshop de mistura', aberto: true } });
+  ok((r.status === 200 || r.status === 201) && r.json.projeto.tipo === 'outro' && r.json.projeto.categoria === 'WORKSHOP', 'um projeto com o tipo novo (funciona como uma campanha)');
+  const projW = r.json.projeto;
+  const noSiteW = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.id === projW.id);
+  ok(noSiteW && noSiteW.tipo_nome === 'Workshop' && noSiteW.aberto, 'no site aparece com o nome "Workshop" e aceita inscrições');
+  r = await call('POST', `/api/integracoes/projetos/${projW.id}/interesse`, { body: { nome: 'Rui', email: 'rui@x.cv' } });
+  ok(r.status === 200 || r.status === 201, 'e recebe inscrições');
+  r = await call('DELETE', `/api/admin/catalogos/tipos_participa/${idWorkshop}`, { cookie: dono });
+  ok(r.status === 409 && /1 projeto/.test(r.json.error), 'um tipo em uso não se apaga (desativa-se)');
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: { tipo: 'INVENTADO', titulo: 'X' } });
+  ok(r.json.projeto.tipo === 'outro' && r.json.projeto.categoria === '', 'um tipo que não existe no catálogo fica "Outro"');
+  await call('DELETE', `/api/admin/integracoes/projetos/${r.json.projeto.id}`, { cookie: dono });
+
   console.log('\nEstados de pagamento e reembolsos');
   r = await call('GET', '/api/admin/catalogos', { cookie: dono });
   const estPag = r.json.catalogos.find((c) => c.key === 'estados_pagamento');

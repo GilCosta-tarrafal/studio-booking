@@ -8,7 +8,20 @@
   const { h, waLink } = S;
   const { app, api, toast, field, campoImagens, pageHead, openModal } = A;
 
+  // Os tipos vêm de Configurações › Tipos de projeto (Participa): os do sistema
+  // e os que o dono criar. Esta lista fica de reserva (catálogo por carregar).
   const TIPOS = [['talentos', 'Campanha de talentos'], ['album', 'Álbum coletivo'], ['gravacao', 'Gravação prolongada (com artista)'], ['publicidade', 'Publicidade'], ['vendas', 'Vendas (artigo à venda)'], ['outro', 'Outro']];
+  const tiposCat = () => (app.catalogos && app.catalogos.tipos_participa) || [];
+  // Os ativos (e o do projeto, mesmo que entretanto desativado).
+  const tiposParaEscolher = (atual) => (tiposCat().length
+    ? tiposCat().filter((i) => i.ativo || i.codigo === atual).map((i) => [i.codigo, i.nome]) : TIPOS);
+  // O código do tipo de um projeto: o criado em Configurações, ou o do sistema.
+  const codigoTipo = (p) => p.categoria || p.tipo;
+  const nomeTipo = (p) => {
+    const c = codigoTipo(p);
+    const it = tiposCat().find((i) => i.codigo === c);
+    return it ? it.nome : TIPO_NOME[c] || c;
+  };
   const ddmm = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
   const hm = (min) => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
 
@@ -35,7 +48,7 @@
     const novo = !p;
     p = p || {};
     const f = {
-      tipo: h('select', { value: p.tipo || 'talentos' }, TIPOS.map(([v, nome]) => h('option', { value: v }, nome))),
+      tipo: h('select', { value: codigoTipo(p) || 'talentos' }, tiposParaEscolher(codigoTipo(p)).map(([v, nome]) => h('option', { value: v }, nome))),
       titulo: h('input', { type: 'text', maxlength: 140, value: p.titulo || '', required: true }),
       resumo: h('input', { type: 'text', maxlength: 200, value: p.resumo || '' }),
       descricao: h('textarea', { maxlength: 2000 }, p.descricao || ''),
@@ -199,7 +212,7 @@
       };
       carregar();
       return h('div', { class: 'modal-in' },
-        h('div', { class: 'modal-head' }, h('h2', {}, 'Inscrições'), h('span', { class: 'tag' }, TIPO_NOME[p.tipo] || p.tipo)),
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Inscrições'), h('span', { class: 'tag' }, nomeTipo(p))),
         h('p', { class: 'modal-sub' }, p.titulo),
         lista,
         h('div', { class: 'modal-foot' }, h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Fechar')));
@@ -252,7 +265,7 @@
       p.capa && h('img', { class: 'projeto-capa', src: p.capa, alt: '', width: 84, height: 84 }),
       h('div', { class: 'projeto-corpo' },
         h('div', { class: 'projeto-topo' },
-          h('span', { class: 'tag' }, TIPO_NOME[p.tipo] || p.tipo),
+          h('span', { class: 'tag' }, nomeTipo(p)),
           marcas),
         h('h2', {}, p.titulo),
         p.resumo && h('p', { class: 'projeto-resumo' }, p.resumo),

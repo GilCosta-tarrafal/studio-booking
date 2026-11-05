@@ -23,11 +23,27 @@ const CATALOGOS = [
     ],
   },
   {
-    key: 'tipos_projeto', titulo: 'Tipos de projeto', desc: 'O que se está a gravar: um single, um álbum, um jingle…',
+    key: 'tipos_projeto', titulo: 'Tipos de projeto (marcações)', desc: 'O que se está a gravar numa marcação: um single, um álbum, um jingle…',
     campo: 'project_type', itens: [
       ['SINGLE', 'Single', 'Uma só música.'], ['EP', 'EP', 'Até seis músicas.'], ['ALBUM', 'Álbum', 'Trabalho completo.'],
       ['MIXTAPE', 'Mixtape', ''], ['JINGLE', 'Jingle / publicidade', 'Spots de rádio, televisão ou redes sociais.'],
       ['PODCAST', 'Podcast', ''], ['BANDA_SONORA', 'Banda sonora', 'Música para filme, série ou jogo.'],
+    ],
+  },
+  {
+    // Os tipos dos projetos da secção "Participa" do site (Projetos, no painel).
+    // Os seis primeiros têm comportamento próprio e ficam protegidos (5.º
+    // elemento = do sistema); os que o dono criar funcionam como uma campanha:
+    // aparecem no site e podem receber inscrições. O código fica em
+    // int_projetos (tipo, para os do sistema; categoria, para os novos).
+    key: 'tipos_participa', titulo: 'Tipos de projeto (Participa)', desc: 'Os tipos dos projetos da secção "Participa" do site. Os do sistema têm comportamento próprio; os novos funcionam como uma campanha (aparecem no site e podem receber inscrições).',
+    itens: [
+      ['talentos', 'Campanha de talentos', 'Convocatória para novos talentos.', 1, true],
+      ['album', 'Álbum coletivo', 'Projeto com vários artistas.', 1, true],
+      ['gravacao', 'Gravação prolongada (com artista)', 'Bloqueia a sala durante um período. Não aparece no site.', 1, true],
+      ['publicidade', 'Publicidade', 'Só um anúncio no site, sem inscrições.', 1, true],
+      ['vendas', 'Vendas (artigo à venda)', 'Artigo da gravadora à venda no site, com preço e stock.', 1, true],
+      ['outro', 'Outro', 'Outra divulgação, com inscrições se quiser.', 1, true],
     ],
   },
   {
@@ -83,8 +99,12 @@ function semear() {
   db.transaction(() => {
     for (const c of CATALOGOS) {
       const vazio = !db.prepare('SELECT 1 FROM catalogo_itens WHERE catalogo=? LIMIT 1').get(c.key);
-      if (!vazio && !c.sistema) continue;
-      c.itens.forEach(([codigo, nome, descricao, ativo = 1], i) => ins.run(c.key, codigo, nome, descricao, ativo, c.sistema ? 1 : 0, i, now));
+      // Itens do sistema (o catálogo todo, ou um item marcado) voltam sempre;
+      // os outros só entram quando o catálogo ainda está vazio.
+      c.itens.forEach(([codigo, nome, descricao, ativo = 1, doSistema = false], i) => {
+        const sistema = c.sistema || doSistema;
+        if (vazio || sistema) ins.run(c.key, codigo, nome, descricao, ativo, sistema ? 1 : 0, i, now);
+      });
     }
   })();
 }

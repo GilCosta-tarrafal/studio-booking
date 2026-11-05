@@ -17,6 +17,7 @@
 const { db } = require('../lib/base');
 const { baixarCapa, eOrigemCapa } = require('../lib/capas');
 const U = require('../../backend/lib/util');
+const CAT = require('../../backend/lib/catalogos');
 const { HttpError } = U;
 
 const TIPOS = ['talentos', 'album', 'gravacao', 'publicidade', 'vendas', 'outro'];
@@ -47,9 +48,15 @@ function normalizar(d) {
   if (!titulo) throw erro('Indique o título do projeto.');
   const prazo = texto(d.prazo, 10);
   if (prazo && !/^\d{4}-\d{2}-\d{2}$/.test(prazo)) throw erro('O prazo tem de ser no formato AAAA-MM-DD.');
-  const tipo = TIPOS.includes(d.tipo) ? d.tipo : 'outro';
+  // Um tipo do sistema (talentos, vendas…) ou um criado em Configurações ›
+  // Tipos de projeto (Participa): esse funciona como "outro" e guarda-se o
+  // código em categoria.
+  let tipo = 'outro';
+  let categoria = '';
+  if (TIPOS.includes(d.tipo)) tipo = d.tipo;
+  else if (d.tipo && CAT.codigoValido('tipos_participa', d.tipo)) categoria = String(d.tipo).slice(0, 40);
   const ordem = Number.isFinite(Number(d.ordem)) ? Math.round(Number(d.ordem)) : 0;
-  if (tipo === 'gravacao') return { ...normalizarGravacao(d), titulo, ordem, preco: null, stock: null };
+  if (tipo === 'gravacao') return { ...normalizarGravacao(d), titulo, ordem, preco: null, stock: null, categoria: '' };
   // Vendas: o preço de cada unidade e a quantidade à venda são obrigatórios.
   let preco = null;
   let stock = null;
@@ -60,7 +67,7 @@ function normalizar(d) {
     if (d.stock === '' || d.stock == null || !Number.isInteger(stock) || stock < 0 || stock > 1e6) throw erro('Indique a quantidade à venda (um número inteiro, 0 ou mais).');
   }
   return {
-    preco, stock,
+    preco, stock, categoria,
     tipo,
     artista: '', room_id: null, data_inicio: '', data_fim: '', hora_inicio: null, hora_fim: null,
     titulo,
@@ -168,12 +175,19 @@ function listarPublico() {
     capa: p.capa || undefined,
     // Todas as imagens (com mais de uma, o cartão do site faz um slide).
     capas: imagensServidas(p),
+    // Tipo criado em Configurações: o site mostra o nome dele.
+    ...(p.categoria ? { categoria: p.categoria, tipo_nome: nomeCategoria(p.categoria) } : {}),
     // Vendas: o preço e quantas unidades se podem comprar agora.
     ...(p.tipo === 'vendas' ? { preco: p.preco, disponivel: loja().disponivel(p) } : {}),
     prazo: p.prazo || undefined,
     aberto: !!p.aberto,
   }));
 }
+
+const nomeCategoria = (codigo) => {
+  const it = db.prepare("SELECT nome FROM catalogo_itens WHERE catalogo='tipos_participa' AND codigo=?").get(codigo);
+  return it ? it.nome : '';
+};
 
 // As imagens já copiadas para o site. Projetos antigos (de antes de haver
 // várias) só têm a capa.
@@ -203,10 +217,10 @@ async function criar(dados) {
   const id = db.transaction(() => {
     const r = db.prepare(
       `INSERT INTO int_projetos(tipo,titulo,resumo,descricao,capa_origem,capas_origem,prazo,aberto,visivel,ordem,
-                                artista,room_id,data_inicio,data_fim,hora_inicio,hora_fim,preco,stock,criado_em,atualizado_em)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+                                artista,room_id,data_inicio,data_fim,hora_inicio,hora_fim,preco,stock,categoria,criado_em,atualizado_em)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.capas_origem, p.prazo, p.aberto, p.visivel, p.ordem,
-      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, agora, agora);
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, p.categoria, agora, agora);
     refazerBloqueios(r.lastInsertRowid, p);
     return r.lastInsertRowid;
   })();
@@ -222,9 +236,9 @@ async function editar(id, dados) {
   db.transaction(() => {
     db.prepare(
       `UPDATE int_projetos SET tipo=?, titulo=?, resumo=?, descricao=?, capa_origem=?, capas_origem=?, prazo=?, aberto=?, visivel=?, ordem=?,
-              artista=?, room_id=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, preco=?, stock=?, atualizado_em=? WHERE id=?`
+              artista=?, room_id=?, data_inicio=?, data_fim=?, hora_inicio=?, hora_fim=?, preco=?, stock=?, categoria=?, atualizado_em=? WHERE id=?`
     ).run(p.tipo, p.titulo, p.resumo, p.descricao, p.capa_origem, p.capas_origem, p.prazo, p.aberto, p.visivel, p.ordem,
-      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, agora, id);
+      p.artista, p.room_id, p.data_inicio, p.data_fim, p.hora_inicio, p.hora_fim, p.preco, p.stock, p.categoria, agora, id);
     refazerBloqueios(id, p);
   })();
   // Só se voltam a copiar as imagens se a lista mudou. (Um projeto antigo só

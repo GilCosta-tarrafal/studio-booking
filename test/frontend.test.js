@@ -512,6 +512,11 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(estadosCat.some((li) => /Expirado/.test(li.textContent)) && !d.querySelector('.cf-add'), 'inclui "Expirado" e não deixa acrescentar estados');
   ok(d.querySelectorAll('.cf-group-t').length === 3, 'menu de Configurações com Geral, Catálogos e Integrações');
   ok([...d.querySelectorAll('.cf-link')].some((a) => a.textContent === 'Estados de pagamento'), 'os catálogos incluem "Estados de pagamento"');
+  w.location.hash = '#/configuracoes?sec=tipos_participa';
+  await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Tipos de projeto (Participa)', 'tipos de projeto (Participa)');
+  const tiposPart = [...d.querySelectorAll('.cf-item')];
+  ok(tiposPart.length >= 6 && ['Campanha de talentos', 'Publicidade', 'Vendas (artigo à venda)'].every((n) => tiposPart.some((li) => li.querySelector('strong').textContent === n && li.querySelector('.cf-act.lock')))
+    && d.querySelector('.cf-add'), 'tipos de projeto (Participa): os do sistema com cadeado, e o botão para acrescentar');
   w.location.hash = '#/configuracoes?sec=estados_pagamento';
   await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Estados de pagamento', 'estados de pagamento');
   const estPagCat = [...d.querySelectorAll('.cf-item')];

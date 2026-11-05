@@ -116,6 +116,9 @@ alargarCheck('int_projetos', "('talentos','album','gravacao','outro')", "('talen
 // Esgotado (stock 0), sai do site.
 alargarCheck('int_projetos', "('talentos','album','gravacao','publicidade','outro')", "('talentos','album','gravacao','publicidade','vendas','outro')", '', "'vendas'");
 acrescentaColuna('int_projetos', 'preco', 'INTEGER');
+// Tipo criado em Configurações › Tipos de projeto (Participa): o código dele.
+// Estes projetos ficam com tipo 'outro' (o comportamento de uma campanha).
+acrescentaColuna('int_projetos', 'categoria', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_projetos', 'stock', 'INTEGER');
 acrescentaColuna('int_projetos', 'artista', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('int_projetos', 'room_id', 'INTEGER');

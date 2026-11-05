@@ -48,6 +48,8 @@
   }
 
   const TIPO_CHAVE = { talentos: 'projetos.tipo.talentos', album: 'projetos.tipo.album', publicidade: 'projetos.tipo.publicidade', vendas: 'projetos.tipo.vendas', outro: 'projetos.tipo.outro' };
+  // Tipo criado em Configurações (o nome vem do painel, tal como foi escrito); os do sistema vêm traduzidos.
+  const rotuloTipo = (p) => p.tipo_nome || t(TIPO_CHAVE[p.tipo] || 'projetos.tipo.outro');
   const dataLonga = (iso) => {
     const d = new Date(iso + 'T00:00:00');
     return isNaN(d) ? iso : d.toLocaleDateString(window.Studio.I18N.locale, { day: 'numeric', month: 'long', year: 'numeric' });
@@ -72,7 +74,7 @@
     dlg.addEventListener('close', () => { for (const r of meus) clearInterval(r); dlg.remove(); });
 
     const cabeca = () => h('div', { class: 'proj-dlg-head' },
-      h('span', { class: 'proj-etiqueta' }, t(TIPO_CHAVE[p.tipo] || 'projetos.tipo.outro')),
+      h('span', { class: 'proj-etiqueta' }, rotuloTipo(p)),
       h('h3', {}, p.titulo));
     const botaoFechar = (cls = 'btn btn-outline') => h('button', { class: cls, type: 'button', onclick: fechar }, t('projetos.form.fechar'));
 
@@ -212,7 +214,7 @@
     },
       capa,
       h('div', { class: 'proj-corpo' },
-        h('span', { class: 'proj-etiqueta' }, t(TIPO_CHAVE[p.tipo] || 'projetos.tipo.outro')),
+        h('span', { class: 'proj-etiqueta' }, rotuloTipo(p)),
         h('h3', {}, p.titulo),
         p.resumo && h('p', { class: 'proj-resumo' }, p.resumo),
         p.descricao && h('p', { class: 'proj-desc proj-desc-curta' }, p.descricao),

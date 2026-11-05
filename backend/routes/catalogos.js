@@ -29,6 +29,10 @@ const paraCodigo = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 
 // Quantas marcações usam o item (o género fica guardado pelo nome).
 function emUso(c, it) {
+  // Tipos de projeto da secção "Participa": contam os projetos com esse tipo.
+  if (c.key === 'tipos_participa') {
+    return db.prepare('SELECT COUNT(*) n FROM int_projetos WHERE categoria=?').get(it.codigo).n;
+  }
   if (!c.campo) return 0;
   const valor = c.campo === 'style' ? it.nome : it.codigo;
   return db.prepare(`SELECT COUNT(*) n FROM bookings WHERE ${c.campo}=?`).get(valor).n;
@@ -79,7 +83,8 @@ router.delete('/:cat/:id', auth.requireManager, (req, res) => {
   const it = item(c, req);
   if (it.sistema) throw new HttpError(400, 'Este item é do sistema e não pode ser apagado.');
   const n = emUso(c, it);
-  if (n) throw new HttpError(409, `Está a ser usado em ${n} ${n === 1 ? 'marcação' : 'marcações'}. Desative-o em vez de o apagar.`);
+  const onde = c.key === 'tipos_participa' ? (n === 1 ? 'projeto' : 'projetos') : (n === 1 ? 'marcação' : 'marcações');
+  if (n) throw new HttpError(409, `Está a ser usado em ${n} ${onde}. Desative-o em vez de o apagar.`);
   db.prepare('DELETE FROM catalogo_itens WHERE id=?').run(it.id);
   res.json({ ok: true });
 });
