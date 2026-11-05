@@ -313,6 +313,12 @@ acrescentaColuna('users', 'last_seen_at', 'TEXT');
 acrescentaColuna('users', 'password_changed_at', 'TEXT');
 // Última vez que a pessoa abriu o sininho: o que for mais recente está "por ler".
 acrescentaColuna('users', 'notif_seen_at', 'TEXT');
+// Chat da equipa: além de texto, fotografias e mensagens de voz (ver
+// routes/chat.js). O ficheiro fica na pasta privada do chat; aqui só o nome.
+acrescentaColuna('chat_messages', 'tipo', "TEXT NOT NULL DEFAULT 'texto'");
+acrescentaColuna('chat_messages', 'anexo', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('chat_messages', 'anexo_mime', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('chat_messages', 'duracao', 'INTEGER');
 // Bloqueio do painel por inatividade (ver lib/auth.js): última atividade real
 // da sessão (ms) e se está bloqueada à espera da palavra-passe.
 acrescentaColuna('sessions', 'active_at', 'INTEGER');

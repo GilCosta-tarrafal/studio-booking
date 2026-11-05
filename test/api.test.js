@@ -381,7 +381,7 @@ function futureWeekday(offset = 3) {
   const donoId = (await call('GET', '/api/admin/chat', { cookie })).json.me;
   r = await call('GET', '/api/admin/chat', { cookie: ac });
   const comDono = r.json.contacts.find((c) => c.id === donoId);
-  ok(r.status === 200 && comDono && comDono.role === 'owner' && r.json.geral.channel === 'geral', 'o agente vê a conversa geral e o administrador nos contactos');
+  ok(r.status === 200 && comDono && comDono.role === 'owner' && !('geral' in r.json), 'o agente vê as pessoas da equipa (o administrador incluído); não há conversa de grupo');
   // Tempo real: o dono abre a ligação e recebe a mensagem do agente.
   const ctrl = new AbortController();
   const stream = await fetch(base + '/api/admin/chat/stream', { headers: { Cookie: cookie }, signal: ctrl.signal });
@@ -407,9 +407,30 @@ function futureWeekday(offset = 3) {
   r = await call('GET', `/api/admin/chat/${comDono.channel}/messages`, { cookie: staff.cookie });
   ok(r.status === 404, 'quem não está na conversa a dois não a lê (404)');
   r = await call('POST', '/api/admin/chat/geral/messages', { cookie: staff.cookie, body: { body: 'Bom dia a todos' } });
-  ok(r.status === 201, 'qualquer pessoa da equipa escreve na conversa geral');
-  r = await call('POST', '/api/admin/chat/geral/messages', { cookie: ac, body: { body: '   ' } });
+  ok(r.status === 404, 'já não há conversa "geral": cada mensagem é de uma pessoa para outra');
+  r = await call('POST', `/api/admin/chat/${comDono.channel}/messages`, { cookie: ac, body: { body: '   ' } });
   ok(r.status === 400, 'mensagem vazia recusada');
+  // Fotografias e mensagens de voz: o ficheiro em bruto; só os dois o abrem.
+  const anexo = (ck, dados, tipo, q = '') => fetch(base + `/api/admin/chat/${comDono.channel}/anexo${q}`, {
+    method: 'POST', headers: { 'Content-Type': tipo, 'X-Requested-With': 'studio', Cookie: ck }, body: dados,
+  }).then(async (x) => ({ status: x.status, json: await x.json() }));
+  const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  r = await anexo(ac, PNG1, 'image/png');
+  ok(r.status === 201 && r.json.message.tipo === 'imagem' && r.json.message.url === '/api/admin/chat/anexos/' + r.json.message.id && !('anexo' in r.json.message), 'enviar uma fotografia ao administrador');
+  const urlFoto = r.json.message.url;
+  let f = await fetch(base + urlFoto, { headers: { Cookie: cookie } });
+  ok(f.status === 200 && f.headers.get('content-type') === 'image/png' && Buffer.from(await f.arrayBuffer()).equals(PNG1), 'o administrador vê a fotografia');
+  f = await fetch(base + urlFoto, { headers: { Cookie: staff.cookie } });
+  ok(f.status === 404, 'quem não está na conversa não abre a fotografia');
+  f = await fetch(base + urlFoto);
+  ok(f.status === 401, 'nem sem sessão');
+  const WEBM = Buffer.concat([Buffer.from([0x1A, 0x45, 0xDF, 0xA3]), Buffer.alloc(40, 1)]);
+  r = await anexo(cookie, WEBM, 'audio/webm', '?duracao=12');
+  ok(r.status === 201 && r.json.message.tipo === 'voz' && r.json.message.duracao === 12 && r.json.message.mime === 'audio/webm', 'enviar uma mensagem de voz (12 s)');
+  r = await anexo(cookie, Buffer.from('<script>alert(1)</script> isto não é imagem'), 'image/png');
+  ok(r.status === 400, 'um ficheiro que não é fotografia nem áudio é recusado');
+  r = await call('GET', '/api/admin/chat', { cookie: ac });
+  ok(r.json.contacts.find((c) => c.id === donoId).last.tipo === 'voz', 'a lista mostra a última mensagem (a de voz)');
   r = await call('POST', '/api/admin/assistente', { cookie: ac, body: { messages: [] } });
   ok(r.status === 400, 'assistente: pergunta vazia recusada');
   r = await call('POST', '/api/admin/assistente', { body: { messages: [{ role: 'user', content: 'Olá' }] } });

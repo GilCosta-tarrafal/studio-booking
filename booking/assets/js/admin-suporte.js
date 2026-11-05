@@ -19,6 +19,9 @@
     close: ['M6 6l12 12', 'M18 6L6 18'],
     back: ['M15 5l-7 7 7 7'],
     send: ['M4 12l16-8-6 16-2-7z', 'M12 13l8-9'],
+    camera: ['M4 8h3l2-3h6l2 3h3v11H4z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+    mic: ['M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3'],
+    trash: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13'],
     users: ['M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M2.5 20a6.5 6.5 0 0 1 13 0', 'M16 4.5a3.5 3.5 0 0 1 0 6.5', 'M18 14a6 6 0 0 1 3.5 6'],
   };
   function ico(nome, tam = 22) {
@@ -72,6 +75,7 @@
   }
 
   function parar() {
+    if (st.pararGravacao) st.pararGravacao(true);   // solta o microfone
     if (st.fonte) st.fonte.close();
     if (st.raiz) st.raiz.remove();
     document.removeEventListener('keydown', onKey);
@@ -109,6 +113,7 @@
   }
 
   function fechar() {
+    if (st.pararGravacao) st.pararGravacao(true);
     st.aberto = null;
     st.conversa = null;
     st.painel.hidden = true;
@@ -191,6 +196,16 @@
   }
 
   // ============================================================ Chat da equipa
+  // Conversas a dois: ao abrir aparece a lista das pessoas da equipa; cada
+  // mensagem vai só para a pessoa escolhida. Além de texto, fotografias e
+  // mensagens de voz (gravadas aqui, com o microfone).
+  const MAX_ANEXO = 8 * 1024 * 1024;
+  const MAX_VOZ_S = 5 * 60;
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  // O que aparece na lista e nos avisos em vez do conteúdo.
+  const previa = (m) => (m.tipo === 'imagem' ? '📷 Fotografia'
+    : m.tipo === 'voz' ? '🎤 Mensagem de voz' + (m.duracao ? ` (${mmss(m.duracao)})` : '') : m.body);
+
   function ligar() {
     if (!window.EventSource) return;
     const fonte = new EventSource('/api/admin/chat/stream');
@@ -213,7 +228,7 @@
 
   function totalPorLer() {
     if (!st.lista) return 0;
-    return st.lista.geral.unread + st.lista.contacts.reduce((n, c) => n + c.unread, 0);
+    return st.lista.contacts.reduce((n, c) => n + c.unread, 0);
   }
   function pintarBadge() {
     const n = totalPorLer();
@@ -221,10 +236,7 @@
     st.badge.textContent = n > 99 ? '99+' : String(n);
   }
 
-  function conversaDe(channel) {
-    if (!st.lista) return null;
-    return channel === 'geral' ? st.lista.geral : st.lista.contacts.find((c) => c.channel === channel);
-  }
+  const conversaDe = (channel) => (st.lista ? st.lista.contacts.find((c) => c.channel === channel) : null);
 
   function receber(msg) {
     const c = conversaDe(msg.channel);
@@ -236,36 +248,59 @@
       if (!minha) api(`/api/admin/chat/${encodeURIComponent(msg.channel)}/read`, { method: 'POST' }).catch(() => {});
     } else if (!minha) {
       c.unread += 1;
-      toast(`${msg.user_name}: ${msg.body.length > 70 ? msg.body.slice(0, 70) + '…' : msg.body}`);
+      const p = previa(msg);
+      toast(`${msg.user_name}: ${p.length > 70 ? p.slice(0, 70) + '…' : p}`);
     }
     pintarBadge();
     if (st.aberto === 'chat' && !st.conversa) pintarChat();
   }
 
+  // Lista das pessoas (com pesquisa): carregar numa abre a conversa com ela.
   async function pintarChat() {
     st.conversa = null;
     st.pintarCabecalhoConversa = null;
     const corpo = h('div', { class: 'sup-corpo sup-lista' });
-    st.painel.replaceChildren(cabecalho('Chat — Agentes', 'Administrador e agentes dos estúdios', null), corpo);
+    const busca = h('input', { type: 'search', class: 'sup-busca', placeholder: 'Procurar pessoa ou estúdio…', 'aria-label': 'Procurar pessoa', value: st.busca || '' });
+    const lista = h('div', { class: 'sup-pessoas' });
+    st.painel.replaceChildren(cabecalho('Chat — Agentes', 'Escolha com quem quer falar', null), corpo);
     if (!st.lista) {
       corpo.append(h('p', { class: 'sup-vazio' }, 'A carregar…'));
       try { await carregarLista(); } catch (ex) { corpo.replaceChildren(h('p', { class: 'sup-vazio' }, ex.message)); return; }
       if (st.aberto !== 'chat' || st.conversa) return;
     }
-    const linha = (c, titulo, sub, avatar, online) => h('button', { class: 'sup-contacto', type: 'button', onclick: () => abrirConversa(c.channel) },
-      h('span', { class: 'sup-avatar' + (online ? ' online' : '') }, avatar),
+    const linha = (c) => h('button', { class: 'sup-contacto', type: 'button', onclick: () => abrirConversa(c.channel) },
+      h('span', { class: 'sup-avatar' + (c.online ? ' online' : '') }, iniciais(c.name)),
       h('span', { class: 'sup-contacto-txt' },
-        h('strong', {}, titulo),
-        h('span', {}, c.last ? (c.last.user_id === app.user.id ? 'Você: ' : (c.channel === 'geral' ? c.last.user_name.split(' ')[0] + ': ' : '')) + c.last.body : sub)),
+        h('strong', {}, c.name),
+        h('span', {}, c.last ? (c.last.user_id === app.user.id ? 'Você: ' : '') + previa(c.last) : papel(c) + (c.online ? ' · ligado' : ''))),
       h('span', { class: 'sup-contacto-meta' },
         c.last && h('time', {}, diaHora(c.last.created_at)),
         c.unread ? h('span', { class: 'sup-n' }, c.unread) : null));
-    corpo.replaceChildren(
-      linha(st.lista.geral, 'Geral', 'Toda a equipa', ico('users', 20), false),
-      h('p', { class: 'sup-sec' }, 'Pessoas'),
-      st.lista.contacts.length
-        ? st.lista.contacts.map((c) => linha(c, c.name, papel(c) + (c.online ? ' · ligado' : ''), iniciais(c.name), c.online))
-        : h('p', { class: 'sup-vazio' }, 'Ainda não há mais ninguém na equipa.'));
+    // Primeiro quem tem mensagens por ler, depois as conversas mais recentes.
+    const ordenadas = st.lista.contacts.slice().sort((a, b) => (b.unread - a.unread)
+      || String((b.last || {}).created_at || '').localeCompare(String((a.last || {}).created_at || '')));
+    const filtrar = () => {
+      st.busca = busca.value;
+      const q = busca.value.trim().toLowerCase();
+      const vis = ordenadas.filter((c) => !q || (c.name + ' ' + c.studio_name + ' ' + papel(c)).toLowerCase().includes(q));
+      lista.replaceChildren(...(vis.length ? vis.map(linha)
+        : [h('p', { class: 'sup-vazio' }, st.lista.contacts.length ? 'Ninguém com esse nome.' : 'Ainda não há mais ninguém na equipa.')]));
+    };
+    busca.addEventListener('input', filtrar);
+    filtrar();
+    corpo.replaceChildren(st.lista.contacts.length > 5 ? busca : null, lista);
+  }
+
+  // Envia um ficheiro (fotografia ou gravação) para a conversa.
+  async function enviarAnexo(channel, blob, duracao) {
+    if (blob.size > MAX_ANEXO) throw new Error('O ficheiro tem mais de 8 MB.');
+    const res = await fetch(`/api/admin/chat/${encodeURIComponent(channel)}/anexo` + (duracao ? `?duracao=${Math.round(duracao)}` : ''), {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': blob.type || 'application/octet-stream', 'X-Requested-With': 'studio' }, body: blob,
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Não foi possível enviar.');
+    return d.message;
   }
 
   async function abrirConversa(channel) {
@@ -274,36 +309,118 @@
     st.conversa = channel;
     st.mensagens = [];
     const corpo = h('div', { class: 'sup-corpo sup-conversa' });
-    const titulo = channel === 'geral' ? 'Geral' : c.name;
     const head = h('div');
     st.pintarCabecalhoConversa = () => {
-      const sub = channel === 'geral' ? 'Toda a equipa' : papel(c) + (st.online.has(c.id) ? ' · ligado agora' : ' · desligado');
-      head.replaceChildren(cabecalho(titulo, sub, () => pintarChat()));
+      head.replaceChildren(cabecalho(c.name, papel(c) + (st.online.has(c.id) ? ' · ligado agora' : ' · desligado'), () => { pararGravacao(true); pintarChat(); }));
     };
     st.pintarCabecalhoConversa();
+    const conteudo = (m) => {
+      if (m.tipo === 'imagem') {
+        return h('a', { href: m.url, target: '_blank', rel: 'noopener', title: 'Abrir a fotografia' },
+          h('img', { class: 'sup-foto', src: m.url, alt: 'Fotografia', loading: 'lazy', onload: () => { if (st.colado) rolarFim(corpo); } }));
+      }
+      if (m.tipo === 'voz') return h('audio', { class: 'sup-voz', controls: true, preload: 'metadata', src: m.url });
+      return m.body;
+    };
     st.pintarMensagens = () => {
       corpo.replaceChildren();
-      if (!st.mensagens.length) corpo.append(h('p', { class: 'sup-vazio' }, 'Ainda não há mensagens. Diga olá!'));
+      if (!st.mensagens.length) corpo.append(h('p', { class: 'sup-vazio' }, `Ainda não há mensagens com ${c.name.split(' ')[0]}. Diga olá!`));
       let dia = '';
       for (const m of st.mensagens) {
         const d = new Date(m.created_at).toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
         if (d !== dia) { dia = d; corpo.append(h('p', { class: 'sup-dia' }, d)); }
         const minha = m.user_id === app.user.id;
-        corpo.append(h('div', { class: 'sup-msg ' + (minha ? 'eu' : 'outro') },
-          !minha && channel === 'geral' && h('span', { class: 'sup-autor' }, m.user_name),
-          h('div', { class: 'sup-bolha' }, m.body, h('time', {}, hora(m.created_at)))));
+        corpo.append(h('div', { class: 'sup-msg ' + (minha ? 'eu' : 'outro') + (m.tipo && m.tipo !== 'texto' ? ' anexo' : '') },
+          h('div', { class: 'sup-bolha' }, conteudo(m), h('time', {}, hora(m.created_at)))));
       }
+      st.colado = true;
       rolarFim(corpo);
     };
-    const enviar = async (texto) => {
-      try {
-        const r = await api(`/api/admin/chat/${encodeURIComponent(channel)}/messages`, { method: 'POST', body: { body: texto } });
-        // Normalmente já chegou pela ligação em tempo real; se não, mostra-se aqui.
-        if (st.conversa === channel && !st.mensagens.some((m) => m.id === r.message.id)) { st.mensagens.push(r.message); st.pintarMensagens(); }
-        return true;
-      } catch (ex) { toast(ex.message, true); return false; }
+    const juntar = (msg) => {
+      // Normalmente já chegou pela ligação em tempo real; se não, mostra-se aqui.
+      if (st.conversa === channel && !st.mensagens.some((m) => m.id === msg.id)) { st.mensagens.push(msg); st.pintarMensagens(); }
     };
-    st.painel.replaceChildren(head, corpo, caixaEnvio('Escreva uma mensagem…', enviar));
+
+    // ---- Caixa de envio: texto, fotografia e voz
+    const txt = h('textarea', { rows: 1, maxlength: 2000, placeholder: 'Escreva uma mensagem…', 'aria-label': 'Mensagem' });
+    const foto = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', hidden: true });
+    const btnFoto = h('button', { class: 'sup-icobtn sup-anexar', type: 'button', title: 'Enviar fotografia', 'aria-label': 'Enviar fotografia', onclick: () => foto.click() }, ico('camera', 20));
+    const btnVoz = h('button', { class: 'sup-icobtn sup-anexar', type: 'button', title: 'Gravar mensagem de voz', 'aria-label': 'Gravar mensagem de voz' }, ico('mic', 20));
+    const btnEnviar = h('button', { class: 'sup-enviar', type: 'submit', 'aria-label': 'Enviar' }, ico('send', 20));
+    const form = h('form', { class: 'sup-form' }, btnFoto, btnVoz, txt, btnEnviar, foto);
+    const ajustar = () => { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight, 120) + 'px'; };
+    txt.addEventListener('input', ajustar);
+    txt.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const v = txt.value.trim();
+      if (!v || btnEnviar.disabled) return;
+      btnEnviar.disabled = true;
+      try {
+        const r = await api(`/api/admin/chat/${encodeURIComponent(channel)}/messages`, { method: 'POST', body: { body: v } });
+        juntar(r.message);
+        txt.value = ''; ajustar();
+      } catch (ex) { toast(ex.message, true); } finally { btnEnviar.disabled = false; txt.focus(); }
+    };
+    foto.addEventListener('change', async () => {
+      const f = foto.files[0];
+      foto.value = '';
+      if (!f) return;
+      if (f.size > MAX_ANEXO) { toast('A fotografia tem mais de 8 MB.', true); return; }
+      btnFoto.disabled = true;
+      try { juntar(await enviarAnexo(channel, f)); } catch (ex) { toast(ex.message, true); } finally { btnFoto.disabled = false; }
+    });
+
+    // Gravação de voz: o microfone só funciona em https:// ou em localhost.
+    const barraVoz = h('div', { class: 'sup-gravar', hidden: true });
+    let gravacao = null;
+    function pararGravacao(descartar) {
+      if (!gravacao) return;
+      gravacao.descartar = descartar;
+      clearInterval(gravacao.relogio);
+      if (gravacao.rec.state !== 'inactive') gravacao.rec.stop();
+      gravacao.stream.getTracks().forEach((t) => t.stop());
+    }
+    st.pararGravacao = pararGravacao;
+    btnVoz.addEventListener('click', async () => {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        toast(window.isSecureContext ? 'Este browser não grava áudio.' : 'Para gravar voz, abra o painel em https:// ou em localhost (o browser só dá o microfone em ligações seguras).', true);
+        return;
+      }
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (_) {
+        toast('Não deu autorização para usar o microfone.', true); return;
+      }
+      const rec = new MediaRecorder(stream);
+      const partes = [];
+      const inicio = Date.now();
+      const tempo = h('strong', {}, '0:00');
+      gravacao = { rec, stream, descartar: false };
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
+      rec.onstop = async () => {
+        const g = gravacao;
+        gravacao = null;
+        barraVoz.hidden = true; form.hidden = false;
+        if (!g || g.descartar || !partes.length) return;
+        const blob = new Blob(partes, { type: (rec.mimeType || 'audio/webm').split(';')[0] });
+        try { juntar(await enviarAnexo(channel, blob, (Date.now() - inicio) / 1000)); } catch (ex) { toast(ex.message, true); }
+      };
+      gravacao.relogio = setInterval(() => {
+        const s = (Date.now() - inicio) / 1000;
+        tempo.textContent = mmss(s);
+        if (s >= MAX_VOZ_S) pararGravacao(false);   // no máximo 5 minutos
+      }, 250);
+      barraVoz.replaceChildren(
+        h('span', { class: 'sup-rec', 'aria-hidden': 'true' }),
+        h('span', { class: 'sup-gravar-txt' }, 'A gravar… ', tempo),
+        h('button', { class: 'sup-icobtn', type: 'button', title: 'Cancelar', 'aria-label': 'Cancelar a gravação', onclick: () => pararGravacao(true) }, ico('trash', 20)),
+        h('button', { class: 'sup-enviar', type: 'button', title: 'Enviar', 'aria-label': 'Parar e enviar a gravação', onclick: () => pararGravacao(false) }, ico('send', 20)));
+      form.hidden = true; barraVoz.hidden = false;
+      rec.start();
+    });
+
+    st.painel.replaceChildren(head, corpo, form, barraVoz);
+    setTimeout(() => txt.focus(), 0);
     corpo.append(h('p', { class: 'sup-vazio' }, 'A carregar…'));
     try {
       const r = await api(`/api/admin/chat/${encodeURIComponent(channel)}/messages`);

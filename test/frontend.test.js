@@ -786,6 +786,13 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(d.querySelector('.sup-fab'), 'o botão de auriculares aparece no painel');
   d.querySelector('.sup-fab').click();
   ok([...d.querySelectorAll('.sup-opcao-txt')].map((b) => b.textContent).join('|') === 'Assistente IA|Chat — Agentes', 'os auriculares abrem Assistente IA e Chat — Agentes');
+  [...d.querySelectorAll('.sup-opcao-txt')].find((b) => b.textContent === 'Chat — Agentes').click();
+  const pessoa = await waitFor(() => d.querySelector('.sup-pessoas .sup-contacto'), 'lista de pessoas do chat');
+  ok(![...d.querySelectorAll('.sup-contacto strong')].some((s) => s.textContent === 'Geral') && /Escolha com quem quer falar/.test(d.querySelector('.sup-head').textContent), 'o chat abre com as pessoas (sem conversa "Geral")');
+  pessoa.click();
+  await waitFor(() => d.querySelector('.sup-form textarea'), 'conversa aberta');
+  const anexar = [...d.querySelectorAll('.sup-form .sup-anexar')].map((b) => b.getAttribute('aria-label'));
+  ok(anexar.join('|') === 'Enviar fotografia|Gravar mensagem de voz' && d.querySelector('.sup-form input[type=file][accept^="image/"]'), 'na conversa: enviar fotografia e gravar mensagem de voz');
   d.querySelector('.sup-fab').click();
   w.close();
 
