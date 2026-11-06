@@ -709,6 +709,38 @@ function seedRbac() {
 }
 seedRbac();
 
+// Acessos de Design e Financeiro (acrescentados depois): as permissões, dadas
+// ao Proprietário e ao Gestor, e um perfil para cada área. Corre uma vez só,
+// para não voltar a criar o que o dono tenha apagado em "Gestão de acesso".
+function rbacDesignFinanceiro() {
+  if (db.prepare("SELECT 1 FROM settings WHERE key='rbac_design_financeiro'").get()) return;
+  const PERMS = [
+    ['Design – Ver', 'design', 'ver'],
+    ['Design – Gerir', 'design', 'gerir'],
+    ['Financeiro – Ver', 'financeiro', 'ver'],
+    ['Financeiro – Gerir', 'financeiro', 'gerir'],
+  ];
+  db.transaction(() => {
+    const insP = db.prepare('INSERT OR IGNORE INTO rbac_permissions(label,resource,action) VALUES(?,?,?)');
+    for (const p of PERMS) insP.run(...p);
+    const pid = (code) => { const [r, a] = code.split('.'); const p = db.prepare('SELECT id FROM rbac_permissions WHERE resource=? AND action=?').get(r, a); return p && p.id; };
+    const dar = (roleId, codes) => {
+      const ins = db.prepare('INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id) VALUES(?,?)');
+      for (const c of codes) { const id = pid(c); if (id) ins.run(roleId, id); }
+    };
+    const role = (code) => db.prepare('SELECT id FROM rbac_roles WHERE code=?').get(code);
+    const novas = PERMS.map(([, r, a]) => r + '.' + a);
+    for (const code of ['proprietario', 'gestor']) { const r = role(code); if (r) dar(r.id, novas); }
+    const insR = db.prepare('INSERT OR IGNORE INTO rbac_roles(name,code,description,priority,category,is_system) VALUES(?,?,?,?,?,?)');
+    insR.run('Designer', 'designer', 'Trata do design: imagens, capas e aspeto do site.', 30, 'design', 0);
+    dar(role('designer').id, ['design.ver', 'design.gerir', 'projetos.gerir', 'musica.gerir', 'painel.ver']);
+    insR.run('Financeiro', 'financeiro', 'Acompanha pagamentos, reembolsos, faturas e relatórios.', 50, 'financeiro', 0);
+    dar(role('financeiro').id, ['financeiro.ver', 'financeiro.gerir', 'relatorios.ver', 'marcacoes.ver', 'clientes.ver', 'painel.ver']);
+    db.prepare("INSERT INTO settings(key,value) VALUES('rbac_design_financeiro','1')").run();
+  })();
+}
+rbacDesignFinanceiro();
+
 // Garante que cada proprietário tem o perfil "Proprietário". Corre no arranque,
 // já com o primeiro utilizador criado.
 function ensureRbacOwners() {

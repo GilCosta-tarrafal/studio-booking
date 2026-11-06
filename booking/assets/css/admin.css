@@ -1281,7 +1281,13 @@ body.bloqueado #toasts { display: none; }
 .sup-msg.anexo .sup-bolha { padding: 4px; }
 .sup-msg.anexo .sup-bolha time { padding: 0 6px 2px; }
 .sup-foto { display: block; max-width: 220px; max-height: 260px; border-radius: 10px; object-fit: cover; }
-.sup-voz { display: block; width: 230px; max-width: 100%; height: 40px; }
+.sup-voz { display: flex; align-items: center; gap: 8px; width: 240px; max-width: 100%; padding: 4px 8px 2px 4px; }
+.sup-gravar .sup-voz { flex: 1; width: auto; }
+.sup-voz-play { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--amber); color: #1A1204; cursor: pointer; }
+.sup-voz-play svg { fill: currentColor; }
+.sup-voz-play:disabled { opacity: .6; cursor: progress; }
+.sup-voz-barra { flex: 1; min-width: 0; height: 4px; accent-color: var(--amber); cursor: pointer; }
+.sup-voz-tempo { flex: none; font-size: .78rem; font-variant-numeric: tabular-nums; opacity: .75; min-width: 2.6em; text-align: right; }
 .sup-gravar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
 .sup-gravar[hidden] { display: none; }
 .sup-gravar-txt { flex: 1; font-size: .9rem; color: var(--muted); }
@@ -1290,3 +1296,36 @@ body.bloqueado #toasts { display: none; }
 @keyframes sup-pisca { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .sup-rec { animation: none; } }
 .sup-form[hidden] { display: none; }
+
+/* Utilizadores: cabeçalho, filtros, tabela e janelas (criar/editar). */
+.ut-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0 0 18px; flex-wrap: wrap; }
+.ut-titulo { margin: 0; font: 800 1.6rem/1.15 var(--display); }
+.ut-sub { margin: 6px 0 0; color: var(--muted); }
+.ut-criar { display: inline-flex; align-items: center; gap: 8px; }
+.ut-filtros { display: grid; gap: 14px; margin-bottom: 18px; }
+.ut-linha { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ut-linha .btn { display: inline-flex; align-items: center; gap: 8px; }
+.ut-pesquisa { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--paper); color: var(--muted); }
+.ut-pesquisa input { flex: 1; border: 0; background: transparent; height: 42px; padding: 0; color: var(--ink); font: inherit; outline: none; }
+.ut-pesquisa:focus-within { border-color: var(--amber); }
+.ut-filtro { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .92rem; }
+.ut-filtro select { min-width: 150px; }
+.ut-count { margin-left: auto; color: var(--muted); font-size: .88rem; }
+.ut-eu { color: var(--muted); font-weight: 400; font-size: .85rem; }
+.ut-funcao { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--amber-soft, rgba(245, 166, 35, .14)); color: var(--amber); font-weight: 600; font-size: .85rem; }
+.ut-funcao small { font-weight: 400; opacity: .8; }
+.ut-sem { color: var(--muted); font-size: .88rem; }
+.ut-estado { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: .82rem; }
+.ut-estado.on { background: rgba(34, 197, 94, .14); color: #16A34A; }
+.ut-estado.off { background: var(--mist); color: var(--muted); }
+.ut-acoes { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.ut-acao { width: 32px; height: 32px; border-radius: 8px; border: 0; display: grid; place-items: center; cursor: pointer; }
+.ut-acao:disabled { opacity: .35; cursor: not-allowed; }
+.ut-acao.editar { background: rgba(249, 115, 22, .14); color: #EA580C; }
+.ut-acao.chave { background: rgba(6, 182, 212, .14); color: #0891B2; }
+.ut-acao.bloquear { background: rgba(234, 179, 8, .16); color: #CA8A04; }
+.ut-acao.apagar { background: rgba(239, 68, 68, .14); color: #DC2626; }
+.ut-acao:not(:disabled):hover { filter: brightness(1.15); }
+.ut-modal { min-width: min(560px, 92vw); }
+.ut-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ut-foot .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }

@@ -845,12 +845,43 @@ function roleAndStudio(b) {
 // O que o painel mostra: 'agent' quando está preso a um estúdio.
 const shownRole = (u) => (u.studio_id ? 'agent' : u.role);
 
+// A função de cada utilizador é um perfil de "Gestão de acesso" (rbac_roles).
+// Escolher a função também acerta o tipo de conta que o painel usa: a função
+// Proprietário dá uma conta de proprietário, Agente de estúdio prende a conta a
+// um estúdio e as outras ficam como equipa.
+function funcaoDoPedido(b) {
+  if (b.funcao_id === undefined) return undefined;                     // não veio: não se mexe
+  if (b.funcao_id === null || b.funcao_id === '') return null;         // "Sem função"
+  const f = db.prepare('SELECT id, code FROM rbac_roles WHERE id=?').get(U.toInt(b.funcao_id));
+  if (!f) throw new HttpError(400, 'Função inválida.');
+  return f;
+}
+function tipoDaFuncao(f, b) {
+  if (f && f.code === 'proprietario') return { ...b, role: 'owner' };
+  if (f && f.code === 'agente') return { ...b, role: 'agent' };
+  if (f) return { ...b, role: 'staff' };
+  return b;   // sem função: fica o tipo de conta que tinha (ou o que o pedido diz)
+}
+// Uma função por utilizador: troca as atribuições que tinha por esta.
+function gravarFuncao(userId, f) {
+  db.prepare('DELETE FROM rbac_assignments WHERE user_id=?').run(userId);
+  if (f) db.prepare('INSERT INTO rbac_assignments(user_id,role_id,created_at) VALUES(?,?,?)').run(userId, f.id, new Date().toISOString());
+}
+
 router.get('/users', auth.requireOwner, (_req, res) => {
   const rows = db.prepare(
-    `SELECT u.id, u.name, u.email, u.role, u.active, u.created_at, u.studio_id, s.name AS studio_name
-       FROM users u LEFT JOIN studios s ON s.id = u.studio_id ORDER BY u.id`
+    `SELECT u.id, u.name, u.email, u.phone, u.role, u.active, u.created_at, u.last_login_at, u.studio_id, s.name AS studio_name
+       FROM users u LEFT JOIN studios s ON s.id = u.studio_id ORDER BY u.created_at DESC, u.id DESC`
   ).all();
-  res.json({ users: rows.map((u) => ({ ...u, role: shownRole(u) })) });
+  // A função principal: o perfil atribuído com maior prioridade.
+  const funcoes = db.prepare(
+    `SELECT a.user_id, r.id, r.name, r.code FROM rbac_assignments a JOIN rbac_roles r ON r.id = a.role_id
+      WHERE a.expires_at IS NULL OR a.expires_at >= date('now') ORDER BY r.priority DESC`
+  ).all();
+  const funcaoDe = {};
+  for (const f of funcoes) if (!funcaoDe[f.user_id]) funcaoDe[f.user_id] = { id: f.id, name: f.name, code: f.code };
+  const roles = db.prepare('SELECT id, name, code FROM rbac_roles ORDER BY priority DESC, id').all();
+  res.json({ users: rows.map((u) => ({ ...u, role: shownRole(u), funcao: funcaoDe[u.id] || null })), funcoes: roles });
 });
 
 router.post('/users', auth.requireOwner, (req, res) => {
@@ -858,13 +889,19 @@ router.post('/users', auth.requireOwner, (req, res) => {
   const name = U.clean(b.name, 80);
   const email = U.clean(b.email, 120).toLowerCase();
   const password = String(b.password || '');
-  const { role, studio_id } = roleAndStudio(b);
+  const funcao = funcaoDoPedido(b);
+  const { role, studio_id } = roleAndStudio(funcao === undefined ? b : tipoDaFuncao(funcao, b));
   if (!name) throw new HttpError(400, 'Indique o nome.');
   if (!U.isEmail(email)) throw new HttpError(400, 'Indique um email válido.');
   if (password.length < 8) throw new HttpError(400, 'A palavra-passe deve ter pelo menos 8 caracteres.');
   if (db.prepare('SELECT 1 FROM users WHERE email=?').get(email)) throw new HttpError(409, 'Já existe um utilizador com esse email.');
-  const id = db.prepare('INSERT INTO users(name,email,password_hash,role,studio_id,created_at) VALUES(?,?,?,?,?,?)')
-    .run(name, email, auth.hashPassword(password), role, studio_id, new Date().toISOString()).lastInsertRowid;
+  const active = b.active === undefined ? 1 : flag(b.active);
+  const id = db.transaction(() => {
+    const novo = db.prepare('INSERT INTO users(name,email,password_hash,role,studio_id,active,phone,created_at) VALUES(?,?,?,?,?,?,?,?)')
+      .run(name, email, auth.hashPassword(password), role, studio_id, active, U.clean(b.phone, 30), new Date().toISOString()).lastInsertRowid;
+    if (funcao !== undefined) gravarFuncao(novo, funcao);
+    return novo;
+  })();
   res.status(201).json({ id });
 });
 
@@ -873,13 +910,20 @@ router.put('/users/:id', auth.requireOwner, (req, res) => {
   const b = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
   if (!user) throw new HttpError(404, 'Utilizador não encontrado.');
-  const { role, studio_id } = roleAndStudio(b);
-  const active = flag(b.active);
+  const funcao = funcaoDoPedido(b);
+  // Campos que não vêm ficam como estavam (por exemplo, só ativar/desativar).
+  const atual = { role: shownRole(user), studio_id: user.studio_id, ...b };
+  const { role, studio_id } = roleAndStudio(funcao === undefined ? atual : tipoDaFuncao(funcao, atual));
+  const active = b.active === undefined ? user.active : flag(b.active);
   const losesOwner = user.role === 'owner' && user.active && (role !== 'owner' || !active);
   if (losesOwner && activeOwners() <= 1) throw new HttpError(400, 'Tem de existir pelo menos um proprietário ativo.');
   if (id === req.user.id && !active) throw new HttpError(400, 'Não pode desativar a sua própria conta.');
   const name = U.clean(b.name, 80) || user.name;
-  db.prepare('UPDATE users SET name=?, role=?, studio_id=?, active=? WHERE id=?').run(name, role, studio_id, active, id);
+  const phone = b.phone === undefined ? user.phone : U.clean(b.phone, 30);
+  db.transaction(() => {
+    db.prepare('UPDATE users SET name=?, role=?, studio_id=?, active=?, phone=? WHERE id=?').run(name, role, studio_id, active, phone, id);
+    if (funcao !== undefined) gravarFuncao(id, funcao);
+  })();
   if (b.password) {
     if (String(b.password).length < 8) throw new HttpError(400, 'A palavra-passe deve ter pelo menos 8 caracteres.');
     db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(auth.hashPassword(String(b.password)), id);

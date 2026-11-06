@@ -45,8 +45,14 @@ router.get('/me', (req, res) => {
   const portas = require('../lib/portas');
   // bloqueio_ms: ao fim de quanto tempo parado o painel se bloqueia; user.locked
   // diz se já está bloqueado (ver lib/auth.js).
+  // A função (perfil de "Gestão de acesso") com maior prioridade, para o chip
+  // da barra de topo.
+  const funcao = db.prepare(
+    `SELECT r.name, r.code FROM rbac_assignments a JOIN rbac_roles r ON r.id = a.role_id
+      WHERE a.user_id=? AND (a.expires_at IS NULL OR a.expires_at >= date('now')) ORDER BY r.priority DESC LIMIT 1`
+  ).get(req.user.id) || null;
   res.json({
-    user: req.user, today: U.nowLocal().date, settings: getSettings(), bloqueio_ms: auth.BLOQUEIO_MS,
+    user: { ...req.user, funcao }, today: U.nowLocal().date, settings: getSettings(), bloqueio_ms: auth.BLOQUEIO_MS,
     site_url: portas.separado() ? portas.url('site', req) + '/' : '/',
   });
 });

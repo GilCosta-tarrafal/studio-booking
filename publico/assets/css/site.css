@@ -875,12 +875,22 @@ body { padding-top: var(--altura-cabecalho); }
 .conta-link .conta-nome { font-weight: 500; white-space: nowrap; }
 @media (max-width: 560px) { .conta-link .conta-nome { display: none; } }
 
+/* Com sessão: o chip do perfil, como no painel (iniciais, nome e papel). */
+.conta-link.conta-chip { gap: 9px; padding: 4px 10px 4px 4px; border-radius: 999px; }
+.conta-link.conta-chip:hover { color: inherit; background: color-mix(in srgb, currentColor 10%, transparent); }
+.conta-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--amber); color: #1A1204; display: grid; place-items: center; font: 800 .85rem/1 var(--display); flex: none; }
+.conta-txt { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.conta-txt strong { font-weight: 700; white-space: nowrap; }
+.conta-txt span { color: var(--muted); font-size: .82rem; }
+.conta-caret { font-size: .7rem; color: var(--muted); }
+@media (max-width: 560px) { .conta-txt, .conta-caret { display: none; } }
+
 /* Menu da conta (com sessão iniciada): Sair, Alterar palavra-passe... */
 .conta-nav { position: relative; display: inline-flex; }
 .conta-menu {
   --menu-fundo: #16181A; --menu-linha: #34383C; --menu-ink: #ECECEC; --menu-realce: #23262A;
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
-  min-width: 210px; padding: 6px; display: flex; flex-direction: column;
+  min-width: 250px; padding: 6px; display: flex; flex-direction: column;
   background: var(--menu-fundo); color: var(--menu-ink);
   border: 1px solid var(--menu-linha); border-radius: 12px;
   box-shadow: 0 14px 38px rgba(0, 0, 0, .45);
@@ -896,6 +906,13 @@ body { padding-top: var(--altura-cabecalho); }
   font: 500 .95rem/42px var(--body); cursor: pointer;
 }
 .conta-menu-item:hover { background: var(--menu-realce); color: inherit; }
+.conta-menu-item { display: flex; align-items: center; gap: 10px; }
+.conta-menu-item svg { flex: none; opacity: .85; }
+.conta-menu-item.danger, .conta-menu-item.danger:hover { color: #F87171; }
+:root[data-tema="claro"] .conta-menu-item.danger { color: #DC2626; }
+.conta-menu-who { display: grid; gap: 2px; padding: 10px 12px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--menu-linha); }
+.conta-menu-who strong { font-weight: 700; }
+.conta-menu-who span { opacity: .65; font-size: .85rem; overflow-wrap: anywhere; }
 
 /* Chamada para a marcação, no herói da página inicial. */
 .hero-cta { margin: 22px 0 0; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }

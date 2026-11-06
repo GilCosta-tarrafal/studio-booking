@@ -904,56 +904,6 @@
       isOwner && h('div', { class: 'modal-foot' }, h('button', { class: 'btn', type: 'submit' }, 'Guardar definições')));
   }
 
-  function userRow(u, meId) {
-    const isNew = !u;
-    const name = h('input', { type: 'text', maxlength: 80, value: u ? u.name : '' });
-    const email = isNew ? h('input', { type: 'email', maxlength: 120, autocomplete: 'off' }) : h('input', { type: 'email', value: u.email, readonly: true });
-    const role = h('select', { value: u ? u.role : 'staff' },
-      h('option', { value: 'staff' }, 'Equipa'),
-      h('option', { value: 'agent' }, 'Agente de estúdio'),
-      h('option', { value: 'owner' }, 'Proprietário'));
-    // Um agente pertence a um estúdio. O seletor só aparece nesse perfil.
-    const studio = h('select', {},
-      h('option', { value: '' }, 'Escolher estúdio…'),
-      app.studios.map((s) => h('option', { value: s.id }, s.name)));
-    if (u && u.studio_id) studio.value = String(u.studio_id);
-    const studioField = field('Estúdio do agente', studio);
-    const syncStudio = () => { studioField.hidden = role.value !== 'agent'; };
-    role.addEventListener('change', syncStudio);
-    syncStudio();
-    const pass = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, placeholder: isNew ? 'Mínimo 8 caracteres' : 'Deixe vazio para manter' });
-    const active = h('input', { type: 'checkbox', checked: u ? !!u.active : true });
-    const save = async () => {
-      const common = { name: name.value, role: role.value, studio_id: role.value === 'agent' ? studio.value : null };
-      try {
-        if (isNew) await api('/api/admin/users', { method: 'POST', body: { ...common, email: email.value, password: pass.value } });
-        else await api(`/api/admin/users/${u.id}`, { method: 'PUT', body: { ...common, active: active.checked, password: pass.value || undefined } });
-        toast(isNew ? 'Utilizador criado.' : 'Utilizador guardado.');
-        A.refresh();
-      } catch (ex) { toast(ex.message, true); }
-    };
-    const remove = async () => {
-      if (!window.confirm(`Eliminar o utilizador ${u.name}?`)) return;
-      try { await api(`/api/admin/users/${u.id}`, { method: 'DELETE' }); toast('Utilizador eliminado.'); A.refresh(); }
-      catch (ex) { toast(ex.message, true); }
-    };
-    return h('div', { class: 'user-card' + (isNew ? ' is-new' : '') },
-      isNew
-        ? h('h3', { class: 'user-card-title' }, 'Novo utilizador')
-        : h('div', { class: 'user-card-id' },
-          h('strong', {}, u.name),
-          h('span', { class: 'tag' }, u.role === 'owner' ? 'Proprietário' : u.studio_id ? 'Agente' : 'Equipa'),
-          !u.active && h('span', { class: 'tag off' }, 'Inativo')),
-      h('div', { class: 'grid-2' }, field('Nome', name), field('Email', email)),
-      h('div', { class: 'grid-2' }, field('Perfil', role), studioField),
-      h('div', { class: 'user-card-foot' },
-        field(isNew ? 'Palavra-passe' : 'Nova palavra-passe', pass),
-        !isNew && h('label', { class: 'check' }, active, 'Ativo'),
-        h('div', { class: 'row-actions' },
-          h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),
-          !isNew && u.id !== meId && h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: remove }, 'Eliminar'))));
-  }
-
   views.definicoes = {
     title: 'Definições',
     async render(box) {
@@ -966,19 +916,175 @@
   };
 
   // ============================================================ Utilizadores (só proprietário)
-  // A gestão das contas de equipa: criar, editar e remover proprietário, equipa
-  // e agentes. (O que estes perfis podem fazer vê-se em "Gestão de acesso".)
+  // Lista das contas com pesquisa e filtros (estado e função), e janelas para
+  // criar e editar. A função é um perfil de "Gestão de acesso"; escolhê-la
+  // também acerta o tipo de conta (Proprietário, Agente de estúdio ou equipa).
+  const UT_ICO = {
+    editar: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
+    chave: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9"/><path d="M17 6l3 3"/><path d="M15 8l2 2"/>',
+    bloquear: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    desbloquear: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
+    apagar: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>',
+    escudo: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
+    mais: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    atualizar: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 20v-4h-4"/>',
+    procurar: '<circle cx="11" cy="11" r="7"/><path d="M16.6 16.6L21 21"/>',
+  };
+  const dataCurta = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
+
+  function modalUtilizador(u, funcoes, depois) {
+    const isNew = !u;
+    openModal((close) => {
+      const name = h('input', { type: 'text', maxlength: 80, required: true, value: u ? u.name : '', autocomplete: 'off' });
+      const phone = h('input', { type: 'tel', maxlength: 30, value: u ? u.phone || '' : '', autocomplete: 'off' });
+      const email = h('input', { type: 'email', maxlength: 120, required: isNew, readonly: !isNew, value: u ? u.email : '', autocomplete: 'off' });
+      const pass = isNew && h('input', { type: 'password', minlength: 8, required: true, autocomplete: 'new-password', placeholder: 'Mínimo 8 caracteres' });
+      const funcao = h('select', {},
+        h('option', { value: '' }, '— Sem função —'),
+        funcoes.map((f) => h('option', { value: f.id }, f.name)));
+      if (u && u.funcao) funcao.value = String(u.funcao.id);
+      const estado = h('select', {}, h('option', { value: '1' }, 'Ativo'), h('option', { value: '0' }, 'Inativo'));
+      estado.value = u && !u.active ? '0' : '1';
+      if (u && u.id === app.user.id) estado.disabled = true;   // não se desativa a si próprio
+      // Agente de estúdio: escolhe-se o estúdio dele.
+      const studio = h('select', {},
+        h('option', { value: '' }, 'Escolher estúdio…'),
+        app.studios.map((st) => h('option', { value: st.id }, st.name)));
+      if (u && u.studio_id) studio.value = String(u.studio_id);
+      const studioField = field('Estúdio do agente', studio);
+      const eAgente = () => { const f = funcoes.find((x) => String(x.id) === funcao.value); return f ? f.code === 'agente' : !!(u && u.studio_id); };
+      const sync = () => { studioField.hidden = !eAgente(); };
+      funcao.addEventListener('change', sync);
+      sync();
+      const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+      const btn = h('button', { class: 'btn', type: 'submit' }, svgIcon(UT_ICO.mais, 18), isNew ? 'Criar' : 'Guardar');
+      return h('div', { class: 'modal-in ut-modal' },
+        h('div', { class: 'modal-head' }, h('h2', {}, isNew ? 'Adicionar novo Utilizador' : 'Editar Utilizador')),
+        h('form', {
+          onsubmit: async (e) => {
+            e.preventDefault(); err.hidden = true; btn.disabled = true;
+            const body = {
+              name: name.value, phone: phone.value, funcao_id: funcao.value || null, active: estado.value === '1',
+              studio_id: eAgente() ? studio.value : null,
+            };
+            if (!body.funcao_id && u) body.role = u.role;       // sem função: mantém o tipo de conta
+            try {
+              if (isNew) await api('/api/admin/users', { method: 'POST', body: { ...body, email: email.value, password: pass.value } });
+              else await api(`/api/admin/users/${u.id}`, { method: 'PUT', body });
+              close(); toast(isNew ? 'Utilizador criado.' : 'Utilizador guardado.'); depois();
+            } catch (ex) { err.textContent = ex.message; err.hidden = false; btn.disabled = false; }
+          },
+        },
+        h('div', { class: 'grid-2' }, field('Nome', name), field('Telefone', phone)),
+        field('Email', email, !isNew ? { hint: 'O email é o nome de entrada e não se muda.' } : undefined),
+        isNew && field('Palavra-passe', pass),
+        h('div', { class: 'grid-2' }, field('Função', funcao), field('Estado', estado)),
+        studioField,
+        err,
+        h('div', { class: 'modal-foot ut-foot' },
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+          btn)));
+    });
+  }
+
+  function modalSenha(u) {
+    openModal((close) => {
+      const pass = h('input', { type: 'password', minlength: 8, required: true, autocomplete: 'new-password', placeholder: 'Mínimo 8 caracteres' });
+      const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
+      return h('div', { class: 'modal-in ut-modal' },
+        h('div', { class: 'modal-head' }, h('h2', {}, 'Nova palavra-passe')),
+        h('p', { class: 'hint' }, `Para ${u.name}. As sessões abertas desta conta terminam.`),
+        h('form', {
+          onsubmit: async (e) => {
+            e.preventDefault(); err.hidden = true;
+            try { await api(`/api/admin/users/${u.id}`, { method: 'PUT', body: { password: pass.value } }); close(); toast('Palavra-passe alterada.'); }
+            catch (ex) { err.textContent = ex.message; err.hidden = false; }
+          },
+        },
+        field('Nova palavra-passe', pass), err,
+        h('div', { class: 'modal-foot ut-foot' },
+          h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
+          h('button', { class: 'btn', type: 'submit' }, 'Alterar'))));
+    });
+  }
+
   views.utilizadores = {
     title: 'Utilizadores',
     async render(box) {
-      const { users } = await api('/api/admin/users');
-      box.append(pageHead('Utilizadores'));
-      box.append(h('section', { class: 'panel' },
-        h('h2', {}, 'Contas de acesso'),
-        h('p', { class: 'hint' }, 'O proprietário vê e faz tudo. A equipa gere marcações, clientes e estúdios. '
-          + 'Um agente de estúdio só vê e gere o seu estúdio — para quem trabalha num dos estúdios espalhados pelo mundo.'),
-        users.map((u) => userRow(u, app.user.id)),
-        userRow(null, app.user.id)));
+      const filtro = { q: '', estado: '', funcao: '' };
+      let users = [], funcoes = [];
+      const lista = h('div');
+      const contagem = h('span', { class: 'ut-count' });
+      const pesquisa = h('input', { type: 'search', placeholder: 'Pesquisar...', 'aria-label': 'Pesquisar utilizadores' });
+      const estadoSel = h('select', { 'aria-label': 'Estado' }, h('option', { value: '' }, 'Todos'), h('option', { value: '1' }, 'Ativo'), h('option', { value: '0' }, 'Inativo'));
+      const funcaoSel = h('select', { 'aria-label': 'Função' });
+      pesquisa.addEventListener('input', () => { filtro.q = pesquisa.value.trim().toLowerCase(); desenhar(); });
+      estadoSel.addEventListener('change', () => { filtro.estado = estadoSel.value; desenhar(); });
+      funcaoSel.addEventListener('change', () => { filtro.funcao = funcaoSel.value; desenhar(); });
+
+      async function carregar() {
+        const r = await api('/api/admin/users');
+        users = r.users; funcoes = r.funcoes;
+        funcaoSel.replaceChildren(h('option', { value: '' }, 'Todos'), h('option', { value: 'nenhuma' }, 'Sem função'),
+          ...funcoes.map((f) => h('option', { value: f.id }, f.name)));
+        funcaoSel.value = filtro.funcao;
+        desenhar();
+      }
+
+      const acao = (cls, titulo, ico, onclick, disabled) => h('button', { class: 'ut-acao ' + cls, type: 'button', title: titulo, 'aria-label': titulo, onclick, disabled: !!disabled }, svgIcon(ico, 16));
+
+      async function alternarAtivo(u) {
+        const ativar = !u.active;
+        if (!window.confirm(`${ativar ? 'Ativar' : 'Bloquear'} a conta de ${u.name}?${ativar ? '' : ' Deixa de conseguir entrar no painel.'}`)) return;
+        try { await api(`/api/admin/users/${u.id}`, { method: 'PUT', body: { active: ativar } }); toast(ativar ? 'Conta ativada.' : 'Conta bloqueada.'); carregar(); }
+        catch (ex) { toast(ex.message, true); }
+      }
+      async function apagar(u) {
+        if (!window.confirm(`Eliminar o utilizador ${u.name}? Esta ação não se pode desfazer.`)) return;
+        try { await api(`/api/admin/users/${u.id}`, { method: 'DELETE' }); toast('Utilizador eliminado.'); carregar(); }
+        catch (ex) { toast(ex.message, true); }
+      }
+
+      function desenhar() {
+        const vis = users.filter((u) => (!filtro.q || [u.name, u.email, u.phone].some((v) => String(v || '').toLowerCase().includes(filtro.q)))
+          && (filtro.estado === '' || String(u.active ? 1 : 0) === filtro.estado)
+          && (filtro.funcao === '' || (filtro.funcao === 'nenhuma' ? !u.funcao : u.funcao && String(u.funcao.id) === filtro.funcao)));
+        contagem.textContent = `${vis.length} ${vis.length === 1 ? 'utilizador' : 'utilizadores'}`;
+        if (!vis.length) { lista.replaceChildren(h('div', { class: 'panel' }, h('p', { class: 'empty' }, 'Nenhum utilizador corresponde aos filtros.'))); return; }
+        lista.replaceChildren(h('div', { class: 'table-wrap ut-tabela' }, labelCells(h('table', { class: 'data' },
+          h('thead', {}, h('tr', {}, ['Utilizador', 'Contacto', 'Função', 'Estado', 'Criado', 'Ações'].map((t) => h('th', { scope: 'col', class: t === 'Ações' ? 'num' : '' }, t)))),
+          h('tbody', {}, vis.map((u) => {
+            const eu = u.id === app.user.id;
+            return h('tr', {},
+              h('td', {}, h('strong', {}, u.name, eu && h('span', { class: 'ut-eu' }, ' (você)')), h('span', { class: 'sub' }, u.email)),
+              h('td', {}, u.phone || '—'),
+              h('td', {}, u.funcao
+                ? h('span', { class: 'ut-funcao' }, svgIcon(UT_ICO.escudo, 14), u.funcao.name, u.studio_name && h('small', {}, ' · ' + u.studio_name))
+                : h('span', { class: 'ut-sem' }, 'Sem função')),
+              h('td', {}, h('span', { class: 'ut-estado ' + (u.active ? 'on' : 'off') }, u.active ? 'Ativo' : 'Inativo')),
+              h('td', {}, dataCurta(u.created_at)),
+              h('td', { class: 'num' }, h('div', { class: 'ut-acoes' },
+                acao('editar', 'Editar', UT_ICO.editar, () => modalUtilizador(u, funcoes, carregar)),
+                acao('chave', 'Alterar palavra-passe', UT_ICO.chave, () => modalSenha(u)),
+                acao('bloquear', u.active ? 'Bloquear' : 'Ativar', u.active ? UT_ICO.bloquear : UT_ICO.desbloquear, () => alternarAtivo(u), eu),
+                acao('apagar', 'Eliminar', UT_ICO.apagar, () => apagar(u), eu))));
+          }))))));
+      }
+
+      box.append(
+        h('div', { class: 'ut-cab' },
+          h('div', {}, h('h1', { class: 'ut-titulo' }, 'Gestão de Utilizadores'), h('p', { class: 'ut-sub' }, 'Gerir utilizadores, funções e estados do sistema')),
+          h('button', { class: 'btn ut-criar', type: 'button', onclick: () => modalUtilizador(null, funcoes, carregar) }, svgIcon(UT_ICO.mais, 18), 'Criar Utilizador')),
+        h('section', { class: 'panel ut-filtros' },
+          h('div', { class: 'ut-linha' },
+            h('label', { class: 'ut-pesquisa' }, svgIcon(UT_ICO.procurar, 18), pesquisa),
+            h('button', { class: 'btn btn-outline', type: 'button', onclick: () => carregar().then(() => toast('Lista atualizada.')) }, svgIcon(UT_ICO.atualizar, 16), 'Atualizar')),
+          h('div', { class: 'ut-linha' },
+            h('label', { class: 'ut-filtro' }, 'Estado:', estadoSel),
+            h('label', { class: 'ut-filtro' }, 'Função:', funcaoSel),
+            contagem)),
+        lista);
+      await carregar();
     },
   };
 
@@ -1031,8 +1137,9 @@
             h('h3', {}, r.name),
             rbacBadge(r.code, 'slug'),
             r.is_system ? rbacBadge('Sistema', 'sistema') : null,
+            h('button', { class: 'btn btn-outline btn-sm rbac-card-del', type: 'button', onclick: () => modalRole(r) }, 'Editar'),
             r.is_system ? null : h('button', {
-              class: 'btn btn-outline btn-sm rbac-card-del', type: 'button',
+              class: 'btn btn-outline btn-sm', type: 'button',
               onclick: () => rbacApagar('/api/admin/rbac/roles/' + r.id, 'Eliminar o perfil "' + r.name + '"?', recarregar),
             }, 'Eliminar')),
           r.description ? h('p', { class: 'rbac-desc' }, r.description) : null,
@@ -1093,31 +1200,40 @@
         });
       }
 
-      function modalRole() {
+      // Sem argumento cria um perfil; com um perfil (r), abre-o para editar.
+      function modalRole(r) {
+        const ed = r && r.id ? r : null;
         openModal((close) => {
-          const name = h('input', { type: 'text', required: true, placeholder: 'ex.: Administrador' });
-          const code = h('input', { type: 'text', placeholder: 'ex.: admin' });
-          const desc = h('input', { type: 'text', placeholder: 'ex.: Acesso total ao sistema' });
-          const prio = h('input', { type: 'number', value: '0' });
-          const cat = h('input', { type: 'text', placeholder: 'ex.: system' });
-          const sys = h('select', {}, h('option', { value: '0' }, 'Não sistema'), h('option', { value: '1' }, 'Sistema'));
+          const name = h('input', { type: 'text', required: true, placeholder: 'ex.: Administrador', value: ed ? ed.name : '' });
+          // O código não muda depois de criado: o sistema reconhece alguns perfis por ele.
+          const code = h('input', { type: 'text', placeholder: 'ex.: admin', value: ed ? ed.code : '', readonly: !!ed });
+          const desc = h('input', { type: 'text', placeholder: 'ex.: Acesso total ao sistema', value: ed ? ed.description || '' : '' });
+          const prio = h('input', { type: 'number', value: ed ? String(ed.priority) : '0' });
+          const cat = h('input', { type: 'text', placeholder: 'ex.: system', value: ed ? ed.category || '' : '' });
+          const sys = h('select', { disabled: !!ed && ed.code === 'proprietario' }, h('option', { value: '0' }, 'Não sistema'), h('option', { value: '1' }, 'Sistema'));
+          if (ed && ed.is_system) sys.value = '1';
+          const temPerm = new Set(ed ? ed.permissions : []);
           const checks = data.permissions.map((p) => {
-            const cb = h('input', { type: 'checkbox', value: p.id });
+            const cb = h('input', { type: 'checkbox', value: p.id, checked: temPerm.has(p.id) });
             return { cb, el: h('label', { class: 'rbac-check' }, cb, h('span', { class: 'rbac-check-l' }, p.code), h('span', { class: 'rbac-check-r' }, p.resource)) };
           });
-          const conta = h('span', {}, '0');
+          const conta = h('span', {}, String(temPerm.size));
           const atualizar = () => { conta.textContent = String(checks.filter((c) => c.cb.checked).length); };
           checks.forEach((c) => c.cb.addEventListener('change', atualizar));
           const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
           return h('div', { class: 'modal-in rbac-modal' },
-            h('div', { class: 'modal-head' }, h('h2', {}, 'Novo Role')),
+            h('div', { class: 'modal-head' }, h('h2', {}, ed ? 'Editar Role' : 'Novo Role')),
             h('form', { onsubmit: async (e) => {
               e.preventDefault(); err.hidden = true;
               const permissions = checks.filter((c) => c.cb.checked).map((c) => +c.cb.value);
-              try { await api('/api/admin/rbac/roles', { method: 'POST', body: { name: name.value, code: code.value, description: desc.value, priority: +prio.value || 0, category: cat.value, is_system: sys.value === '1', permissions } }); close(); toast('Perfil criado.'); recarregar(); }
-              catch (ex) { err.textContent = ex.message; err.hidden = false; }
+              const body = { name: name.value, description: desc.value, priority: +prio.value || 0, category: cat.value, is_system: sys.value === '1', permissions };
+              try {
+                if (ed) await api('/api/admin/rbac/roles/' + ed.id, { method: 'PUT', body });
+                else await api('/api/admin/rbac/roles', { method: 'POST', body: { ...body, code: code.value } });
+                close(); toast(ed ? 'Perfil guardado.' : 'Perfil criado.'); recarregar();
+              } catch (ex) { err.textContent = ex.message; err.hidden = false; }
             } },
-            h('div', { class: 'grid-2' }, field('Nome', name), field('Código', code)),
+            h('div', { class: 'grid-2' }, field('Nome', name), field('Código', code, ed ? { hint: 'O código não se muda depois de criado.' } : undefined)),
             field('Descrição', desc),
             h('div', { class: 'grid-3' }, field('Prioridade', prio), field('Categoria', cat), field('Sistema', sys)),
             h('div', { class: 'field' },
@@ -1130,7 +1246,7 @@
             err,
             h('div', { class: 'modal-foot' },
               h('button', { class: 'btn btn-outline', type: 'button', onclick: close }, 'Cancelar'),
-              h('button', { class: 'btn', type: 'submit' }, 'Criar Role'))));
+              h('button', { class: 'btn', type: 'submit' }, ed ? 'Guardar' : 'Criar Role'))));
         });
       }
 

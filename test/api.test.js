@@ -439,8 +439,35 @@ function futureWeekday(offset = 3) {
 
   console.log('\nControlo de acesso (RBAC)');
   r = await call('GET', '/api/admin/rbac', { cookie });
-  ok(r.status === 200 && r.json.roles.length === 3 && r.json.permissions.length === 15, 'RBAC: 3 perfis e 15 permissões de origem');
+  ok(r.status === 200 && r.json.roles.length === 5 && r.json.permissions.length === 19, 'RBAC: 5 perfis e 19 permissões de origem');
+  const codigos = (role) => role.permissions.map((id) => r.json.permissions.find((p) => p.id === id).code);
+  const perfil = (code) => r.json.roles.find((x) => x.code === code);
+  ok(['design.ver', 'design.gerir', 'financeiro.ver', 'financeiro.gerir'].every((c) => r.json.permissions.some((p) => p.code === c)), 'RBAC: há acessos de Design e Financeiro');
+  ok(codigos(perfil('proprietario')).includes('financeiro.gerir') && codigos(perfil('gestor')).includes('design.gerir'), 'RBAC: o Proprietário e o Gestor têm Design e Financeiro');
+  ok(codigos(perfil('designer')).includes('design.gerir') && codigos(perfil('financeiro')).includes('financeiro.gerir') && !codigos(perfil('designer')).includes('financeiro.ver'),
+    'RBAC: perfis Designer e Financeiro, cada um com a sua área');
   ok(r.json.assignments.some((a) => a.role_name === 'Proprietário'), 'RBAC: o proprietário já tem o perfil atribuído');
+  {
+    // Utilizadores com função: a função é um perfil e acerta o tipo de conta.
+    const perfilId = (code) => r.json.roles.find((x) => x.code === code).id;
+    let u = await call('POST', '/api/admin/users', { cookie, body: { name: 'Fátima', email: 'fatima@exemplo.com', password: 'segredo-longo-1', phone: '9900011', funcao_id: perfilId('financeiro') } });
+    ok(u.status === 201, 'criar utilizador com a função Financeiro');
+    const fid = u.json.id;
+    let lista = (await call('GET', '/api/admin/users', { cookie })).json;
+    let fa = lista.users.find((x) => x.id === fid);
+    ok(fa.funcao && fa.funcao.code === 'financeiro' && fa.role === 'staff' && fa.phone === '9900011' && lista.funcoes.length >= 5, 'a lista traz a função, o contacto e as funções para escolher');
+    await call('PUT', `/api/admin/users/${fid}`, { cookie, body: { funcao_id: perfilId('proprietario') } });
+    fa = (await call('GET', '/api/admin/users', { cookie })).json.users.find((x) => x.id === fid);
+    ok(fa.role === 'owner' && fa.funcao.code === 'proprietario', 'mudar a função para Proprietário torna a conta de proprietário');
+    await call('PUT', `/api/admin/users/${fid}`, { cookie, body: { active: false } });
+    fa = (await call('GET', '/api/admin/users', { cookie })).json.users.find((x) => x.id === fid);
+    ok(!fa.active && fa.role === 'owner' && fa.funcao.code === 'proprietario', 'bloquear só muda o estado (a função fica)');
+    const eu = (await call('GET', '/api/auth/me', { cookie })).json.user;
+    u = await call('PUT', `/api/admin/users/${eu.id}`, { cookie, body: { funcao_id: perfilId('designer') } });
+    ok(u.status === 400 && /proprietário ativo/.test(u.json.error), 'não se tira a função de Proprietário ao último proprietário ativo');
+    await call('DELETE', `/api/admin/users/${fid}`, { cookie });
+    r = await call('GET', '/api/admin/rbac', { cookie });
+  }
   r = await call('GET', '/api/admin/rbac', { cookie: staff.cookie });
   ok(r.status === 403, 'RBAC: a equipa não acede (só proprietário)');
   r = await call('POST', '/api/admin/rbac/permissions', { cookie, body: { label: 'Reservas – Criar', resource: 'reservas', action: 'criar' } });
@@ -455,6 +482,14 @@ function futureWeekday(offset = 3) {
   ok(r.status === 409, 'RBAC: código de perfil repetido → 409');
   rb = (await call('GET', '/api/admin/rbac', { cookie })).json;
   ok(rb.roles.some((x) => x.code === 'comercial' && x.permCount === 1), 'RBAC: o novo perfil aparece com 1 permissão');
+  r = await call('PUT', `/api/admin/rbac/roles/${novoRoleId}`, { cookie, body: { name: 'Comercial e Vendas', description: 'Vende', priority: 55, category: 'vendas', code: 'outro', permissions: [rb.permissions[0].id, rb.permissions[1].id] } });
+  rb = (await call('GET', '/api/admin/rbac', { cookie })).json;
+  const editado = rb.roles.find((x) => x.id === novoRoleId);
+  ok(r.status === 200 && editado.name === 'Comercial e Vendas' && editado.priority === 55 && editado.category === 'vendas' && editado.permCount === 2 && editado.code === 'comercial',
+    'RBAC: editar perfil muda nome, prioridade, categoria e permissões (o código fica)');
+  const prop = rb.roles.find((x) => x.code === 'proprietario');
+  await call('PUT', `/api/admin/rbac/roles/${prop.id}`, { cookie, body: { is_system: false } });
+  ok((await call('GET', '/api/admin/rbac', { cookie })).json.roles.find((x) => x.id === prop.id).is_system, 'RBAC: o Proprietário continua de sistema');
   const tec = (await call('GET', '/api/admin/users', { cookie })).json.users.find((u) => u.email === 'tecnico@teste.cv');
   r = await call('POST', '/api/admin/rbac/assignments', { cookie, body: { user_id: tec.id, role_ids: [novoRoleId] } });
   ok(r.status === 201 && r.json.atribuidos === 1, 'RBAC: atribui perfil a um utilizador');

@@ -95,6 +95,33 @@ router.post('/roles', (req, res) => {
   res.status(201).json({ id: create() });
 });
 
+// Editar um perfil: nome, descrição, prioridade, categoria, "sistema" e as
+// permissões (a lista enviada substitui a que havia). O código não muda: é por
+// ele que o sistema reconhece alguns perfis (proprietario, agente).
+router.put('/roles/:id', (req, res) => {
+  const id = U.toInt(req.params.id);
+  const row = db.prepare('SELECT * FROM rbac_roles WHERE id=?').get(id);
+  if (!row) throw new HttpError(404, 'Perfil não encontrado.');
+  const b = req.body || {};
+  const name = b.name === undefined ? row.name : U.clean(b.name, 60);
+  if (name.length < 2) throw new HttpError(400, 'Indique um nome para o perfil.');
+  const description = b.description === undefined ? row.description : U.clean(b.description, 300);
+  const priority = b.priority === undefined ? row.priority : U.toInt(b.priority, 0);
+  const category = b.category === undefined ? row.category : slug(b.category, 40);
+  // O Proprietário é sempre de sistema (não se pode eliminar).
+  const isSystem = row.code === 'proprietario' ? 1 : b.is_system === undefined ? row.is_system : (b.is_system ? 1 : 0);
+  db.transaction(() => {
+    db.prepare('UPDATE rbac_roles SET name=?, description=?, priority=?, category=?, is_system=? WHERE id=?')
+      .run(name, description, priority, category, isSystem, id);
+    if (Array.isArray(b.permissions)) {
+      db.prepare('DELETE FROM rbac_role_permissions WHERE role_id=?').run(id);
+      const ins = db.prepare('INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id) SELECT ?, id FROM rbac_permissions WHERE id=?');
+      for (const pid of new Set(b.permissions.map((x) => U.toInt(x)).filter(Boolean))) ins.run(id, pid);
+    }
+  })();
+  res.json({ ok: true });
+});
+
 router.delete('/roles/:id', (req, res) => {
   const row = db.prepare('SELECT is_system FROM rbac_roles WHERE id=?').get(U.toInt(req.params.id));
   if (!row) throw new HttpError(404, 'Perfil não encontrado.');

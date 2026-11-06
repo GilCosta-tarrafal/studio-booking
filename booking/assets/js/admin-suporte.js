@@ -22,6 +22,9 @@
     camera: ['M4 8h3l2-3h6l2 3h3v11H4z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
     mic: ['M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3'],
     trash: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13'],
+    play: ['M8 5v14l11-7z'],
+    pause: ['M8 5v14', 'M16 5v14'],
+    stop: ['M7 7h10v10H7z'],
     users: ['M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M2.5 20a6.5 6.5 0 0 1 13 0', 'M16 4.5a3.5 3.5 0 0 1 0 6.5', 'M18 14a6 6 0 0 1 3.5 6'],
   };
   function ico(nome, tam = 22) {
@@ -202,6 +205,51 @@
   const MAX_ANEXO = 8 * 1024 * 1024;
   const MAX_VOZ_S = 5 * 60;
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  // Leitor das mensagens de voz (em vez do <audio> do browser). O ficheiro vem
+  // inteiro por fetch, com a sessão, e toca a partir de uma cópia local: não
+  // depende de pedidos parciais nem do que o browser guardou em cache. Serve
+  // também para ouvir uma gravação antes de a enviar (blob). As gravações do
+  // browser às vezes não dizem quanto duram: aí usa-se a duração guardada.
+  function leitorVoz({ url, blob, duracao }) {
+    const audio = new Audio();
+    let pronto = blob ? Promise.resolve(audio.src = URL.createObjectURL(blob)) : null;
+    const carregar = () => pronto || (pronto = fetch(url, { credentials: 'same-origin' })
+      .then((r) => { if (!r.ok) throw new Error(); return r.blob(); })
+      .then((b) => { audio.src = URL.createObjectURL(b); })
+      .catch((e) => { pronto = null; throw e; }));
+    const total = () => (Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : duracao || 0);
+    const btn = h('button', { class: 'sup-voz-play', type: 'button', 'aria-label': 'Ouvir' }, ico('play', 18));
+    const barra = h('input', { class: 'sup-voz-barra', type: 'range', min: 0, max: 1000, value: 0, step: 1, 'aria-label': 'Posição na mensagem de voz' });
+    const tempo = h('span', { class: 'sup-voz-tempo' }, mmss(duracao || 0));
+    const pintar = () => {
+      const t = total();
+      barra.value = t ? Math.min(1000, Math.round((audio.currentTime / t) * 1000)) : 0;
+      tempo.textContent = mmss(audio.paused && !audio.currentTime ? t : audio.currentTime);
+    };
+    audio.addEventListener('play', () => { btn.replaceChildren(ico('pause', 18)); btn.setAttribute('aria-label', 'Pausa'); });
+    audio.addEventListener('pause', () => { btn.replaceChildren(ico('play', 18)); btn.setAttribute('aria-label', 'Ouvir'); });
+    audio.addEventListener('timeupdate', pintar);
+    audio.addEventListener('loadedmetadata', pintar);
+    audio.addEventListener('ended', () => { audio.currentTime = 0; pintar(); });
+    btn.addEventListener('click', async () => {
+      if (!audio.paused) { audio.pause(); return; }
+      // Só uma mensagem a tocar de cada vez.
+      for (const outro of document.querySelectorAll('.sup-voz')) if (outro !== caixa && outro.pausar) outro.pausar();
+      btn.disabled = true;
+      try { await carregar(); await audio.play(); } catch (_) {
+        toast('Não foi possível tocar a mensagem de voz. Verifique o som do computador e tente outra vez.', true);
+      } finally { btn.disabled = false; }
+    });
+    barra.addEventListener('input', async () => {
+      try { await carregar(); } catch (_) { return; }
+      const t = total();
+      if (t) audio.currentTime = (barra.value / 1000) * t;
+    });
+    const caixa = h('div', { class: 'sup-voz' }, btn, barra, tempo);
+    caixa.pausar = () => audio.pause();
+    return caixa;
+  }
   // O que aparece na lista e nos avisos em vez do conteúdo.
   const previa = (m) => (m.tipo === 'imagem' ? '📷 Fotografia'
     : m.tipo === 'voz' ? '🎤 Mensagem de voz' + (m.duracao ? ` (${mmss(m.duracao)})` : '') : m.body);
@@ -319,7 +367,7 @@
         return h('a', { href: m.url, target: '_blank', rel: 'noopener', title: 'Abrir a fotografia' },
           h('img', { class: 'sup-foto', src: m.url, alt: 'Fotografia', loading: 'lazy', onload: () => { if (st.colado) rolarFim(corpo); } }));
       }
-      if (m.tipo === 'voz') return h('audio', { class: 'sup-voz', controls: true, preload: 'metadata', src: m.url });
+      if (m.tipo === 'voz') return leitorVoz({ url: m.url, duracao: m.duracao });
       return m.body;
     };
     st.pintarMensagens = () => {
@@ -374,9 +422,11 @@
     // Gravação de voz: o microfone só funciona em https:// ou em localhost.
     const barraVoz = h('div', { class: 'sup-gravar', hidden: true });
     let gravacao = null;
-    function pararGravacao(descartar) {
+    // descartar: apaga; ouvir: pára e mostra a gravação para ouvir antes de enviar.
+    function pararGravacao(descartar, ouvir) {
       if (!gravacao) return;
       gravacao.descartar = descartar;
+      gravacao.ouvir = !!ouvir;
       clearInterval(gravacao.relogio);
       if (gravacao.rec.state !== 'inactive') gravacao.rec.stop();
       gravacao.stream.getTracks().forEach((t) => t.stop());
@@ -400,10 +450,21 @@
       rec.onstop = async () => {
         const g = gravacao;
         gravacao = null;
-        barraVoz.hidden = true; form.hidden = false;
-        if (!g || g.descartar || !partes.length) return;
+        const fechar = () => { barraVoz.hidden = true; form.hidden = false; };
+        if (!g || g.descartar || !partes.length) { fechar(); return; }
         const blob = new Blob(partes, { type: (rec.mimeType || 'audio/webm').split(';')[0] });
-        try { juntar(await enviarAnexo(channel, blob, (Date.now() - inicio) / 1000)); } catch (ex) { toast(ex.message, true); }
+        const duracao = (Date.now() - inicio) / 1000;
+        const enviar = async (botao) => {
+          if (botao) botao.disabled = true;
+          try { juntar(await enviarAnexo(channel, blob, duracao)); fechar(); } catch (ex) { toast(ex.message, true); if (botao) botao.disabled = false; }
+        };
+        if (!g.ouvir) { fechar(); enviar(); return; }
+        // Ouvir antes de enviar: o leitor com a gravação, apagar ou enviar.
+        const enviarBtn = h('button', { class: 'sup-enviar', type: 'button', title: 'Enviar', 'aria-label': 'Enviar a gravação', onclick: () => enviar(enviarBtn) }, ico('send', 20));
+        barraVoz.replaceChildren(
+          h('button', { class: 'sup-icobtn', type: 'button', title: 'Apagar', 'aria-label': 'Apagar a gravação', onclick: fechar }, ico('trash', 20)),
+          leitorVoz({ blob, duracao }),
+          enviarBtn);
       };
       gravacao.relogio = setInterval(() => {
         const s = (Date.now() - inicio) / 1000;
@@ -414,6 +475,7 @@
         h('span', { class: 'sup-rec', 'aria-hidden': 'true' }),
         h('span', { class: 'sup-gravar-txt' }, 'A gravar… ', tempo),
         h('button', { class: 'sup-icobtn', type: 'button', title: 'Cancelar', 'aria-label': 'Cancelar a gravação', onclick: () => pararGravacao(true) }, ico('trash', 20)),
+        h('button', { class: 'sup-icobtn', type: 'button', title: 'Parar e ouvir', 'aria-label': 'Parar e ouvir a gravação antes de enviar', onclick: () => pararGravacao(false, true) }, ico('stop', 20)),
         h('button', { class: 'sup-enviar', type: 'button', title: 'Enviar', 'aria-label': 'Parar e enviar a gravação', onclick: () => pararGravacao(false) }, ico('send', 20)));
       form.hidden = true; barraVoz.hidden = false;
       rec.start();

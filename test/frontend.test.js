@@ -593,23 +593,52 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
   // Utilizadores: a lista de contas, com o novo perfil de agente.
   w.location.hash = '#/utilizadores';
-  await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Utilizadores' && d.querySelector('.user-card'), 'utilizadores');
-  ok(d.querySelectorAll('.user-card').length === 2, 'utilizadores: 1 conta + linha de novo');
-  const novaConta = [...d.querySelectorAll('.user-card')].pop();
-  const perfil = novaConta.querySelector('select');
-  const campoEstudio = [...novaConta.querySelectorAll('.field')].find((f) => /Estúdio do agente/.test(f.textContent));
+  await waitFor(() => d.querySelector('.ut-titulo') && d.querySelector('.ut-tabela tbody tr'), 'utilizadores');
+  ok(d.querySelector('.ut-titulo').textContent === 'Gestão de Utilizadores' && d.querySelectorAll('.ut-tabela tbody tr').length === 1, 'utilizadores: tabela com a conta');
+  const linhaDono = d.querySelector('.ut-tabela tbody tr');
+  ok(/Proprietário/.test(linhaDono.querySelector('.ut-funcao').textContent) && linhaDono.querySelector('.ut-estado.on') && linhaDono.querySelectorAll('.ut-acao').length === 4,
+    'cada utilizador mostra a função, o estado e as ações (editar, palavra-passe, bloquear, eliminar)');
+  d.querySelector('.ut-criar').click();
+  const utDlg = await waitFor(() => d.querySelector('dialog.modal[open]'), 'janela de novo utilizador');
+  const campoUt = (rot) => [...utDlg.querySelectorAll('.field')].find((f) => f.querySelector('label') && f.querySelector('label').textContent.startsWith(rot));
+  const funcaoUt = campoUt('Função').querySelector('select');
+  const opcoesUt = [...funcaoUt.options].map((o) => o.textContent);
+  ok(opcoesUt[0] === '— Sem função —' && ['Proprietário', 'Gestor', 'Financeiro', 'Designer', 'Agente de estúdio'].every((n) => opcoesUt.includes(n)), 'criar: escolhe-se a função entre os perfis da Gestão de acesso');
+  const campoEstudio = campoUt('Estúdio do agente');
   ok(campoEstudio && campoEstudio.hidden, 'o seletor de estúdio começa escondido');
-  perfil.value = 'agent'; perfil.dispatchEvent(new w.Event('change', { bubbles: true }));
+  const escolherFuncao = (n) => { funcaoUt.value = [...funcaoUt.options].find((o) => o.textContent === n).value; funcaoUt.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  escolherFuncao('Agente de estúdio');
   ok(!campoEstudio.hidden, 'escolher "Agente de estúdio" mostra o seletor de estúdio');
+  escolherFuncao('Financeiro');
+  setVal(w, campoUt('Nome').querySelector('input'), 'Rita Contas');
+  setVal(w, campoUt('Telefone').querySelector('input'), '9911223');
+  setVal(w, campoUt('Email').querySelector('input'), 'rita@exemplo.com');
+  setVal(w, campoUt('Palavra-passe').querySelector('input'), 'segredo-longo-1');
+  utDlg.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => d.querySelectorAll('.ut-tabela tbody tr').length === 2, 'utilizador criado na lista');
+  const linhaRita = [...d.querySelectorAll('.ut-tabela tbody tr')].find((tr) => /Rita Contas/.test(tr.textContent));
+  ok(linhaRita && /Financeiro/.test(linhaRita.querySelector('.ut-funcao').textContent) && /9911223/.test(linhaRita.textContent), 'o novo utilizador aparece com a função e o contacto');
+  // Editar: o administrador muda a função.
+  linhaRita.querySelector('.ut-acao.editar').click();
+  const edDlg = await waitFor(() => d.querySelector('dialog.modal[open]'), 'janela de editar');
+  const funcaoEd = [...edDlg.querySelectorAll('.field')].find((f) => /^Função/.test(f.textContent)).querySelector('select');
+  ok([...funcaoEd.options].find((o) => o.selected).textContent === 'Financeiro', 'editar: a função atual vem escolhida');
+  funcaoEd.value = [...funcaoEd.options].find((o) => o.textContent === 'Designer').value;
+  edDlg.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => [...d.querySelectorAll('.ut-tabela tbody tr')].some((tr) => /Rita Contas/.test(tr.textContent) && /Designer/.test(tr.textContent)), 'função mudada');
+  ok(true, 'editar: mudar a função de Financeiro para Designer');
+  d.querySelector('.ut-filtros select[aria-label="Função"]').value = [...d.querySelector('.ut-filtros select[aria-label="Função"]').options].find((o) => o.textContent === 'Designer').value;
+  d.querySelector('.ut-filtros select[aria-label="Função"]').dispatchEvent(new w.Event('change', { bubbles: true }));
+  ok(d.querySelectorAll('.ut-tabela tbody tr').length === 1 && /1 utilizador$/.test(d.querySelector('.ut-count').textContent), 'filtro por função: só os designers');
 
   // Gestão de acesso (RBAC): roles, permissões e atribuições — retrato do modelo atual.
   w.location.hash = '#/acesso';
   await waitFor(() => d.querySelector('.page-head h1') && d.querySelector('.page-head h1').textContent === 'Controlo de Acesso (RBAC)', 'gestão de acesso (RBAC)');
-  ok([...d.querySelectorAll('.tabs .tab')].map((t) => t.textContent).join(' | ') === 'Roles (3) | Permissões (15) | Atribuições (1)', 'RBAC: três abas com contagens');
-  ok(d.querySelectorAll('.rbac-card').length === 3 && /Proprietário/.test(d.querySelector('.rbac-card').textContent), 'RBAC: três roles, a começar no Proprietário');
+  ok([...d.querySelectorAll('.tabs .tab')].map((t) => t.textContent).join(' | ') === 'Roles (5) | Permissões (19) | Atribuições (2)', 'RBAC: três abas com contagens');
+  ok(d.querySelectorAll('.rbac-card').length === 5 && /Proprietário/.test(d.querySelector('.rbac-card').textContent), 'RBAC: cinco roles, a começar no Proprietário');
   [...d.querySelectorAll('.tabs .tab')].find((t) => /Permissões/.test(t.textContent)).click();
   await waitFor(() => d.querySelector('.rbac-perms'), 'aba de permissões');
-  ok(d.querySelectorAll('.rbac-perms li').length === 15, 'RBAC: 15 permissões listadas');
+  ok(d.querySelectorAll('.rbac-perms li').length === 19, 'RBAC: 19 permissões listadas');
   [...d.querySelectorAll('.tabs .tab')].find((t) => /Atribuições/.test(t.textContent)).click();
   await waitFor(() => d.querySelector('table.data tbody tr'), 'aba de atribuições');
   ok(/Proprietário/.test(d.querySelector('table.data tbody').textContent), 'RBAC: atribuições mostram a função de cada utilizador');
@@ -622,7 +651,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, rbTxt[0], 'Comercial'); setVal(w, rbTxt[1], 'comercial');
   const rbCb = rbDlg.querySelector('.rbac-check input'); rbCb.checked = true; ev(w, rbCb, 'change');
   rbDlg.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
-  await waitFor(() => [...d.querySelectorAll('.tabs .tab')][0].textContent === 'Roles (4)', 'novo role na lista');
+  await waitFor(() => [...d.querySelectorAll('.tabs .tab')][0].textContent === 'Roles (6)', 'novo role na lista');
   ok(/Comercial/.test(d.getElementById('view').textContent), 'RBAC: criar role pelo modal adiciona-o à lista');
 
   // Sair

@@ -43,6 +43,8 @@ app.use((_req, res, next) => {
       "style-src 'self' https://fonts.googleapis.com",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data:",
+      // Mensagens de voz do chat: tocam a partir de uma cópia local (blob:).
+      "media-src 'self' blob:",
       "connect-src 'self' https://api.stripe.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",

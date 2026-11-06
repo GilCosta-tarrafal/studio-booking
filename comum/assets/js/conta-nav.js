@@ -1,17 +1,37 @@
 /* Conta no cabeçalho do site. Sem sessão, o ícone aponta para /conta e diz
-   "Entrar". Com sessão, mostra o primeiro nome e, ao clicar, abre um menu com
-   "As minhas marcações", "Alterar palavra-passe" e "Sair". É independente do
+   "Entrar". Com sessão, fica o chip do perfil, como no painel (iniciais num
+   círculo, nome e "Cliente") e, ao clicar, abre um menu com quem está, "As
+   minhas marcações", "Alterar palavra-passe" e "Sair". É independente do
    resto: se o pedido falhar, fica o estado de "Entrar", que é o seguro. */
 (function () {
   'use strict';
   const link = document.getElementById('conta-link');
   if (!link || !window.Studio) return;
   const { h, t, api } = Studio;
-  const nome = link.querySelector('.conta-nome');
+
+  const ICO = {
+    marcacoes: ['M5 5h14v15H5z', 'M5 9.5h14', 'M9 3v4M15 3v4'],
+    senha: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
+    sair: ['M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4', 'M9 16l-4-4 4-4', 'M5 12h11'],
+  };
+  function ico(nome) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: 17, height: 17, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+    for (const d of ICO[nome]) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); svg.append(p); }
+    return svg;
+  }
 
   api('/api/conta/me').then((d) => {
     if (!d || !d.client) return;
-    if (nome) nome.textContent = d.client.name.split(/\s+/)[0];
+    const c = d.client;
+    const partes = (c.name || '').trim().split(/\s+/);
+    const iniciais = partes.map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
+    link.replaceChildren(
+      h('span', { class: 'conta-avatar', 'aria-hidden': 'true' }, iniciais),
+      h('span', { class: 'conta-txt' }, h('strong', {}, partes[0] || ''), h('span', { 'data-i18n': 'conta.papel' }, t('conta.papel'))),
+      h('span', { class: 'conta-caret', 'aria-hidden': 'true' }, '▾'));
+    link.classList.add('conta-chip');
     link.setAttribute('aria-label', t('conta.minhaConta'));
 
     // O ícone passa a abrir um menu em vez de navegar.
@@ -26,9 +46,10 @@
     }
 
     const menu = h('div', { class: 'conta-menu', role: 'menu', hidden: true },
-      h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/consultar' }, t('conta.minhasMarcacoes')),
-      h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/conta#senha' }, t('conta.alterarSenha')),
-      h('button', { class: 'conta-menu-item', role: 'menuitem', type: 'button', onclick: sair }, t('conta.sair')),
+      h('div', { class: 'conta-menu-who' }, h('strong', {}, c.name), (c.email || c.phone) && h('span', {}, c.email || c.phone)),
+      h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/consultar' }, ico('marcacoes'), h('span', { 'data-i18n': 'conta.minhasMarcacoes' }, t('conta.minhasMarcacoes'))),
+      h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/conta#senha' }, ico('senha'), h('span', { 'data-i18n': 'conta.alterarSenha' }, t('conta.alterarSenha'))),
+      h('button', { class: 'conta-menu-item danger', role: 'menuitem', type: 'button', onclick: sair }, ico('sair'), h('span', { 'data-i18n': 'conta.sair' }, t('conta.sair'))),
     );
 
     const wrap = h('div', { class: 'conta-nav' });

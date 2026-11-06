@@ -551,8 +551,10 @@
     return wrap;
   }
 
-  // Como se descreve o utilizador no chip da barra de topo.
+  // Como se descreve o utilizador no chip da barra de topo: a função que lhe
+  // foi dada em Utilizadores; sem função, o tipo de conta.
   function chipRole() {
+    if (app.user.funcao) return app.user.funcao.name;
     if (app.user.role === 'owner') return 'Administrador';
     if (app.user.studio_id) return 'Agente';
     return 'Responsável';
