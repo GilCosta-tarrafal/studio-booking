@@ -4,10 +4,16 @@
   "description": "Site de marcações e painel de gestão para produtor com vários estúdios",
   "private": true,
   "license": "UNLICENSED",
-  "workspaces": ["api", "site", "admin"],
+  "workspaces": [
+    "api",
+    "site",
+    "admin"
+  ],
   "scripts": {
     "start": "node --env-file-if-exists=.env dev.js",
-    "dev": "node --env-file-if-exists=.env dev.js --vigiar --pagamentos-demo",
+    "dev:start": "node --env-file-if-exists=.env dev.js --parte=api --vigiar --pagamentos-demo",
+    "dev:site": "node --env-file-if-exists=.env dev.js --parte=site --vigiar",
+    "dev": "node --env-file-if-exists=.env dev.js --parte=painel --vigiar",
     "comum": "node scripts/copiar-comum.js",
     "pretest": "node scripts/copiar-comum.js",
     "test": "node test/api.test.js && node test/integracoes.test.js",

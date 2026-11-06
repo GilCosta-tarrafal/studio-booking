@@ -5,7 +5,7 @@
 //
 // Cada uma das três partes tem de poder ir para o ar sozinha, sem as outras ao
 // lado, por isso leva a sua cópia em <parte>/comum. Mexa só no original e
-// corra `npm run comum` (o `npm run dev` e o `npm test` já o fazem); o teste
+// corra `npm run comum` (os `npm run dev...` e o `npm test` já o fazem); o teste
 // avisa se alguma cópia ficar para trás.
 //
 //   node scripts/copiar-comum.js          copia o que mudou

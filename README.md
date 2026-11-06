@@ -19,22 +19,17 @@ Precisa de [Node.js 22](https://nodejs.org) ou superior.
 
 ```bash
 npm install
-npm start
 ```
 
-Para trabalhar no projeto, arranque com:
+Para trabalhar no projeto, cada parte arranca no seu terminal, na sua porta, e reinicia sozinha quando muda o código dela:
 
-```
-npm run dev
-```
+| Parte | Comando | Endereço |
+| --- | --- | --- |
+| API | `npm run dev:start` | http://localhost:3007 (o site e o painel falam com ela; não se abre no browser) |
+| Site | `npm run dev:site` | http://localhost:3005 |
+| Painel | `npm run dev` | http://localhost:3006/admin |
 
-Arrancam as três partes de uma vez, cada uma na sua porta, e reiniciam sozinhas sempre que muda o código:
-
-| Parte | Endereço |
-| --- | --- |
-| Site | http://localhost:3005 |
-| Painel | http://localhost:3006/admin |
-| API | http://localhost:3007 (o site e o painel falam com ela; não se abre no browser) |
+Arranque primeiro a API: o site e o painel precisam dela para mostrar as páginas. Para ligar as três de uma vez, num só terminal e sem reinício automático, use `npm start`.
 
 O terminal mostra também os endereços na rede local, para abrir noutro aparelho ligado ao mesmo Wi-Fi. Se uma porta estiver ocupada por outro programa, o arranque para e diz qual. Para usar outras, defina `SITE_PORT`, `ADMIN_PORT` e `API_PORT` no `.env` da raiz (copie-o de `api/.env.example`).
 
@@ -93,7 +88,7 @@ Os nomes de domínio e o HTTPS são configurados no serviço de alojamento. Os a
 
 O site e o painel ficam em domínios diferentes, por isso cada um tem a sua sessão. Quem é da equipa e entra pela página **A minha conta** do site é levado ao painel, mas aí pode ter de iniciar sessão outra vez.
 
-**Antes de pôr no ar uma alteração a `comum/`**, corra `npm run comum`. Isso atualiza as cópias dentro de `api/`, `site/` e `admin/`, que são as que vão para o ar. O `npm run dev` e o `npm test` já o fazem, e um teste avisa se alguma cópia ficar desatualizada.
+**Antes de pôr no ar uma alteração a `comum/`**, corra `npm run comum`. Isso atualiza as cópias dentro de `api/`, `site/` e `admin/`, que são as que vão para o ar. Os comandos `npm run dev...` e o `npm test` já o fazem, e um teste avisa se alguma cópia ficar desatualizada.
 
 ### Os trechos de música
 
@@ -223,7 +218,7 @@ comum/               o ORIGINAL do que as três partes partilham (mexa aqui e co
   servidor/prefs.js    língua, tema e moeda de quem visita; os botões do cabeçalho
   servidor/paginas.js  montar e traduzir as páginas, segurança, reencaminhar para a API
 
-dev.js               no computador: arranca as três partes de uma vez (`npm run dev`)
+dev.js               no computador: arranca a API (`dev:start`), o site (`dev:site`) ou o painel (`dev`)
 scripts/copiar-comum.js  põe as cópias de comum/ em dia
 test/                testes de ponta a ponta (arrancam as três partes)
 ```
