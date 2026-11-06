@@ -2,7 +2,7 @@
 
 const express = require('express');
 const {
-  db, getSettings, saveSettings, parseHours, findConflict, newCode, BOOKING_SELECT, priceFor, sinalDe,
+  db, getSettings, saveSettings, parseHours, findConflict, newCode, BOOKING_SELECT, priceFor, sinalDe, paraBase: pb,
 } = require('../lib/db');
 const auth = require('../lib/auth');
 const U = require('../lib/util');
@@ -301,14 +301,14 @@ router.get('/notificacoes', (req, res) => {
   }
 
   const atraso = db.prepare(
-    `SELECT COUNT(*) n, COALESCE(SUM(b.price-b.paid),0) v FROM bookings b JOIN rooms r ON r.id=b.room_id
+    `SELECT COUNT(*) n, COALESCE(SUM(${pb('b.price-b.paid')}),0) v FROM bookings b JOIN rooms r ON r.id=b.room_id
       WHERE b.status='concluido' AND b.price>b.paid AND b.date<?${sf}`
   ).get(now.date);
   if (atraso.n) {
     itens.push({
       id: 'atraso-' + now.date, kind: 'pagamento',
       title: atraso.n === 1 ? '1 sessão concluída por pagar' : `${atraso.n} sessões concluídas por pagar`,
-      text: `Falta receber ${Number(atraso.v).toLocaleString('pt-PT')} ${getSettings().currency}.`, at: inicioDia, href: '#/relatorios',
+      text: `Falta receber ${Number(atraso.v).toLocaleString('pt-PT')} ${getSettings().currency} (convertido para a moeda principal).`, at: inicioDia, href: '#/relatorios',
     });
   }
 
@@ -365,8 +365,8 @@ router.get('/dashboard', (req, res) => {
     next7: n(`SELECT COUNT(*) v ${base} AND b.date>? AND b.date<=? AND b.status NOT IN ${LIVRES}`, now.date, U.addDays(now.date, 7)).v,
   };
   const money = {
-    received_month: n(`SELECT COALESCE(SUM(b.paid),0) v ${base} AND b.date>=? AND b.date<=? AND b.status NOT IN ${LIVRES}`, monthStart, monthEnd).v,
-    outstanding: n(`SELECT COALESCE(SUM(b.price-b.paid),0) v ${base} AND b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid`).v,
+    received_month: n(`SELECT COALESCE(SUM(${pb('b.paid')}),0) v ${base} AND b.date>=? AND b.date<=? AND b.status NOT IN ${LIVRES}`, monthStart, monthEnd).v,
+    outstanding: n(`SELECT COALESCE(SUM(${pb('b.price-b.paid')}),0) v ${base} AND b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid`).v,
   };
   const pending = db.prepare(`${BOOKING_SELECT} WHERE b.status='pedido'${studioId ? ' AND r.studio_id=' + studioId : ''}
                               ORDER BY b.date, b.start_min LIMIT 12`).all().map(withTimes);
@@ -392,10 +392,10 @@ router.get('/dashboard/fluxo', (req, res) => {
   const FROM = `FROM bookings b JOIN rooms r ON r.id=b.room_id LEFT JOIN services sv ON sv.id=b.service_id
                 WHERE b.status NOT IN ${LIVRES} AND b.date>=? AND b.date<=?${sf}`;
   const porMes = new Map(db.prepare(`SELECT substr(b.date,1,7) month, COUNT(*) sessions,
-      COALESCE(SUM(b.end_min-b.start_min),0) minutes, COALESCE(SUM(b.price),0) billed, COALESCE(SUM(b.paid),0) received
+      COALESCE(SUM(b.end_min-b.start_min),0) minutes, COALESCE(SUM(${pb('b.price')}),0) billed, COALESCE(SUM(${pb('b.paid')}),0) received
       ${FROM} GROUP BY month`).all(de, ate).map((r) => [r.month, r]));
   const servicos = db.prepare(`SELECT substr(b.date,1,7) month, b.service_id id, COALESCE(sv.name,'Sem serviço') name,
-      COUNT(*) sessions, COALESCE(SUM(b.price),0) billed
+      COUNT(*) sessions, COALESCE(SUM(${pb('b.price')}),0) billed
       ${FROM} GROUP BY month, b.service_id`).all(de, ate);
   res.json({
     current: meses[meses.length - 1],
@@ -438,22 +438,22 @@ function computeReport(req) {
   const totals = one(`SELECT
       COUNT(*) sessions,
       COALESCE(SUM(b.end_min-b.start_min),0) minutes,
-      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
-      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received,
-      COALESCE(SUM(CASE WHEN b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid THEN b.price-b.paid ELSE 0 END),0) outstanding,
+      COALESCE(SUM(${vivo} ${pb('b.price')} ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} ${pb('b.paid')} ELSE 0 END),0) received,
+      COALESCE(SUM(CASE WHEN b.status IN ('confirmado','em_curso','concluido') AND b.price>b.paid THEN ${pb('b.price-b.paid')} ELSE 0 END),0) outstanding,
       COUNT(DISTINCT b.client_name) clients
     ${FROM}`);
   const byStatus = many(`SELECT b.status, COUNT(*) sessions,
-      COALESCE(SUM(b.price),0) billed, COALESCE(SUM(b.paid),0) received ${FROM} GROUP BY b.status`);
+      COALESCE(SUM(${pb('b.price')}),0) billed, COALESCE(SUM(${pb('b.paid')}),0) received ${FROM} GROUP BY b.status`);
   const byService = many(`SELECT COALESCE(sv.name,'—') name, COUNT(*) sessions,
-      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
-      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY b.service_id ORDER BY sessions DESC`);
+      COALESCE(SUM(${vivo} ${pb('b.price')} ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} ${pb('b.paid')} ELSE 0 END),0) received ${FROM} GROUP BY b.service_id ORDER BY sessions DESC`);
   const byStudio = scope ? [] : many(`SELECT s.name name, COUNT(*) sessions,
-      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
-      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY r.studio_id ORDER BY billed DESC`);
+      COALESCE(SUM(${vivo} ${pb('b.price')} ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} ${pb('b.paid')} ELSE 0 END),0) received ${FROM} GROUP BY r.studio_id ORDER BY billed DESC`);
   const byMonth = many(`SELECT substr(b.date,1,7) month, COUNT(*) sessions,
-      COALESCE(SUM(${vivo} b.price ELSE 0 END),0) billed,
-      COALESCE(SUM(${vivo} b.paid ELSE 0 END),0) received ${FROM} GROUP BY month ORDER BY month`);
+      COALESCE(SUM(${vivo} ${pb('b.price')} ELSE 0 END),0) billed,
+      COALESCE(SUM(${vivo} ${pb('b.paid')} ELSE 0 END),0) received ${FROM} GROUP BY month ORDER BY month`);
   const rows = db.prepare(`${BOOKING_SELECT} WHERE ${W} ORDER BY b.date DESC, b.start_min DESC LIMIT 500`).all(...args).map(withTimes);
 
   return { totals, byStatus, byService, byStudio, byMonth, rows, limited: rows.length >= 500, scope };
@@ -595,6 +595,13 @@ async function completarFiscal(b) {
   return b;
 }
 
+// A moeda em que o estúdio trabalha: obrigatória, um código de 3 letras (EUR, CVE...).
+function moedaDoEstudio(v) {
+  const m = U.clean(v, 8).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(m)) throw new HttpError(400, 'Escolha a moeda em que o estúdio trabalha.');
+  return m;
+}
+
 function studioBody(b) {
   const name = U.clean(b.name, 80);
   if (!name) throw new HttpError(400, 'Indique o nome do estúdio.');
@@ -603,6 +610,7 @@ function studioBody(b) {
     legal_name: U.clean(b.legal_name, 120), nif: U.clean(b.nif, 30), email: emailOuVazio(b.email),
     country_code: U.clean(b.country_code, 2).toLowerCase(), tax_name: U.clean(b.tax_name, 10) || 'IVA', vat_rate: taxaIva(b.vat_rate),
     lat: coord(b.lat, 90), lon: coord(b.lon, 180),
+    currency: moedaDoEstudio(b.currency),
     description: U.clean(b.description, 400), hours: JSON.stringify(normalizeHours(b.hours)), active: flag(b.active),
     traducoes: traducoes(b, TR.CAMPOS.studios),
     sort: U.toInt(b.sort),
@@ -628,8 +636,8 @@ router.get('/studios', (req, res) => {
 router.post('/studios', auth.requireManager, async (req, res) => {
   const b = await completarFiscal(studioBody(req.body || {}));
   const max = db.prepare('SELECT COALESCE(MAX(sort),0) m FROM studios').get().m;
-  const id = db.prepare(`INSERT INTO studios(name,city,address,phone,legal_name,nif,email,country_code,tax_name,vat_rate,description,hours,lat,lon,traducoes,active,sort) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?, '{}'),?,?)`)
-    .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, max + 1).lastInsertRowid;
+  const id = db.prepare(`INSERT INTO studios(name,city,address,phone,legal_name,nif,email,country_code,tax_name,vat_rate,currency,description,hours,lat,lon,traducoes,active,sort) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE(?, '{}'),?,?)`)
+    .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.currency, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, max + 1).lastInsertRowid;
   res.status(201).json({ id });
 });
 
@@ -638,11 +646,25 @@ router.post('/studios', auth.requireManager, async (req, res) => {
 router.put('/studios/:id', async (req, res) => {
   const id = idParam(req);
   assertStudioInScope(req, id);
-  const b = await completarFiscal(studioBody(req.body || {}));
-  const info = db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, legal_name=?, nif=?, email=?, country_code=?, tax_name=?, vat_rate=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
-    .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
-  if (!info.changes) throw new HttpError(404, 'Estúdio não encontrado.');
-  res.json({ ok: true });
+  const antes = db.prepare('SELECT currency FROM studios WHERE id=?').get(id);
+  if (!antes) throw new HttpError(404, 'Estúdio não encontrado.');
+  const body = req.body || {};
+  // Sem moeda no pedido (um painel antigo), fica a que o estúdio tinha.
+  const b = await completarFiscal(studioBody({ currency: antes.currency, ...body }));
+  // Mudou a moeda e pediu-se para converter: o preço por hora das salas passa
+  // para a moeda nova com a taxa do dia. As marcações já feitas ficam na moeda
+  // em que foram feitas.
+  let taxa = null;
+  if (body.converter_precos === true && antes.currency && antes.currency !== b.currency) {
+    taxa = require('../../integracoes').cambio.taxa(antes.currency, b.currency);
+    if (taxa === null) throw new HttpError(400, `Não há taxa de câmbio de ${antes.currency} para ${b.currency}. Atualize as taxas em Integrações, ou desmarque "Converter os preços das salas".`);
+  }
+  db.transaction(() => {
+    db.prepare('UPDATE studios SET name=?, city=?, address=?, phone=?, legal_name=?, nif=?, email=?, country_code=?, tax_name=?, vat_rate=?, currency=?, description=?, hours=?, lat=?, lon=?, traducoes=COALESCE(?, traducoes), active=? WHERE id=?')
+      .run(b.name, b.city, b.address, b.phone, b.legal_name, b.nif, b.email, b.country_code, b.tax_name, b.vat_rate, b.currency, b.description, b.hours, b.lat, b.lon, b.traducoes, b.active, id);
+    if (taxa) db.prepare('UPDATE rooms SET hourly_rate = CAST(ROUND(hourly_rate * ?) AS INTEGER) WHERE studio_id=?').run(taxa, id);
+  })();
+  res.json({ ok: true, convertido: taxa });
 });
 
 router.delete('/studios/:id', auth.requireManager, (req, res) => {
@@ -734,7 +756,7 @@ router.delete('/services/:id', auth.requireManager, (req, res) => {
 router.get('/clients', (req, res) => {
   const scope = scopeStudio(req);
   const rows = db.prepare(
-    'SELECT b.client_name, b.client_phone, b.client_email, b.date, b.paid, b.price FROM bookings b'
+    `SELECT b.client_name, b.client_phone, b.client_email, b.date, ${pb('b.paid')} paid, ${pb('b.price')} price FROM bookings b`
     + (scope ? ' JOIN rooms r ON r.id=b.room_id' : '')
     + ` WHERE b.status NOT IN ${LIVRES}` + (scope ? ' AND r.studio_id=' + scope : '') + ' ORDER BY b.date'
   ).all();
@@ -769,10 +791,14 @@ function conversaoDeMoeda(de, para) {
   if (taxa === null) {
     throw new HttpError(400, `Não há taxa de câmbio de ${de} para ${para}. Atualize as taxas em Integrações › Taxas de câmbio, ou desmarque "Converter os preços".`);
   }
+  const velha = de.toUpperCase(), nova = para.toUpperCase();
   return () => {
     const c = (col) => `${col} = CAST(ROUND(${col} * ?) AS INTEGER)`;
-    db.prepare(`UPDATE rooms SET ${c('hourly_rate')}`).run(taxa);
-    db.prepare(`UPDATE bookings SET ${c('price')}, ${c('paid')}`).run(taxa, taxa);
+    // Só os estúdios (e as suas salas) e as marcações que estavam na moeda
+    // antiga; um estúdio que trabalha noutra moeda fica como está.
+    db.prepare(`UPDATE rooms SET ${c('hourly_rate')} WHERE studio_id IN (SELECT id FROM studios WHERE currency=?)`).run(taxa, velha);
+    db.prepare('UPDATE studios SET currency=? WHERE currency=?').run(nova, velha);
+    db.prepare(`UPDATE bookings SET ${c('price')}, ${c('paid')}, currency=? WHERE currency=?`).run(taxa, taxa, nova, velha);
     db.prepare(`UPDATE int_projetos SET ${c('preco')} WHERE preco IS NOT NULL`).run(taxa);
     db.prepare(`UPDATE int_encomendas SET ${c('preco_unit')}, ${c('total')}`).run(taxa, taxa);
     return taxa;

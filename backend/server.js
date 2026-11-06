@@ -171,7 +171,9 @@ function page(pasta, file, { traduzida = true } = {}) {
     const base = String(s.currency || '').trim().toUpperCase();
     const taxas = {};
     if (traduzida && /^[A-Z]{3}$/.test(base)) {
-      for (const m of prefs.MOEDAS_VER) { const t = integracoes.cambio.taxa(base, m); if (t) taxas[m] = t; }
+      // Também as moedas dos estúdios, para converter preços de qualquer um deles.
+      const dosEstudios = db.prepare("SELECT DISTINCT currency FROM studios WHERE currency<>''").all().map((r) => r.currency);
+      for (const m of new Set([...prefs.MOEDAS_VER, ...dosEstudios])) { const t = integracoes.cambio.taxa(base, m); if (t) taxas[m] = t; }
     }
     let html = fs.readFileSync(path.join(pasta, 'views', file), 'utf8')
       .replaceAll('{{NAME}}', esc(s.business_name))

@@ -6,6 +6,9 @@
   const { h, fmtMin, parseHM, fmtDate, addDays, money, waLink, statusTag, STATUS, DAY_SHORT, DAY_LONG } = S;
   const { app, ui, views, api, toast, field, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock, bookingItem } = A;
   const cur = () => app.settings.currency;
+  // Cada estúdio trabalha na sua moeda; cada marcação guarda a sua.
+  const moedaEstudio = (id) => { const st = app.studios.find((x) => x.id === id); return (st && st.currency) || cur(); };
+  const moedaDe = (b) => b.currency || b.studio_currency || cur();
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
   // Pequeno ícone SVG (herda a cor e o tamanho do texto à volta).
@@ -172,8 +175,8 @@
   function payCell(b) {
     if (!b.price && !b.paid) return h('td', { class: 'num' }, '—');
     const owed = b.price - b.paid;
-    const note = b.status === 'cancelado' || b.status === 'expirado' ? '' : owed <= 0 ? 'Pago' : b.paid > 0 ? 'Falta ' + money(owed, cur()) : 'Por pagar';
-    return h('td', { class: 'num' }, money(b.price, cur()), note && h('span', { class: 'sub' }, note));
+    const note = b.status === 'cancelado' || b.status === 'expirado' ? '' : owed <= 0 ? 'Pago' : b.paid > 0 ? 'Falta ' + money(owed, moedaDe(b)) : 'Por pagar';
+    return h('td', { class: 'num' }, money(b.price, moedaDe(b)), note && h('span', { class: 'sub' }, note));
   }
 
   views.marcacoes = {
@@ -491,7 +494,7 @@
 
   function studioForm(s) {
     const isNew = !s;
-    const st = s || { name: '', city: '', address: '', phone: '', legal_name: '', nif: '', email: '', description: '', lat: null, lon: null, active: 1, hours: DEFAULT_HOURS };
+    const st = s || { name: '', city: '', address: '', phone: '', legal_name: '', nif: '', email: '', description: '', lat: null, lon: null, active: 1, hours: DEFAULT_HOURS, currency: '' };
     const f = {
       name: h('input', { type: 'text', maxlength: 80, required: true, value: st.name }),
       city: h('input', { type: 'text', maxlength: 60, value: st.city }),
@@ -507,9 +510,22 @@
       // Imposto: proposto pela localização (país e taxa), mas editável.
       pais: h('input', { type: 'text', readonly: true, value: '', placeholder: 'Sai da localização do estúdio' }),
       vat_rate: h('input', { type: 'number', min: 0, max: 50, step: 0.01, value: st.vat_rate == null ? '' : st.vat_rate, placeholder: 'Ex.: 15' }),
+      // Moeda em que o estúdio trabalha (preços das salas, marcações e pagamentos).
+      currency: h('select', { required: true },
+        h('option', { value: '' }, 'Escolher a moeda…'),
+        MOEDAS.map(([v, nome]) => h('option', { value: v }, `${nome} (${v})`))),
+      converter: h('input', { type: 'checkbox', checked: true }),
       description: h('textarea', { maxlength: 400 }, st.description),
       active: h('input', { type: 'checkbox', checked: !!st.active }),
     };
+    const moedaAtual = st.currency || '';
+    if (moedaAtual && !MOEDAS.some(([v]) => v === moedaAtual)) f.currency.append(h('option', { value: moedaAtual }, moedaAtual));
+    f.currency.value = moedaAtual;
+    // Ao mudar a moeda de um estúdio que já existe: converter os preços das salas?
+    const caixaConverter = h('div', { hidden: true },
+      h('label', { class: 'check' }, f.converter, 'Converter os preços das salas para a moeda nova, com a taxa de câmbio do dia'),
+      h('p', { class: 'hint' }, 'As marcações já feitas ficam na moeda em que foram feitas.'));
+    f.currency.addEventListener('change', () => { caixaConverter.hidden = isNew || !moedaAtual || f.currency.value === moedaAtual; });
     const traducoes = blocoTraducoes([['name', 'Nome do estúdio', 80], ['city', 'Cidade ou ilha', 60], ['description', 'Descrição', 400, true]], st.traducoes);
     // País e imposto: guardados no estúdio; ao mudar o sítio, propõe-se a taxa do país.
     const fiscalAtual = { country_code: st.country_code || '', tax_name: st.tax_name || 'IVA' };
@@ -554,6 +570,7 @@
         legal_name: f.legal_name.value, nif: f.nif.value, email: f.email.value,
         country_code: fiscalAtual.country_code, tax_name: fiscalAtual.tax_name, vat_rate: f.vat_rate.value,
         lat: f.lat.value, lon: f.lon.value, description: f.description.value, active: f.active.checked, hours,
+        currency: f.currency.value, converter_precos: !caixaConverter.hidden && f.converter.checked,
         traducoes: traducoes.valor() };
       try {
         if (isNew) await api('/api/admin/studios', { method: 'POST', body });
@@ -570,6 +587,9 @@
     return h('form', { onsubmit: submit },
       h('div', { class: 'grid-2' }, field('Nome do estúdio', f.name), field('Cidade ou ilha', f.city)),
       h('div', { class: 'grid-2' }, field('Morada', f.address), field('Telefone do estúdio', f.phone)),
+      h('div', { class: 'grid-2' },
+        field('Moeda do estúdio', f.currency, { hint: 'Os preços das salas, as marcações e os pagamentos deste estúdio ficam nesta moeda.' })),
+      caixaConverter,
       h('h3', {}, 'Dados para o recibo'),
       h('p', { class: 'hint' }, 'Aparecem no canto superior direito do recibo das marcações deste estúdio, com o telefone e a morada.'),
       h('div', { class: 'grid-3' },
@@ -706,7 +726,7 @@
       catch (ex) { toast(ex.message, true); }
     };
     return h('div', { class: 'row-form' },
-      field(isNew ? 'Nova sala' : 'Sala', name), field('Preço por hora', rate), field('Descrição', desc),
+      field(isNew ? 'Nova sala' : 'Sala', name), field(`Preço por hora (${moedaEstudio(studioId)})`, rate), field('Descrição', desc),
       h('label', { class: 'check' }, active, 'Ativa'),
       h('div', { class: 'row-actions' },
         h('button', { class: 'btn btn-sm', type: 'button', onclick: save }, isNew ? 'Adicionar' : 'Guardar'),

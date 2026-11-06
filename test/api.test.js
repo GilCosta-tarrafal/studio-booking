@@ -273,17 +273,34 @@ function futureWeekday(offset = 3) {
   r = await call('DELETE', '/api/admin/studios/1', { cookie });
   ok(r.status === 409, 'não elimina estúdio com marcações');
   const hours = r.json ? null : null;
-  r = await call('POST', '/api/admin/studios', { cookie, body: { name: 'Estúdio Novo', hours: [null, { open: '08:00', close: '18:00' }, null, null, null, null, null] } });
+  r = await call('POST', '/api/admin/studios', { cookie, body: { name: 'Sem Moeda', hours: [null, { open: '08:00', close: '18:00' }, null, null, null, null, null] } });
+  ok(r.status === 400 && /moeda/.test(r.json.error), 'criar estúdio sem moeda → 400 (a moeda é obrigatória)');
+  r = await call('POST', '/api/admin/studios', { cookie, body: { name: 'Estúdio Novo', currency: 'eur', hours: [null, { open: '08:00', close: '18:00' }, null, null, null, null, null] } });
   ok(r.status === 201, 'criar estúdio');
   const newStudio = r.json.id;
-  r = await call('POST', '/api/admin/studios', { cookie, body: { name: 'X', hours: [null, { open: '18:00', close: '08:00' }, null, null, null, null, null] } });
+  r = await call('POST', '/api/admin/studios', { cookie, body: { name: 'X', currency: 'EUR', hours: [null, { open: '18:00', close: '08:00' }, null, null, null, null, null] } });
   ok(r.status === 400, 'horário com fecho antes da abertura → 400');
   r = await call('POST', '/api/admin/rooms', { cookie, body: { studio_id: newStudio, name: 'Sala A', hourly_rate: 1800 } });
   ok(r.status === 201, 'criar sala');
   const newRoom = r.json.id;
   r = await call('GET', '/api/public/config');
   ok(r.json.studios.length === 3, 'novo estúdio aparece no site público');
+  ok(r.json.studios.find((x) => x.id === newStudio).currency === 'EUR' && r.json.studios.find((x) => x.id === 1).currency === 'CVE',
+    'cada estúdio diz a sua moeda no site (o novo em EUR, os antigos na das Definições)');
+  {
+    // Uma marcação numa sala do estúdio novo fica na moeda dele.
+    const qualquerDia = futureWeekday(20);
+    const nb = await call('POST', '/api/admin/bookings', { cookie, body: { room_id: newRoom, date: qualquerDia, start: '10:00', end: '11:00', client_name: 'Moeda Teste', status: 'confirmado' } });
+    const bk = db.prepare('SELECT currency, price FROM bookings WHERE id=?').get(nb.json.booking.id);
+    ok(nb.status === 201 && bk.currency === 'EUR' && bk.price === 1800 && nb.json.booking.studio_currency === 'EUR', 'a marcação fica na moeda do estúdio (1800 EUR)');
+    const lista = (await call('GET', '/api/admin/bookings?q=Moeda%20Teste', { cookie })).json.bookings;
+    ok(lista[0].currency === 'EUR', 'a lista do painel traz a moeda de cada marcação');
+    r = await call('PUT', `/api/admin/studios/${newStudio}`, { cookie, body: { name: 'Estúdio Novo', currency: 'CVE', converter_precos: true, hours: [null, { open: '08:00', close: '18:00' }, null, null, null, null, null] } });
+    ok(r.status === 400 && /taxa de câmbio/.test(r.json.error), 'mudar a moeda com conversão, sem taxas: recusa com explicação');
+    db.prepare('DELETE FROM bookings WHERE id=?').run(nb.json.booking.id);
+  }
   r = await call('PUT', `/api/admin/studios/${newStudio}`, { cookie, body: { name: 'Estúdio Novo', active: false, hours: [null, { open: '08:00', close: '18:00' }, null, null, null, null, null] } });
+  ok(db.prepare('SELECT currency FROM studios WHERE id=?').get(newStudio).currency === 'EUR', 'guardar o estúdio sem mandar a moeda mantém a que tinha');
   r = await call('GET', '/api/public/config');
   ok(r.json.studios.length === 2, 'estúdio desativado desaparece do site público');
   r = await call('DELETE', `/api/admin/rooms/${newRoom}`, { cookie });

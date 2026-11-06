@@ -46,7 +46,7 @@ function contexto(user) {
   const ate = U.addDays(hoje.date, 14);
   const agenda = db.prepare(`${BOOKING_SELECT} WHERE b.date>=? AND b.date<=? AND b.status NOT IN ('cancelado','expirado')${sf}
     ORDER BY b.date, b.start_min LIMIT 80`).all(hoje.date, ate);
-  const porPagar = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(b.price-b.paid),0) v FROM bookings b JOIN rooms r ON r.id=b.room_id
+  const porPagar = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(${require('../lib/db').paraBase('b.price-b.paid')}),0) v FROM bookings b JOIN rooms r ON r.id=b.room_id
     WHERE b.status='concluido' AND b.price>b.paid${sf}`).get();
 
   const linhas = [];
@@ -57,9 +57,9 @@ function contexto(user) {
   linhas.push(`Quem pergunta: ${user.name}, ${papel}.`);
   linhas.push('', 'Estúdios e salas:');
   for (const e of estudios) {
-    linhas.push(`- ${e.name}${e.city ? ' (' + e.city + ')' : ''}${e.active ? '' : ' [oculto no site]'}`);
+    linhas.push(`- ${e.name}${e.city ? ' (' + e.city + ')' : ''} · moeda ${e.currency || s.currency}${e.active ? '' : ' [oculto no site]'}`);
     for (const r of salas.filter((x) => x.studio_id === e.id)) {
-      linhas.push(`  · ${r.name}: ${r.hourly_rate} ${s.currency}/hora${r.active ? '' : ' [inativa]'}`);
+      linhas.push(`  · ${r.name}: ${r.hourly_rate} ${e.currency || s.currency}/hora${r.active ? '' : ' [inativa]'}`);
     }
   }
   linhas.push('', 'Serviços: ' + (servicos.map((x) => x.name + (x.remote_ok ? ' (pode ser à distância)' : '')).join(', ') || 'nenhum'));
@@ -67,7 +67,7 @@ function contexto(user) {
   if (!agenda.length) linhas.push('- nenhuma');
   for (const b of agenda) {
     linhas.push(`- ${b.date} ${U.fmtHM(b.start_min)}–${U.fmtHM(b.end_min)} · ${b.studio_name} / ${b.room_name} · ${b.client_name}`
-      + `${b.service_name ? ' · ' + b.service_name : ''} · ${b.price} ${s.currency}, pago ${b.paid} (${b.status}) · código ${b.code}`);
+      + `${b.service_name ? ' · ' + b.service_name : ''} · ${b.price} ${b.currency || s.currency}, pago ${b.paid} (${b.status}) · código ${b.code}`);
   }
   linhas.push('', `Sessões concluídas por pagar: ${porPagar.n} (falta receber ${porPagar.v} ${s.currency}).`);
   return linhas.join('\n');

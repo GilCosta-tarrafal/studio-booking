@@ -424,9 +424,23 @@ function futureWeekday(offset = 3) {
 
   // O visitante escolhe ver os preços noutra moeda: a página traz a taxa.
   let pagina = await (await fetch(base + '/', { headers: { Cookie: 'moeda=EUR' } })).text();
-  ok(/id="pref-moeda-btn"/.test(pagina) && /data-moeda="EUR" data-moeda-base="CVE" data-moeda-taxa="0.0090689"/.test(pagina), 'o site mostra o botão da moeda e, escolhido EUR, a taxa do dia');
+  ok(!/pref-moeda-btn/.test(pagina) && /data-moeda="EUR" data-moeda-base="CVE" data-moeda-taxa="0.0090689"/.test(pagina), 'sem botão de moeda no cabeçalho; com EUR escolhido, a página traz a taxa do dia');
   pagina = await (await fetch(base + '/')).text();
-  ok(/id="pref-moeda-btn"/.test(pagina) && /<div class="prefs">/.test(pagina), 'sem escolha: preços só na moeda do estúdio');
+  ok(/<div class="prefs">/.test(pagina), 'sem escolha: preços só na moeda do estúdio');
+
+  // A moeda escolhe-se no perfil do cliente (/conta) e fica guardada na conta.
+  r = await call('GET', '/api/conta/moeda', { cookie: contaCookie });
+  ok(r.status === 200 && r.json.base === 'CVE' && r.json.atual === '' && r.json.opcoes.some((o) => o.codigo === 'EUR') && !r.json.opcoes.some((o) => o.codigo === 'BRL'),
+    'perfil › moeda: as opções são as que têm taxa do dia (EUR sim, BRL não)');
+  r = await call('PUT', '/api/conta/moeda', { cookie: contaCookie, body: { moeda: 'EUR' } });
+  ok(r.status === 200 && /moeda=EUR/.test(r.res.headers.get('set-cookie') || ''), 'guardar EUR no perfil: fica na conta e no cookie das páginas');
+  ok(db.prepare("SELECT moeda FROM clients WHERE email='ana@exemplo.cv'").get().moeda === 'EUR', 'a moeda fica guardada na conta do cliente');
+  r = await call('POST', '/api/conta/login', { body: { identifier: 'ana@exemplo.cv', password: 'cliente-1234' } });
+  ok(/moeda=EUR/.test(r.res.headers.get('set-cookie') || ''), 'ao entrar noutro aparelho, a moeda da conta volta a aplicar-se');
+  r = await call('PUT', '/api/conta/moeda', { cookie: contaCookie, body: { moeda: 'XYZ' } });
+  ok(r.status === 400, 'uma moeda fora da lista é recusada');
+  r = await call('PUT', '/api/conta/moeda', { cookie: contaCookie, body: { moeda: '' } });
+  ok(r.status === 200 && db.prepare("SELECT moeda FROM clients WHERE email='ana@exemplo.cv'").get().moeda === '', 'voltar a "só a moeda do estúdio"');
 
   // Mudar a moeda das Definições com "Converter os preços": os valores passam
   // para a moeda nova com a taxa do dia.
@@ -441,6 +455,26 @@ function futureWeekday(offset = 3) {
   r = await call('PUT', '/api/admin/settings', { cookie, body: { ...defs, currency: 'CVE' } });
   ok(r.status === 200 && db.prepare('SELECT hourly_rate FROM rooms WHERE id=?').get(sala.id).hourly_rate === 100, 'sem pedir conversão: a moeda muda e os números ficam');
   db.prepare('UPDATE rooms SET hourly_rate=? WHERE id=?').run(sala.hourly_rate, sala.id);
+
+  // Estúdios com moedas diferentes.
+  const est = db.prepare('SELECT * FROM studios ORDER BY id LIMIT 1').get();
+  const salaE = db.prepare('SELECT id, hourly_rate FROM rooms WHERE studio_id=? ORDER BY id LIMIT 1').get(est.id);
+  db.prepare('UPDATE rooms SET hourly_rate=11027 WHERE id=?').run(salaE.id);
+  db.prepare("UPDATE studios SET currency='CVE' WHERE id=?").run(est.id);   // a mudança da moeda principal (acima) já o tinha passado a EUR
+  const corpoEst = { name: est.name, hours: JSON.parse(est.hours), active: true, lat: est.lat, lon: est.lon, vat_rate: est.vat_rate };
+  r = await call('PUT', `/api/admin/studios/${est.id}`, { cookie, body: { ...corpoEst, currency: 'EUR', converter_precos: true } });
+  ok(r.status === 200 && db.prepare('SELECT hourly_rate FROM rooms WHERE id=?').get(salaE.id).hourly_rate === 100 && db.prepare('SELECT currency FROM studios WHERE id=?').get(est.id).currency === 'EUR',
+    'mudar a moeda de um estúdio para EUR com conversão: a sala passa de 11027 CVE para 100 EUR');
+  // Uma marcação de 100 EUR conta 11027 CVE nos totais (moeda principal: CVE).
+  const bE = db.prepare("INSERT INTO bookings(code,room_id,date,start_min,end_min,client_name,status,price,paid,currency,created_at,updated_at) VALUES('MOEDA1',?,'2020-01-15',600,660,'Cliente EUR','concluido',100,0,'EUR',?,?)")
+    .run(salaE.id, new Date().toISOString(), new Date().toISOString()).lastInsertRowid;
+  r = await call('GET', '/api/admin/reports?from=2020-01-01&to=2020-01-31', { cookie });
+  ok(r.status === 200 && Math.abs(r.json.totals.billed - 11027) <= 1, 'relatórios: 100 EUR somam-se como 11027 CVE (convertido para a moeda principal)');
+  pagina = await (await fetch(base + '/', { headers: { Cookie: 'moeda=USD' } })).text();
+  ok(/data-moeda-taxas="[^"]*EUR/.test(pagina), 'o site traz as taxas das moedas dos estúdios, para converter qualquer preço');
+  db.prepare('DELETE FROM bookings WHERE id=?').run(bE);
+  db.prepare('UPDATE studios SET currency=? WHERE id=?').run(est.currency, est.id);
+  db.prepare('UPDATE rooms SET hourly_rate=? WHERE id=?').run(salaE.hourly_rate, salaE.id);
 
   console.log(`\n${passed} certos, ${failed} falhados`);
   server.close();

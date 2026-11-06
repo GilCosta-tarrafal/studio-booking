@@ -12,6 +12,7 @@
   const ICO = {
     marcacoes: ['M5 5h14v15H5z', 'M5 9.5h14', 'M9 3v4M15 3v4'],
     senha: ['M6 11h12v9H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
+    moeda: ['M12 3.4a8.6 8.6 0 1 1 0 17.2 8.6 8.6 0 0 1 0-17.2z', 'M14.6 9.2c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.2 0-2.2-.6-2.6-1.6', 'M12 6v1.6M12 16.4V18'],
     sair: ['M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4', 'M9 16l-4-4 4-4', 'M5 12h11'],
   };
   function ico(nome) {
@@ -48,6 +49,7 @@
     const menu = h('div', { class: 'conta-menu', role: 'menu', hidden: true },
       h('div', { class: 'conta-menu-who' }, h('strong', {}, c.name), (c.email || c.phone) && h('span', {}, c.email || c.phone)),
       h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/consultar' }, ico('marcacoes'), h('span', { 'data-i18n': 'conta.minhasMarcacoes' }, t('conta.minhasMarcacoes'))),
+      h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/conta#moeda' }, ico('moeda'), h('span', { 'data-i18n': 'conta.moedaTitulo' }, t('conta.moedaTitulo'))),
       h('a', { class: 'conta-menu-item', role: 'menuitem', href: '/conta#senha' }, ico('senha'), h('span', { 'data-i18n': 'conta.alterarSenha' }, t('conta.alterarSenha'))),
       h('button', { class: 'conta-menu-item danger', role: 'menuitem', type: 'button', onclick: sair }, ico('sair'), h('span', { 'data-i18n': 'conta.sair' }, t('conta.sair'))),
     );

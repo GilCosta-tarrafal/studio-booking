@@ -379,6 +379,9 @@ alargarCheck('bookings', "'cancelado','expirado')", "'cancelado','expirado','agu
 // ficam os cartões. Aqui só se guarda o que se mostra na carteira (marca,
 // 4 últimos dígitos, validade) e o id do cartão no Stripe — nunca o número.
 acrescentaColuna('clients', 'stripe_customer_id', "TEXT NOT NULL DEFAULT ''");
+// Moeda em que o cliente quer ver também os preços ('' = só a do estúdio).
+// Escolhe-se no perfil (/conta); cobra-se sempre na moeda do estúdio.
+acrescentaColuna('clients', 'moeda', "TEXT NOT NULL DEFAULT ''");
 db.exec(`
 CREATE TABLE IF NOT EXISTS pag_cartoes (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,6 +401,51 @@ CREATE TABLE IF NOT EXISTS pag_cartoes (
 // Bloqueios criados por um projeto de gravação prolongada (Projetos): ficam
 // ligados a ele, para se refazerem ao editar e saírem ao apagar o projeto.
 acrescentaColuna('blocks', 'projeto_id', 'INTEGER');
+
+// Moeda de cada estúdio (nem todos trabalham com a mesma). As salas e as
+// marcações do estúdio estão nessa moeda; cada marcação guarda a sua (a moeda
+// em que foi feita), para não mudar se o estúdio mudar de moeda mais tarde.
+// Os estúdios e marcações que já existiam ficam com a moeda das Definições.
+acrescentaColuna('studios', 'currency', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('bookings', 'currency', "TEXT NOT NULL DEFAULT ''");
+{
+  const moedaBase = (db.prepare("SELECT value FROM settings WHERE key='currency'").get() || {}).value || 'CVE';
+  db.prepare("UPDATE studios SET currency=? WHERE currency=''").run(moedaBase);
+  db.prepare(`UPDATE bookings SET currency=COALESCE((SELECT s.currency FROM rooms r JOIN studios s ON s.id=r.studio_id WHERE r.id=bookings.room_id), ?)
+               WHERE currency=''`).run(moedaBase);
+}
+// Uma marcação nova (ou que muda de sala) fica com a moeda do estúdio da sala.
+db.exec(`
+CREATE TRIGGER IF NOT EXISTS bookings_moeda_ins AFTER INSERT ON bookings WHEN NEW.currency = '' BEGIN
+  UPDATE bookings SET currency = COALESCE((SELECT s.currency FROM rooms r JOIN studios s ON s.id = r.studio_id WHERE r.id = NEW.room_id), '')
+   WHERE id = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS bookings_moeda_sala AFTER UPDATE OF room_id ON bookings WHEN NEW.room_id <> OLD.room_id BEGIN
+  UPDATE bookings SET currency = COALESCE((SELECT s.currency FROM rooms r JOIN studios s ON s.id = r.studio_id WHERE r.id = NEW.room_id), currency)
+   WHERE id = NEW.id;
+END;
+`);
+// Um estúdio novo sem moeda fica com a das Definições.
+db.exec(`
+CREATE TRIGGER IF NOT EXISTS studios_moeda_ins AFTER INSERT ON studios WHEN NEW.currency = '' BEGIN
+  UPDATE studios SET currency = COALESCE((SELECT value FROM settings WHERE key = 'currency'), 'CVE') WHERE id = NEW.id;
+END;
+`);
+
+// paraBase('b.price'): um pedaço de SQL com o valor convertido para a moeda das
+// Definições, com a taxa do dia — para somar dinheiro de estúdios com moedas
+// diferentes (dashboard, relatórios, clientes). As taxas leem-se aqui, antes
+// da consulta, e entram no SQL como números. Sem taxa, fica o valor como está.
+function paraBase(expr, colMoeda = 'b.currency') {
+  const base = String(getSettings().currency || '').trim().toUpperCase();
+  const moedas = db.prepare("SELECT DISTINCT currency m FROM bookings WHERE currency<>'' UNION SELECT DISTINCT currency FROM studios WHERE currency<>''").all()
+    .map((r) => String(r.m).toUpperCase()).filter((m) => m !== base && /^[A-Z]{3}$/.test(m));
+  let cambio = null;
+  try { cambio = require('../../integracoes/fornecedores/cambio'); } catch (_) { cambio = null; }
+  const casos = moedas.map((m) => [m, cambio && cambio.taxa(m, base)]).filter(([, t]) => t);
+  if (!casos.length) return `(${expr})`;
+  return `ROUND((${expr}) * CASE upper(${colMoeda}) ${casos.map(([m, t]) => `WHEN '${m}' THEN ${Number(t)}`).join(' ')} ELSE 1 END)`;
+}
 
 // As bases criadas antes de haver coordenadas ficaram com os estúdios de
 // exemplo por preencher. Dá-se-lhes a cidade e o ponto no mapa — mas só
@@ -621,7 +669,7 @@ function newCode() {
 }
 
 const BOOKING_SELECT = `
-  SELECT b.*, r.name AS room_name, r.studio_id, s.name AS studio_name, sv.name AS service_name,
+  SELECT b.*, r.name AS room_name, r.studio_id, s.name AS studio_name, s.currency AS studio_currency, sv.name AS service_name,
          r.traducoes AS room_tr, s.traducoes AS studio_tr, sv.traducoes AS service_tr
     FROM bookings b
     JOIN rooms r ON r.id = b.room_id
@@ -753,6 +801,6 @@ function ensureRbacOwners() {
 
 module.exports = {
   db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
-  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, sinalDe, ensureRbacOwners, expirarPedidos,
+  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, sinalDe, paraBase, ensureRbacOwners, expirarPedidos,
   alargarCheck, acrescentaColuna,
 };

@@ -25,8 +25,8 @@
       b.service_name && [t('linha.servico'), tr(b, 'service_name')], b.style && [t('linha.estilo'), b.style],
       b.title && [t('linha.projeto'), b.title],
       [t('linha.dia'), cap(fmtDate(b.date))], [t('linha.hora'), t('linha.horas', { de: b.start, ate: b.end })],
-      b.price > 0 && [t('linha.valor'), money(b.price, cur)],
-      b.paid > 0 && [t('linha.pago'), money(b.paid, cur)],
+      b.price > 0 && [t('linha.valor'), money(b.price, b.currency || cur)],
+      b.paid > 0 && [t('linha.pago'), money(b.paid, b.currency || cur)],
     ].filter(Boolean);
     for (const [k, v] of rows) dl.append(h('dt', {}, k), h('dd', {}, v));
 
@@ -40,10 +40,10 @@
     // Aceite pelo estúdio e à espera do pagamento: vai para a página de
     // pagamento do site (cartões, resumo e recibo).
     if (b.status === 'aguarda_pagamento' && b.price > b.paid) {
-      actions.prepend(h('a', { class: 'btn', href: '/pagar?code=' + encodeURIComponent(b.code) }, t('botao.pagar', { valor: money(b.price - b.paid, cur) })));
+      actions.prepend(h('a', { class: 'btn', href: '/pagar?code=' + encodeURIComponent(b.code) }, t('botao.pagar', { valor: money(b.price - b.paid, b.currency || cur) })));
     } else if (pagamentos && ['confirmado', 'em_curso'].includes(b.status) && b.price > b.paid) {
       const pagar = h('button', { type: 'button', class: 'btn', onclick: () => pay(b.code, pagar) },
-        t('botao.pagar', { valor: money(b.price - b.paid, cur) }));
+        t('botao.pagar', { valor: money(b.price - b.paid, b.currency || cur) }));
       actions.prepend(pagar);
     }
     actions.append(h('button', { type: 'button', class: 'btn btn-outline', onclick: (e) => baixarRecibo(b.code, e.currentTarget) }, t('botao.recibo')));

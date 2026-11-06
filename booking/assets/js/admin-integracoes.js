@@ -124,7 +124,7 @@
   // Janela de reembolso: o valor, o motivo e o que fazer à marcação (cancelar)
   // ou à compra (devolver as unidades ao stock).
   function reembolsar(p) {
-    const cur = app.settings.currency;
+    const cur = String(p.moeda || app.settings.currency || '').toUpperCase();
     const compra = p.tipo === 'compra';
     const motivo = h('textarea', { maxlength: 300, rows: 3, placeholder: 'Ex.: o cliente desistiu; sessão cancelada pelo estúdio…' });
     const cancelaveis = ['pedido', 'aguarda_pagamento', 'confirmado', 'em_curso'];
@@ -180,7 +180,7 @@
         h('tbody', {}, lista.map((p) => h('tr', {},
           h('td', {}, p.booking_code || '—', h('span', { class: 'sub' }, p.tipo === 'compra' ? `Compra · ${p.quantidade} × ${p.artigo}` : 'Marcação')),
           h('td', {}, p.client_name || '—'),
-          h('td', { class: 'num' }, money(p.valor, cur)),
+          h('td', { class: 'num' }, money(p.valor, String(p.moeda || cur || '').toUpperCase())),
           h('td', {}, h('span', { class: 'tag', 'data-s': COR_PAG[p.estado] || '' }, nomeEstadoPag(p.estado)),
             p.estado === 'reembolsado' && p.reembolso_motivo ? h('span', { class: 'sub' }, p.reembolso_motivo) : null),
           h('td', {}, quando(p.estado === 'reembolsado' && p.reembolsado_em ? p.reembolsado_em : p.atualizado_em)),

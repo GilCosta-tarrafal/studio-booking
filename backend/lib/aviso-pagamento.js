@@ -20,7 +20,7 @@ async function avisar(b, req) {
     `O ${s.business_name || 'estúdio'} aceitou o seu pedido de marcação ${b.code}`,
     `(${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}).`,
     '',
-    `A sua marcação precisa somente do pagamento para ficar confirmada: ${emFalta} ${s.currency || ''}.`,
+    `A sua marcação precisa somente do pagamento para ficar confirmada: ${emFalta} ${b.currency || s.currency || ''}.`,
     `Pague aqui: ${link}`,
     '',
     'Se não for paga até à hora da sessão, a marcação expira e o horário fica livre.',
@@ -72,7 +72,7 @@ async function confirmado(b, valor, req) {
   const texto = [
     `Olá ${b.client_name},`,
     '',
-    `Recebemos o seu pagamento de ${valor} ${s.currency || ''} da marcação ${b.code}.`,
+    `Recebemos o seu pagamento de ${valor} ${b.currency || s.currency || ''} da marcação ${b.code}.`,
     `A marcação está confirmada: ${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}.`,
     '',
     `Consulte a marcação e o recibo aqui: ${link}`,

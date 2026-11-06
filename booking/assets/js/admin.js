@@ -768,6 +768,16 @@
       if (s !== null && (e === null || e <= s)) f.end.value = S.fmtMin(Math.min(s + 60, 1440 - 1));
     });
     for (const el of [f.room, f.start, f.end]) el.addEventListener('change', () => { if (auto) f.price.value = calc(); });
+    // A moeda é a do estúdio da sala escolhida (cada estúdio trabalha na sua).
+    const moedaSala = () => {
+      const r = rooms.find((x) => x.id === +f.room.value);
+      const st = r && app.studios.find((x) => x.id === r.studio_id);
+      return (st && st.currency) || app.settings.currency;
+    };
+    const rotuloValor = h('span', {}), rotuloPago = h('span', {});
+    const pintarMoeda = () => { const m = moedaSala(); rotuloValor.textContent = `Valor total (${m})`; rotuloPago.textContent = `Valor já recebido (${m})`; };
+    f.room.addEventListener('change', pintarMoeda);
+    pintarMoeda();
 
     // A caixa só faz sentido em serviços que dispensam a presença.
     const remoteWrap = h('label', { class: 'check' }, f.remote, 'À distância (o cliente não vem ao estúdio)');
@@ -840,8 +850,8 @@
       field('Mensagem do cliente', f.notes),
       field('Notas internas (o cliente não vê)', f.internal),
       h('div', { class: 'grid-2' },
-        field('Valor total', f.price, { hint: 'Deixe vazio para calcular pelo preço da sala.' }),
-        field('Valor já recebido', f.paid)),
+        field(rotuloValor, f.price, { hint: 'Deixe vazio para calcular pelo preço da sala.' }),
+        field(rotuloPago, f.paid)),
       h('div', { class: 'grid-2' }, field('Método de pagamento', f.payMethod), null),
       err,
       h('div', { class: 'modal-foot' },

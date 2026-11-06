@@ -96,7 +96,7 @@ router.post('/pagamentos/checkout', pagarLimiter, async (req, res) => {
   }
   try {
     const r = await stripe.criarCheckout({
-      booking, valor: require('./pagamento').aPagarAgora(booking, (req.body || {}).opcao), textoMoeda: getSettings().currency, siteUrl: siteUrl(req), lingua: req.lingua,
+      booking, valor: require('./pagamento').aPagarAgora(booking, (req.body || {}).opcao), textoMoeda: booking.currency || getSettings().currency, siteUrl: siteUrl(req), lingua: req.lingua,
     });
     res.json({ url: r.url, valor: r.valor });
   } catch (e) {

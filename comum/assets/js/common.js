@@ -272,14 +272,20 @@
   function moedaVer() {
     const p = document.querySelector('.prefs[data-moeda]');
     const taxa = p && Number(p.dataset.moedaTaxa);
-    return taxa > 0 ? { moeda: p.dataset.moeda, base: p.dataset.moedaBase, taxa } : null;
+    if (!(taxa > 0)) return null;
+    let taxas = {};
+    try { taxas = JSON.parse(p.dataset.moedaTaxas || '{}'); } catch (_) { /* fica só a base */ }
+    taxas[p.dataset.moedaBase] = 1;
+    return { moeda: p.dataset.moeda, base: p.dataset.moedaBase, taxa, taxas };
   }
 
   function money(n, cur) {
     const txt = new Intl.NumberFormat(I18N.locale, { maximumFractionDigits: 0 }).format(n || 0) + (cur ? '\u00A0' + cur : '');
     const ver = moedaVer();
-    if (!ver || !n || String(cur || '').trim().toUpperCase() !== ver.base) return txt;
-    const v = n * ver.taxa;
+    const de = String(cur || '').trim().toUpperCase();
+    // Cada estúdio pode ter a sua moeda: converte-se a partir da moeda do preço.
+    if (!ver || !n || de === ver.moeda || !(ver.taxas[de] > 0)) return txt;
+    const v = (n / ver.taxas[de]) * ver.taxa;
     const conv = new Intl.NumberFormat(I18N.locale, { maximumFractionDigits: Math.abs(v) < 1000 ? 2 : 0 }).format(v);
     return txt + ' \u2248\u00A0' + conv + '\u00A0' + ver.moeda;
   }

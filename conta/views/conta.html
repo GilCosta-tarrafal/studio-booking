@@ -51,6 +51,17 @@
       <button type="button" class="btn btn-outline" id="btn-sair" data-i18n="conta.sair">Sair</button>
     </div>
 
+    <form id="form-moeda" class="conta-form conta-senha" novalidate hidden>
+      <h2 id="moeda" data-i18n="conta.moedaTitulo">Moeda dos preços</h2>
+      <p class="hint" data-i18n="conta.moedaDica">Os preços passam a mostrar também o valor nesta moeda, com a taxa do dia. O pagamento é feito sempre na moeda do estúdio.</p>
+      <div class="field">
+        <label for="moeda-sel" data-i18n="conta.moedaRotulo">Ver os preços também em</label>
+        <select id="moeda-sel"></select>
+      </div>
+      <p class="submit-row"><button class="btn" type="submit" data-i18n="conta.moedaGuardar">Guardar moeda</button></p>
+      <p class="notice ok" id="moeda-ok" hidden data-i18n="conta.moedaGuardada">Moeda guardada.</p>
+    </form>
+
     <form id="form-senha" class="conta-form conta-senha" novalidate>
       <h2 id="senha" data-i18n="conta.alterarSenha">Alterar palavra-passe</h2>
       <div class="field">

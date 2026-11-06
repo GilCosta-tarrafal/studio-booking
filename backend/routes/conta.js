@@ -24,6 +24,14 @@ function publicClient(c) {
   return { id: c.id, name: c.name, email: c.email, phone: c.phone };
 }
 
+// A moeda em que o cliente vê os preços vai também num cookie, para as páginas
+// já saírem do servidor com os preços convertidos (ver lib/prefs.js).
+const prefs = require('../lib/prefs');
+function cookieMoeda(res, moeda) {
+  if (moeda) res.cookie('moeda', moeda, { path: '/', maxAge: prefs.COOKIE_MAX_AGE * 1000, sameSite: 'lax' });
+  else res.clearCookie('moeda', { path: '/' });
+}
+
 // Telefone em formato internacional (+238...) para o SMS. Se o número já trouxer
 // o indicativo do país, não se repete.
 function toE164(phoneDigits, countryCode) {
@@ -84,12 +92,34 @@ router.post('/login', loginLimiter, (req, res) => {
   const ok = conta.verifyPassword(password, row ? row.password_hash : auth.DUMMY_HASH);
   if (!row || !ok || !row.active) throw new HttpError(401, req.t('conta.credenciaisErradas'));
   conta.createSession(res, row.id);
+  cookieMoeda(res, row.moeda);
   res.json({ client: publicClient(row) });
 });
 
 router.post('/logout', (req, res) => {
   conta.destroySession(req, res);
+  cookieMoeda(res, '');
   res.json({ ok: true });
+});
+
+// Perfil › Moeda: a atual e as que se podem escolher (só as que têm taxa do dia).
+router.get('/moeda', conta.requireClient, (req, res) => {
+  const base = String(getSettings().currency || '').trim().toUpperCase();
+  const { cambio } = require('../../integracoes');
+  let nomes = null;
+  try { nomes = new Intl.DisplayNames([require('../../comum/assets/js/dicionario.js').lingua(req.lingua).locale], { type: 'currency' }); } catch (_) { nomes = null; }
+  const nome = (c) => (nomes && nomes.of(c)) || c;
+  const opcoes = prefs.MOEDAS_VER.filter((m) => m !== base && /^[A-Z]{3}$/.test(base) && cambio.taxa(base, m)).map((m) => ({ codigo: m, nome: nome(m) }));
+  const atual = db.prepare('SELECT moeda FROM clients WHERE id=?').get(req.client.id).moeda || '';
+  res.json({ atual: opcoes.some((o) => o.codigo === atual) ? atual : '', base, base_nome: nome(base), opcoes });
+});
+
+router.put('/moeda', conta.requireClient, (req, res) => {
+  const m = U.clean((req.body || {}).moeda, 3).toUpperCase();
+  if (m && !prefs.MOEDAS_VER.includes(m)) throw new HttpError(400, req.t('conta.moedaInvalida'));
+  db.prepare('UPDATE clients SET moeda=? WHERE id=?').run(m, req.client.id);
+  cookieMoeda(res, m);
+  res.json({ moeda: m });
 });
 
 router.get('/me', (req, res) => {

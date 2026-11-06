@@ -37,7 +37,7 @@ function publicBooking(b) {
     code: b.code, status: b.status, date: b.date,
     start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min),
     studio_name: b.studio_name, room_name: b.room_name, service_name: b.service_name || '',
-    title: b.title, style: b.style || '', price: b.price, paid: b.paid, client_name: b.client_name, remote: !!b.remote,
+    title: b.title, style: b.style || '', price: b.price, paid: b.paid, currency: b.currency || '', client_name: b.client_name, remote: !!b.remote,
     i18n: TR.juntar([
       [b.studio_tr, { name: 'studio_name' }], [b.room_tr, { name: 'room_name' }], [b.service_tr, { name: 'service_name' }],
     ]),
@@ -80,7 +80,7 @@ router.get('/config', (_req, res) => {
     .map((st) => ({
       id: st.id, name: st.name, city: st.city, address: st.address, phone: st.phone,
       description: st.description, hours: parseHours(st.hours),
-      lat: st.lat, lon: st.lon, i18n: TR.ler(st.traducoes),
+      lat: st.lat, lon: st.lon, i18n: TR.ler(st.traducoes), currency: st.currency || s.currency,
       rooms: rooms.filter((r) => r.studio_id === st.id)
         .map((r) => ({ id: r.id, name: r.name, description: r.description, hourly_rate: r.hourly_rate, i18n: TR.ler(r.traducoes) })),
     }))

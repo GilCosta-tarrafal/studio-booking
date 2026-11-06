@@ -63,7 +63,7 @@ function emitir(bookingId, dados = {}, userId = null) {
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(serie, numero, b.id, b.studio_id, JSON.stringify(emitente), new Date().toISOString(),
       clean(dados.cliente_nome, 120) || b.client_name, clean(dados.cliente_nif, 20), clean(dados.cliente_morada, 200),
-      b.client_email || '', descricao, total, base, imposto, taxa, st.tax_name || 'IVA', getSettings().currency || '', userId).lastInsertRowid;
+      b.client_email || '', descricao, total, base, imposto, taxa, st.tax_name || 'IVA', b.currency || getSettings().currency || '', userId).lastInsertRowid;
     return obter(id);
   })();
 }

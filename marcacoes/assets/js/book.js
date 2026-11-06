@@ -83,7 +83,7 @@
       box.append(h('p', { class: 'hint' }, t('marcar.escolhaEstudio')));
       return;
     }
-    const cur = state.cfg.business.currency;
+    const cur = state.studio.currency || state.cfg.business.currency;   // a moeda do estúdio
     box.append(...state.studio.rooms.map((r) => h('label', { class: 'choice' },
       h('input', { type: 'radio', name: 'room', value: r.id, checked: state.room && state.room.id === r.id, onchange: () => selectRoom(r) }),
       h('span', { class: 'choice-body' },
@@ -306,7 +306,7 @@
       h('p', { class: 'where' }, `${tr(state.studio, 'name')}, ${tr(state.room, 'name')}`),
       h('p', { class: aDistancia() ? 'modo remoto' : 'modo' },
         t(aDistancia() ? 'resumo.distancia' : 'resumo.presencial')),
-      price > 0 && h('p', { class: 'cost' }, t('resumo.valor', { valor: money(price, state.cfg.business.currency) })));
+      price > 0 && h('p', { class: 'cost' }, t('resumo.valor', { valor: money(price, state.studio.currency || state.cfg.business.currency) })));
   }
 
   // Só os serviços marcados para isso podem ser feitos sem o cliente vir.
@@ -424,7 +424,7 @@
       [t('linha.hora'), t('linha.horas', { de: b.start, ate: b.end })],
       b.style && [t('linha.estilo'), b.style],
       [t('linha.sessao'), t(b.remote ? 'linha.distancia' : 'linha.presencial')],
-      b.price > 0 && [t('linha.valorEstimado'), money(b.price, biz.currency)],
+      b.price > 0 && [t('linha.valorEstimado'), money(b.price, b.currency || biz.currency)],
       [t('linha.estado'), statusTag(b.status)],
     ].filter(Boolean);
     for (const [k, v] of rows) dl.append(h('dt', {}, k), h('dd', {}, v));

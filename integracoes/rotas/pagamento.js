@@ -68,7 +68,7 @@ function resumo(b) {
     itens: [{ descricao: b.service_name || 'Sessão em estúdio', detalhe: `${b.room_name} · ${min / 60} h${b.style ? ' · ' + b.style : ''}`, valor: b.price }],
     ja_pago: b.paid || 0, base, imposto: r2(total - base), taxa, imposto_nome: st.tax_name || 'IVA', total,
     sinal: sinalEmFalta(b), sinal_pct: getSettings().deposit_percent,
-    moeda: getSettings().currency || '', pode_pagar: PAGAVEIS.includes(b.status) && total > 0,
+    moeda: b.currency || getSettings().currency || '', pode_pagar: PAGAVEIS.includes(b.status) && total > 0,
   };
 }
 
@@ -110,7 +110,7 @@ function recibo(pagId, clientId) {
       telefone: st.phone || s.phone || '', email: st.email || s.email || '', morada: [st.address, st.city].filter(Boolean).join(', '),
     },
     marcacao: { code: b.code, studio: b.studio_name, room: b.room_name, date: b.date, start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min), cliente: b.client_name, servico: b.service_name || 'Sessão em estúdio', minutos: b.end_min - b.start_min },
-    valor: p.valor, base, imposto: r2(p.valor - base), taxa, imposto_nome: st.tax_name || 'IVA', moeda: s.currency || '',
+    valor: p.valor, base, imposto: r2(p.valor - base), taxa, imposto_nome: st.tax_name || 'IVA', moeda: b.currency || s.currency || '',
     cartao: { marca: p.cartao_marca, ultimos: p.cartao_ultimos }, estado: 'APROVADO', demo: p.fornecedor === 'demo',
     status_marcacao: b.status,
   };
@@ -181,7 +181,7 @@ router.post('/pagar', limitador, async (req, res) => {
     const pagId = db.transaction(() => {
       const id = db.prepare(`INSERT INTO int_pagamentos(booking_id,booking_code,fornecedor,externo_id,valor,moeda,estado,criado_em,atualizado_em,cartao_marca,cartao_ultimos)
                              VALUES(?,?,'demo',?,?,?,'pago',?,?,?,?)`)
-        .run(b ? b.id : null, a.code, 'demo_pi_' + crypto.randomBytes(6).toString('hex'), valor, getSettings().currency || '', agora, agora, cartao.marca, cartao.ultimos).lastInsertRowid;
+        .run(b ? b.id : null, a.code, 'demo_pi_' + crypto.randomBytes(6).toString('hex'), valor, (b && b.currency) || getSettings().currency || '', agora, agora, cartao.marca, cartao.ultimos).lastInsertRowid;
       if (b) aposPagamento(b.id, valor); else loja.aposPagamento(a.code);
       return id;
     })();
@@ -197,7 +197,7 @@ router.post('/pagar', limitador, async (req, res) => {
     studio_name: getSettings().business_name || 'Loja', room_name: `${a.e.quantidade} × ${a.e.titulo}`,
   };
   let pi;
-  try { pi = await stripe.pagarComCartao({ booking: aPagar, valor, customer, pmId: cartao.externo_id, textoMoeda: getSettings().currency }); } catch (e) {
+  try { pi = await stripe.pagarComCartao({ booking: aPagar, valor, customer, pmId: cartao.externo_id, textoMoeda: (b && b.currency) || getSettings().currency }); } catch (e) {
     throw erro(e.message && /card|cartão|declin/i.test(e.message) ? 'O pagamento foi recusado: ' + e.message : req.t('pagar.falhou'), 402);
   }
   db.prepare('UPDATE int_pagamentos SET cartao_marca=?, cartao_ultimos=? WHERE externo_id=?').run(cartao.marca, cartao.ultimos, pi.id);

@@ -80,12 +80,6 @@ const SOL = svg([
 
 const LUA = svg(['M20 14.4A8.4 8.4 0 0 1 9.6 4a8.6 8.6 0 1 0 10.4 10.4z'], 'pref-ico');
 
-const MOEDA = svg([
-  'M12 3.4a8.6 8.6 0 1 1 0 17.2 8.6 8.6 0 0 1 0-17.2z',
-  'M14.6 9.2c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.2 0-2.2-.6-2.6-1.6',
-  'M12 6v1.6M12 16.4V18',
-], 'pref-ico');
-
 const SETA = svg(['m6.5 9.5 5.5 5 5.5-5'], 'pref-chev');
 const VISTO = svg(['m5 12.6 4.4 4.4L19 7.4'], 'pref-visto');
 
@@ -122,7 +116,7 @@ function html(lingua, tema, moeda) {
     { valor: 'claro', nome: t('prefs.tema.claro'), marca: SOL },
     { valor: 'escuro', nome: t('prefs.tema.escuro'), marca: LUA },
   ];
-  let menuMoeda = '', dados = '';
+  let dados = '';
   if (moeda && moeda.base) {
     let nomes;
     try { nomes = new Intl.DisplayNames([D.lingua(lingua).locale], { type: 'currency' }); } catch (_) { nomes = null; }
@@ -131,14 +125,17 @@ function html(lingua, tema, moeda) {
       valor: c === moeda.base ? '' : c, curto: c, nome: nome(c), marca: `<span class="pref-cod">${esc(c)}</span>`,
     }));
     if (opcoes.length > 1) {
+      // A escolha faz-se no perfil do cliente (/conta), não no cabeçalho: aqui
+      // só vão as taxas, para os preços saírem já convertidos.
       const escolhida = moeda.taxas[moeda.escolhida] ? moeda.escolhida : '';
-      menuMoeda = menu('pref-moeda', t('prefs.moeda'), 'moeda', MOEDA, escolhida, opcoes);
-      if (escolhida) dados = ` data-moeda="${esc(escolhida)}" data-moeda-base="${esc(moeda.base)}" data-moeda-taxa="${moeda.taxas[escolhida]}"`;
+      // data-moeda-taxas: 1 unidade da moeda base = taxa × moeda, para cada moeda
+      // (as dos estúdios incluídas), para converter um preço em qualquer delas.
+      if (escolhida) dados = ` data-moeda="${esc(escolhida)}" data-moeda-base="${esc(moeda.base)}" data-moeda-taxa="${moeda.taxas[escolhida]}"`
+        + ` data-moeda-taxas="${esc(JSON.stringify(moeda.taxas))}"`;
     }
   }
   return `<div class="prefs"${dados}>`
     + menu('pref-lingua', t('prefs.lingua'), 'lingua', GLOBO, lingua, linguas)
-    + menuMoeda
     + menu('pref-tema', t('prefs.tema'), 'tema', tema === 'claro' ? SOL : LUA, tema, temas)
     + '</div>';
 }

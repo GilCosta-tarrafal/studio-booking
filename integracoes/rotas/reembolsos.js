@@ -75,7 +75,7 @@ async function avisar(p, booking, encomenda, motivo, cancelada) {
     text: [
       `Olá ${nome},`,
       '',
-      `O ${s.business_name || 'estúdio'} reembolsou o pagamento ${oque}: ${Number(p.valor).toLocaleString('pt-PT')} ${s.currency || ''}.`,
+      `O ${s.business_name || 'estúdio'} reembolsou o pagamento ${oque}: ${Number(p.valor).toLocaleString('pt-PT')} ${String(p.moeda || s.currency || '').toUpperCase()}.`,
       p.fornecedor === 'stripe' ? 'O valor volta ao cartão com que pagou; pode demorar alguns dias a aparecer, conforme o banco.' : null,
       cancelada ? 'A marcação foi cancelada.' : null,
       motivo ? `Motivo: ${motivo}` : null,

@@ -43,7 +43,7 @@ function gerar(res, b, st, biz, nomes = {}) {
   const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 50, left: 40, right: 40 }, info: { Title: 'Recibo ' + b.code } });
   doc.pipe(res);
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
-  const cur = biz.currency || '';
+  const cur = b.currency || biz.currency || '';   // a moeda da marcação (a do estúdio)
 
   // -------------------------------------------------- Cabeçalho
   let y = doc.page.margins.top;

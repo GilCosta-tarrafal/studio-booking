@@ -81,7 +81,7 @@
           + (b.service_name ? ' · ' + tr(b, 'service_name') : '')),
         h('div', { class: 'mm-fim' },
           statusTag(b.status),
-          b.price > 0 && h('span', { class: 'mm-valor' }, money(b.price, moeda)),
+          b.price > 0 && h('span', { class: 'mm-valor' }, money(b.price, b.currency || moeda)),
           h('a', { class: 'mm-ver', href: '/consultar?code=' + encodeURIComponent(b.code) }, t('conta.verMarcacao')))));
     }
   }
@@ -146,6 +146,26 @@
           $('senha-atual').value = '';
           $('senha-nova').value = '';
           $('senha-ok').hidden = false;
+        });
+      });
+      // Perfil › Moeda dos preços: a escolha fica na conta.
+      api('/api/conta/moeda').then((m) => {
+        if (!m.opcoes.length) return;   // sem taxas do dia: não há o que escolher
+        const sel = $('moeda-sel');
+        sel.replaceChildren(h('option', { value: '' }, t('conta.moedaSo', { moeda: `${m.base_nome} (${m.base})` })),
+          ...m.opcoes.map((o) => h('option', { value: o.codigo }, `${o.nome} (${o.codigo})`)));
+        sel.value = m.atual;
+        $('form-moeda').hidden = false;
+        if (location.hash === '#moeda') sel.focus();
+      }).catch(() => { /* fica escondido */ });
+      $('form-moeda').addEventListener('submit', (e) => {
+        e.preventDefault();
+        $('moeda-ok').hidden = true;
+        enviar(e.submitter || $('form-moeda').querySelector('button[type=submit]'), async () => {
+          await api('/api/conta/moeda', { method: 'PUT', body: { moeda: $('moeda-sel').value } });
+          // As páginas saem do servidor com as taxas da moeda escolhida: recarrega.
+          location.hash = 'moeda';
+          location.reload();
         });
       });
       // Com /conta#senha, leva o foco direto ao formulário de palavra-passe.
