@@ -738,6 +738,14 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   d.dispatchEvent(new w.Event('visibilitychange'));
   await waitFor(() => d.querySelector('.bloq'), 'ecrã de bloqueio');
   ok(/Painel bloqueado/.test(d.querySelector('.bloq').textContent) && /15 minutos/.test(d.querySelector('.bloq').textContent), 'ao fim de 15 minutos parado, o painel bloqueia');
+  {
+    const pw = d.querySelector('.bloq input[type=password]');
+    const olho = d.querySelector('.bloq .pw-olho');
+    olho.click();
+    ok(pw.type === 'text' && olho.getAttribute('aria-pressed') === 'true', 'o olho mostra a palavra-passe escrita');
+    olho.click();
+    ok(pw.type === 'password' && olho.getAttribute('aria-label') === 'Mostrar palavra-passe', 'e volta a escondê-la');
+  }
   ok(d.getElementById('root').inert === true, 'o painel por trás fica inacessível');
   await sleep(150);
   let rb = await fetch(base + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });

@@ -71,7 +71,7 @@
           pass.select();
         } finally { btn.disabled = false; }
       },
-    }, pass, err, btn);
+    }, S.campoSenha(pass), err, btn);
     const sair = async () => {
       try { await S.api('/api/auth/logout', { method: 'POST' }); } catch (_) { /* segue */ }
       gravar(CHAVE_ESTADO, 'livre:' + Date.now());

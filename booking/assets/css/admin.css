@@ -1329,3 +1329,19 @@ body.bloqueado #toasts { display: none; }
 .ut-modal { min-width: min(560px, 92vw); }
 .ut-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .ut-foot .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* Campo de palavra-passe com o botão de olho (common.js campoSenha). */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; padding-right: 46px; }
+.bloq-form .pw-wrap input { padding-left: 46px; }   /* o texto centrado fica mesmo ao centro */
+.pw-olho {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 8px; background: none; color: inherit;
+  opacity: .65; cursor: pointer;
+}
+.pw-olho:hover, .pw-olho:focus-visible { opacity: 1; }
+.pw-olho .ic-off { display: none; }
+.pw-olho.mostrar .ic-on { display: none; }
+.pw-olho.mostrar .ic-off { display: inline; }

@@ -239,6 +239,8 @@
     const pass = h('input', { type: 'password', autocomplete: 'current-password', required: true });
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
     const btn = h('button', { class: 'btn', type: 'submit' }, 'Entrar');
+    const campoPass = field('Palavra-passe', pass);
+    S.campoSenha(pass);
     const form = h('form', {
       onsubmit: async (e) => {
         e.preventDefault();
@@ -254,7 +256,7 @@
           btn.disabled = false;
         }
       },
-    }, field('Email', email), field('Palavra-passe', pass), err, h('p', { class: 'submit-row' }, btn));
+    }, field('Email', email), campoPass, err, h('p', { class: 'submit-row' }, btn));
     // Nome do estúdio em destaque: da sessão que ainda está em memória (ao sair)
     // ou, numa entrada fria, do título da página que o servidor já preencheu.
     const bizName = (app.settings && app.settings.business_name)

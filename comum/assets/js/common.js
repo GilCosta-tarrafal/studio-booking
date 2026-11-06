@@ -284,6 +284,28 @@
     return txt + ' \u2248\u00A0' + conv + '\u00A0' + ver.moeda;
   }
 
+  // Campo de palavra-passe com o botão de olho, para ver o que se escreveu.
+  // Devolve o invólucro (o campo fica lá dentro; se já estava na página, o
+  // invólucro toma o lugar dele). Usado no painel.
+  function campoSenha(input, rotulos = { ver: 'Mostrar palavra-passe', ocultar: 'Ocultar palavra-passe' }) {
+    const on = icone('olho', 20); on.classList.add('ic-on');
+    const off = icone('olhoRiscado', 20); off.classList.add('ic-off');
+    const btn = h('button', { type: 'button', class: 'pw-olho', 'aria-label': rotulos.ver, title: rotulos.ver, 'aria-pressed': 'false' }, on, off);
+    btn.addEventListener('click', () => {
+      const mostrar = input.type === 'password';
+      input.type = mostrar ? 'text' : 'password';
+      btn.classList.toggle('mostrar', mostrar);
+      btn.setAttribute('aria-pressed', String(mostrar));
+      btn.setAttribute('aria-label', mostrar ? rotulos.ocultar : rotulos.ver);
+      btn.title = mostrar ? rotulos.ocultar : rotulos.ver;
+      input.focus();
+    });
+    const wrap = h('span', { class: 'pw-wrap' });
+    if (input.parentNode) input.parentNode.replaceChild(wrap, input);
+    wrap.append(input, btn);
+    return wrap;
+  }
+
   // Link do WhatsApp; acrescenta o indicativo do país a números locais.
   function waLink(biz, phone, text) {
     let d = String(phone || '').replace(/\D/g, '');
@@ -357,7 +379,7 @@
   // são propriedades calculadas, que devolvem já os textos da língua ativa.
   window.Studio = {
     t, tr, trTexto, I18N, h, api, fmtMin, parseHM, fmtDate, fmtDateFull, fmtDuration,
-    addDays, money, waLink, telLink, statusTag, renderStrip, hoursSummary, icone,
+    addDays, money, waLink, telLink, statusTag, renderStrip, hoursSummary, icone, campoSenha,
     servicoIcone, fundoServico,
     get STATUS() { return estados(); },
     get DAY_SHORT() { return I18N.lista('dias.curtos'); },
