@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 const express = require('express');
 const crypto = require('crypto');
-const { db, getSettings, BOOKING_SELECT } = require('../../backend/lib/db');
+const { db, getSettings, BOOKING_SELECT, sinalDe: sinal } = require('../../backend/lib/db');
 const U = require('../../backend/lib/util');
 const { requireClient } = require('../../backend/lib/conta-auth');
 const { rateLimit } = require('../../backend/lib/ratelimit');
@@ -34,6 +34,11 @@ const PAGAVEIS = ['aguarda_pagamento', 'confirmado', 'em_curso'];
 
 const r2 = (n) => Math.round(n * 100) / 100;
 const emFalta = (b) => Math.max(0, (b.price || 0) - (b.paid || 0));
+// Do sinal (ver db.sinalDe), o que ainda falta. O resto do preço paga-se no
+// estúdio, ou online de uma vez, se o cliente preferir.
+const sinalEmFalta = (b) => Math.min(emFalta(b), Math.max(0, sinal(b) - (b.paid || 0)));
+// Quanto se cobra agora: só o sinal (opcao 'sinal', se ainda faltar) ou tudo o que falta.
+const aPagarAgora = (b, opcao) => (opcao === 'sinal' && sinalEmFalta(b) > 0 ? sinalEmFalta(b) : emFalta(b));
 
 // O que se vai pagar com este código: uma marcação ou uma compra da loja
 // (ver rotas/loja.js), sempre desta conta.
@@ -62,16 +67,20 @@ function resumo(b) {
     start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min), minutos: min,
     itens: [{ descricao: b.service_name || 'Sessão em estúdio', detalhe: `${b.room_name} · ${min / 60} h${b.style ? ' · ' + b.style : ''}`, valor: b.price }],
     ja_pago: b.paid || 0, base, imposto: r2(total - base), taxa, imposto_nome: st.tax_name || 'IVA', total,
+    sinal: sinalEmFalta(b), sinal_pct: getSettings().deposit_percent,
     moeda: getSettings().currency || '', pode_pagar: PAGAVEIS.includes(b.status) && total > 0,
   };
 }
 
-// Depois de um pagamento confirmado: soma ao "Já pago" e, pago tudo, a
-// marcação que aguardava pagamento fica confirmada.
+// Depois de um pagamento confirmado: soma ao "Já pago" e, pago pelo menos o
+// sinal, a marcação que aguardava pagamento fica confirmada.
 function aposPagamento(bookingId, valor) {
   const agora = new Date().toISOString();
   db.prepare('UPDATE bookings SET paid = paid + ?, updated_at=? WHERE id=?').run(valor, agora, bookingId);
-  db.prepare("UPDATE bookings SET status='confirmado', updated_at=? WHERE id=? AND status='aguarda_pagamento' AND paid >= price").run(agora, bookingId);
+  const depois = db.prepare('SELECT price, paid FROM bookings WHERE id=?').get(bookingId);
+  if (depois && depois.paid >= sinal(depois)) {
+    db.prepare("UPDATE bookings SET status='confirmado', updated_at=? WHERE id=? AND status='aguarda_pagamento'").run(agora, bookingId);
+  }
   // O cliente fica a saber que o pagamento entrou (o painel vê-o no sininho).
   const b = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(bookingId);
   if (b) {
@@ -158,7 +167,7 @@ router.post('/pagar', limitador, async (req, res) => {
   let valor;
   if (a.tipo === 'marcacao') {
     if (!PAGAVEIS.includes(b.status) || emFalta(b) <= 0) throw erro(req.t(emFalta(b) > 0 ? 'pagar.aindaNao' : 'pagar.nadaEmFalta'));
-    valor = emFalta(b);
+    valor = aPagarAgora(b, body.opcao);
   } else {
     if (a.e.estado === 'pago') throw erro(req.t('pagar.nadaEmFalta'));
     if (a.e.estado !== 'aguarda_pagamento') throw erro('A reserva desta compra expirou e o artigo esgotou entretanto.', 409);
@@ -188,7 +197,7 @@ router.post('/pagar', limitador, async (req, res) => {
     studio_name: getSettings().business_name || 'Loja', room_name: `${a.e.quantidade} × ${a.e.titulo}`,
   };
   let pi;
-  try { pi = await stripe.pagarComCartao({ booking: aPagar, customer, pmId: cartao.externo_id, textoMoeda: getSettings().currency }); } catch (e) {
+  try { pi = await stripe.pagarComCartao({ booking: aPagar, valor, customer, pmId: cartao.externo_id, textoMoeda: getSettings().currency }); } catch (e) {
     throw erro(e.message && /card|cartão|declin/i.test(e.message) ? 'O pagamento foi recusado: ' + e.message : req.t('pagar.falhou'), 402);
   }
   db.prepare('UPDATE int_pagamentos SET cartao_marca=?, cartao_ultimos=? WHERE externo_id=?').run(cartao.marca, cartao.ultimos, pi.id);
@@ -226,4 +235,4 @@ router.get('/recibo/:id/pdf', (req, res) => {
   require('../../backend/lib/pdf-talao').gerar(res, r);
 });
 
-module.exports = { router, aposPagamento, recibo, modo };
+module.exports = { router, aposPagamento, recibo, modo, aPagarAgora };

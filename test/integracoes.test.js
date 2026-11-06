@@ -422,6 +422,26 @@ function futureWeekday(offset = 3) {
   cb = r.json.fornecedores.find((f) => f.id === 'cambio');
   ok(cb.conversor && cb.detalhes.some(([k, v]) => k === 'Taxas atuais' && /1 EUR = 110,2\d+ CVE/.test(v)), 'o painel mostra as taxas atuais e o conversor');
 
+  // O visitante escolhe ver os preços noutra moeda: a página traz a taxa.
+  let pagina = await (await fetch(base + '/', { headers: { Cookie: 'moeda=EUR' } })).text();
+  ok(/id="pref-moeda-btn"/.test(pagina) && /data-moeda="EUR" data-moeda-base="CVE" data-moeda-taxa="0.0090689"/.test(pagina), 'o site mostra o botão da moeda e, escolhido EUR, a taxa do dia');
+  pagina = await (await fetch(base + '/')).text();
+  ok(/id="pref-moeda-btn"/.test(pagina) && /<div class="prefs">/.test(pagina), 'sem escolha: preços só na moeda do estúdio');
+
+  // Mudar a moeda das Definições com "Converter os preços": os valores passam
+  // para a moeda nova com a taxa do dia.
+  const defs = (await call('GET', '/api/admin/settings', { cookie })).json.settings;
+  const sala = db.prepare('SELECT id, hourly_rate FROM rooms ORDER BY id LIMIT 1').get();
+  db.prepare('UPDATE rooms SET hourly_rate=11027 WHERE id=?').run(sala.id);
+  r = await call('PUT', '/api/admin/settings', { cookie, body: { ...defs, currency: 'EUR', converter_precos: true } });
+  ok(r.status === 200 && r.json.settings.currency === 'EUR' && Math.abs(r.json.convertido - 0.0090689) < 1e-9, 'mudar CVE → EUR com conversão: responde com a taxa usada');
+  ok(db.prepare('SELECT hourly_rate FROM rooms WHERE id=?').get(sala.id).hourly_rate === 100, 'o preço por hora da sala passa de 11027 CVE para 100 EUR');
+  r = await call('PUT', '/api/admin/settings', { cookie, body: { ...defs, currency: 'BRL', converter_precos: true } });
+  ok(r.status === 400 && /taxa de câmbio/.test(r.json.error), 'sem taxa para a moeda nova: recusa com explicação, sem mexer em nada');
+  r = await call('PUT', '/api/admin/settings', { cookie, body: { ...defs, currency: 'CVE' } });
+  ok(r.status === 200 && db.prepare('SELECT hourly_rate FROM rooms WHERE id=?').get(sala.id).hourly_rate === 100, 'sem pedir conversão: a moeda muda e os números ficam');
+  db.prepare('UPDATE rooms SET hourly_rate=? WHERE id=?').run(sala.hourly_rate, sala.id);
+
   console.log(`\n${passed} certos, ${failed} falhados`);
   server.close();
   fora.close();

@@ -28,6 +28,7 @@ function rulesInfo(s) {
   return {
     slot_minutes: s.slot_minutes, min_minutes: s.min_minutes, max_minutes: s.max_minutes,
     lead_hours: s.lead_hours, max_advance_days: s.max_advance_days, auto_confirm: s.auto_confirm,
+    deposit_percent: s.deposit_percent,
   };
 }
 

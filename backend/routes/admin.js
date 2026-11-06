@@ -2,7 +2,7 @@
 
 const express = require('express');
 const {
-  db, getSettings, saveSettings, parseHours, findConflict, newCode, BOOKING_SELECT, priceFor,
+  db, getSettings, saveSettings, parseHours, findConflict, newCode, BOOKING_SELECT, priceFor, sinalDe,
 } = require('../lib/db');
 const auth = require('../lib/auth');
 const U = require('../lib/util');
@@ -128,7 +128,9 @@ router.get('/bookings', (req, res) => {
     where.push("(b.client_name LIKE ? ESCAPE '\\' OR b.client_phone LIKE ? ESCAPE '\\' OR b.title LIKE ? ESCAPE '\\' OR b.code LIKE ? ESCAPE '\\')");
     args.push(like, like, like, like);
   }
-  const order = q.order === 'desc' ? 'b.date DESC, b.start_min DESC' : 'b.date ASC, b.start_min ASC';
+  // 'recentes': as marcadas há menos tempo primeiro (a lista do painel).
+  const order = q.order === 'recentes' ? 'b.created_at DESC, b.id DESC'
+    : q.order === 'desc' ? 'b.date DESC, b.start_min DESC' : 'b.date ASC, b.start_min ASC';
   const sql = `${BOOKING_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY ${order} LIMIT 500`;
   res.json({ bookings: db.prepare(sql).all(...args).map(withTimes) });
 });
@@ -233,9 +235,9 @@ router.patch('/bookings/:id/status', (req, res) => {
   const row = db.prepare('SELECT * FROM bookings WHERE id=?').get(id);
   if (!row) throw new HttpError(404, 'Marcação não encontrada.');
   assertInScope(req, row.room_id);
-  // Aceitar um pedido do site que tem valor por pagar não o confirma logo:
-  // fica "aguarda pagamento" e o cliente é avisado de que só falta pagar.
-  const aceite = status === 'confirmado' && row.status === 'pedido' && row.price > row.paid && !!row.client_id;
+  // Aceitar um pedido do site cujo sinal ainda não foi pago não o confirma
+  // logo: fica "aguarda pagamento" e o cliente é avisado de que só falta pagar.
+  const aceite = status === 'confirmado' && row.status === 'pedido' && row.paid < sinalDe(row) && !!row.client_id;
   if (aceite) status = 'aguarda_pagamento';
   db.transaction(() => {
     assertNoConflict({ status, room_id: row.room_id, date: row.date, start: row.start_min, end: row.end_min }, id);
@@ -754,6 +756,29 @@ router.get('/clients', (req, res) => {
 
 router.get('/settings', (_req, res) => res.json({ settings: getSettings() }));
 
+// Ao mudar a moeda (CVE -> EUR, por exemplo), os valores guardados passam para
+// a moeda nova com a taxa do dia: preço por hora das salas, preço e "já pago"
+// das marcações, artigos à venda e compras. Os pagamentos registados guardam a
+// moeda em que foram feitos e ficam como estão. Devolve a função que converte
+// (a correr dentro da transação que grava as definições), ou null.
+function conversaoDeMoeda(de, para) {
+  const iso = (m) => /^[A-Z]{3}$/.test(String(m || '').trim().toUpperCase());
+  if (!iso(de) || !iso(para) || de.toUpperCase() === para.toUpperCase()) return null;
+  const { cambio } = require('../../integracoes');
+  const taxa = cambio.taxa(de, para);
+  if (taxa === null) {
+    throw new HttpError(400, `Não há taxa de câmbio de ${de} para ${para}. Atualize as taxas em Integrações › Taxas de câmbio, ou desmarque "Converter os preços".`);
+  }
+  return () => {
+    const c = (col) => `${col} = CAST(ROUND(${col} * ?) AS INTEGER)`;
+    db.prepare(`UPDATE rooms SET ${c('hourly_rate')}`).run(taxa);
+    db.prepare(`UPDATE bookings SET ${c('price')}, ${c('paid')}`).run(taxa, taxa);
+    db.prepare(`UPDATE int_projetos SET ${c('preco')} WHERE preco IS NOT NULL`).run(taxa);
+    db.prepare(`UPDATE int_encomendas SET ${c('preco_unit')}, ${c('total')}`).run(taxa, taxa);
+    return taxa;
+  };
+}
+
 router.put('/settings', auth.requireOwner, (req, res) => {
   const b = req.body || {};
   const name = U.clean(b.business_name, 80);
@@ -774,18 +799,30 @@ router.put('/settings', auth.requireOwner, (req, res) => {
     if (!/^https?:$/.test(u.protocol)) throw new HttpError(400, 'Endereço de ' + nome + ' inválido.');
     return u.href;
   };
-  saveSettings({
-    business_name: name, tagline: U.clean(b.tagline, 160),
-    phone: U.clean(b.phone, 30), whatsapp: U.clean(b.whatsapp, 30), email: U.clean(b.email, 120),
-    instagram: rede(b.instagram, 'Instagram'),
-    spotify: rede(b.spotify, 'Spotify'), youtube: rede(b.youtube, 'YouTube'),
-    currency: U.clean(b.currency, 8) || 'CVE', country_code: U.digits(b.country_code).slice(0, 4),
-    slot_minutes: slot, min_minutes: min, max_minutes: max, lead_hours: lead, max_advance_days: adv,
-    auto_confirm: !!b.auto_confirm, terms: U.clean(b.terms, 500),
-    // Sem traduções no pedido (um cliente antigo do painel), ficam as que havia.
-    ...(b.traducoes === undefined ? {} : { traducoes: TR.limpar(b.traducoes, TR.CAMPOS.settings) }),
-  });
-  res.json({ settings: getSettings() });
+  const moedaNova = U.clean(b.currency, 8) || 'CVE';
+  // Só converte quando o painel o pede (a caixa "Converter os preços").
+  const converter = b.converter_precos !== true ? null : conversaoDeMoeda(getSettings().currency, moedaNova);
+  let taxa = null;
+  db.transaction(() => {
+    if (converter) taxa = converter();
+    saveSettings({
+      business_name: name, tagline: U.clean(b.tagline, 160),
+      phone: U.clean(b.phone, 30), whatsapp: U.clean(b.whatsapp, 30), email: U.clean(b.email, 120),
+      instagram: rede(b.instagram, 'Instagram'),
+      spotify: rede(b.spotify, 'Spotify'), youtube: rede(b.youtube, 'YouTube'),
+      currency: moedaNova, country_code: U.digits(b.country_code).slice(0, 4),
+      slot_minutes: slot, min_minutes: min, max_minutes: max, lead_hours: lead, max_advance_days: adv,
+      auto_confirm: !!b.auto_confirm, terms: U.clean(b.terms, 500),
+      deposit_percent: b.deposit_percent === undefined ? getSettings().deposit_percent : Math.min(100, Math.max(1, U.toInt(b.deposit_percent) || 50)),
+      // Sem traduções no pedido (um cliente antigo do painel), ficam as que havia.
+      ...(b.traducoes === undefined ? {} : { traducoes: TR.limpar(b.traducoes, TR.CAMPOS.settings) }),
+    });
+  })();
+  if (converter) {
+    // As taxas guardam-se em relação à moeda base: vão-se buscar já na nova.
+    require('../../integracoes').cambio.sincronizar().catch((e) => console.error('[cambio] atualização falhou:', e.message));
+  }
+  res.json({ settings: getSettings(), convertido: taxa });
 });
 
 // ------------------------------------------------------------ Utilizadores (só proprietário)

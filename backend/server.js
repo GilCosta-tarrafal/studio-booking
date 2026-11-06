@@ -164,13 +164,20 @@ function page(pasta, file, { traduzida = true } = {}) {
     // O painel é interno e fica sempre em português e em escuro.
     const lingua = traduzida ? req.lingua : 'pt';
     const tema = traduzida ? prefs.lerTema(req) : 'escuro';
+    // Taxas do dia (1 unidade da moeda do estúdio = taxa × moeda), para o
+    // visitante poder ver os preços noutra moeda.
+    const base = String(s.currency || '').trim().toUpperCase();
+    const taxas = {};
+    if (traduzida && /^[A-Z]{3}$/.test(base)) {
+      for (const m of prefs.MOEDAS_VER) { const t = integracoes.cambio.taxa(base, m); if (t) taxas[m] = t; }
+    }
     let html = fs.readFileSync(path.join(pasta, 'views', file), 'utf8')
       .replaceAll('{{NAME}}', esc(s.business_name))
       .replaceAll('{{TAGLINE}}', esc(TR.local(s.tagline, s.traducoes, lingua, 'tagline')))
       .replaceAll('{{YEAR}}', String(new Date().getFullYear()))
       .replaceAll('{{LANG}}', lingua)
       .replaceAll('{{TEMA}}', tema)
-      .replaceAll('{{PREFS}}', traduzida ? prefs.html(lingua, tema) : '');
+      .replaceAll('{{PREFS}}', traduzida ? prefs.html(lingua, tema, { escolhida: prefs.lerMoeda(req), base, taxas }) : '');
     html = traduzir(html, lingua);
     // A resposta muda com o cookie: sem isto, uma cache pública podia servir a
     // página portuguesa a quem escolheu francês.

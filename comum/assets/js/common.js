@@ -266,8 +266,22 @@
     return mm ? t('duracao.hm', { h: hh, m: pad(mm) }) : t('duracao.h', { h: hh });
   }
 
+  // Se o visitante escolheu ver os pre\u00E7os noutra moeda (bot\u00E3o do cabe\u00E7alho),
+  // junta-se o equivalente com a taxa do dia: "2500 CVE \u2248 22,67 EUR". Cobra-se
+  // sempre na moeda do est\u00FAdio.
+  function moedaVer() {
+    const p = document.querySelector('.prefs[data-moeda]');
+    const taxa = p && Number(p.dataset.moedaTaxa);
+    return taxa > 0 ? { moeda: p.dataset.moeda, base: p.dataset.moedaBase, taxa } : null;
+  }
+
   function money(n, cur) {
-    return new Intl.NumberFormat(I18N.locale, { maximumFractionDigits: 0 }).format(n || 0) + (cur ? '\u00A0' + cur : '');
+    const txt = new Intl.NumberFormat(I18N.locale, { maximumFractionDigits: 0 }).format(n || 0) + (cur ? '\u00A0' + cur : '');
+    const ver = moedaVer();
+    if (!ver || !n || String(cur || '').trim().toUpperCase() !== ver.base) return txt;
+    const v = n * ver.taxa;
+    const conv = new Intl.NumberFormat(I18N.locale, { maximumFractionDigits: Math.abs(v) < 1000 ? 2 : 0 }).format(v);
+    return txt + ' \u2248\u00A0' + conv + '\u00A0' + ver.moeda;
   }
 
   // Link do WhatsApp; acrescenta o indicativo do país a números locais.

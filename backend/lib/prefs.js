@@ -1,6 +1,7 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Preferências de quem visita: língua e tema. Ambas ficam num cookie simples
+// Preferências de quem visita: língua, tema e moeda em que quer ver os
+// preços. Todas ficam num cookie simples
 // (sem sessão, sem base de dados) e são lidas aqui para que a página já saia
 // do servidor na língua e no tema certos — sem o texto trocar à frente dos
 // olhos nem o ecrã dar um flash branco antes de o JavaScript correr.
@@ -38,6 +39,14 @@ function lerLingua(req) {
   return D.codigos.includes(c) ? c : 'pt';
 }
 
+// A moeda em que o visitante quer ver os preços ('' = a do estúdio). Só se
+// mostra o equivalente: cobra-se sempre na moeda das Definições.
+const MOEDAS_VER = ['EUR', 'USD', 'CVE', 'GBP', 'BRL', 'AOA', 'XOF', 'CHF'];
+function lerMoeda(req) {
+  const c = cookie(req, 'moeda').toUpperCase();
+  return MOEDAS_VER.includes(c) ? c : '';
+}
+
 function lerTema(req) {
   const c = cookie(req, 'tema');
   return TEMAS.includes(c) ? c : 'escuro';
@@ -71,6 +80,12 @@ const SOL = svg([
 
 const LUA = svg(['M20 14.4A8.4 8.4 0 0 1 9.6 4a8.6 8.6 0 1 0 10.4 10.4z'], 'pref-ico');
 
+const MOEDA = svg([
+  'M12 3.4a8.6 8.6 0 1 1 0 17.2 8.6 8.6 0 0 1 0-17.2z',
+  'M14.6 9.2c-.4-1-1.4-1.6-2.6-1.6-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 2 2.6.8 2.6 2-1.1 2-2.6 2c-1.2 0-2.2-.6-2.6-1.6',
+  'M12 6v1.6M12 16.4V18',
+], 'pref-ico');
+
 const SETA = svg(['m6.5 9.5 5.5 5 5.5-5'], 'pref-chev');
 const VISTO = svg(['m5 12.6 4.4 4.4L19 7.4'], 'pref-visto');
 
@@ -95,7 +110,9 @@ function menu(id, rotulo, atributo, icone, valor, opcoes) {
     + `</div>`;
 }
 
-function html(lingua, tema) {
+// "moeda": { escolhida, base, taxas: { EUR: 1 base em EUR, ... } } — as taxas
+// vão no próprio HTML, para os preços saírem já convertidos (common.js money).
+function html(lingua, tema, moeda) {
   const t = (chave) => D.t(lingua, chave);
   const linguas = D.LINGUAS.map((l) => ({
     valor: l.cod, curto: l.curto, nome: l.nome, lang: l.cod,
@@ -105,10 +122,25 @@ function html(lingua, tema) {
     { valor: 'claro', nome: t('prefs.tema.claro'), marca: SOL },
     { valor: 'escuro', nome: t('prefs.tema.escuro'), marca: LUA },
   ];
-  return '<div class="prefs">'
+  let menuMoeda = '', dados = '';
+  if (moeda && moeda.base) {
+    let nomes;
+    try { nomes = new Intl.DisplayNames([D.lingua(lingua).locale], { type: 'currency' }); } catch (_) { nomes = null; }
+    const nome = (c) => (nomes && nomes.of(c)) || c;
+    const opcoes = [moeda.base, ...MOEDAS_VER.filter((c) => c !== moeda.base && moeda.taxas[c])].map((c) => ({
+      valor: c === moeda.base ? '' : c, curto: c, nome: nome(c), marca: `<span class="pref-cod">${esc(c)}</span>`,
+    }));
+    if (opcoes.length > 1) {
+      const escolhida = moeda.taxas[moeda.escolhida] ? moeda.escolhida : '';
+      menuMoeda = menu('pref-moeda', t('prefs.moeda'), 'moeda', MOEDA, escolhida, opcoes);
+      if (escolhida) dados = ` data-moeda="${esc(escolhida)}" data-moeda-base="${esc(moeda.base)}" data-moeda-taxa="${moeda.taxas[escolhida]}"`;
+    }
+  }
+  return `<div class="prefs"${dados}>`
     + menu('pref-lingua', t('prefs.lingua'), 'lingua', GLOBO, lingua, linguas)
+    + menuMoeda
     + menu('pref-tema', t('prefs.tema'), 'tema', tema === 'claro' ? SOL : LUA, tema, temas)
     + '</div>';
 }
 
-module.exports = { TEMAS, COOKIE_MAX_AGE, cookie, lerLingua, lerTema, middleware, html, esc };
+module.exports = { TEMAS, MOEDAS_VER, COOKIE_MAX_AGE, cookie, lerLingua, lerTema, lerMoeda, middleware, html, esc };

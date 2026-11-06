@@ -1,6 +1,6 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Os dois botões do cabeçalho: língua e tema.
+// Os botões do cabeçalho: língua, moeda e tema.
 //
 // A página já chega do servidor na língua e no tema certos (ver backend/lib/
 // prefs.js); este ficheiro só trata do que acontece depois de a pessoa clicar.
@@ -76,16 +76,24 @@
     marcarEscolhas();
   }
 
-  // ---- Estado visível dos dois botões ------------------------------------
+  // A moeda em que se veem os preços: o servidor já converte ao desenhar a
+  // página (as taxas vêm nela), por isso basta gravar a escolha e recarregar.
+  function mudarMoeda(nova) {
+    guardar('moeda', nova);
+    location.reload();
+  }
+
+  // ---- Estado visível dos botões -----------------------------------------
   function marcarEscolhas() {
     const tema = raiz.dataset.tema === 'claro' ? 'claro' : 'escuro';
-    const escolhas = { lingua, tema };
+    const prefs = document.querySelector('.prefs');
+    const escolhas = { lingua, tema, moeda: (prefs && prefs.dataset.moeda) || '' };
     for (const menu of document.querySelectorAll('.pref-menu')) {
       const caixa = menu.closest('.pref');
       const botao = caixa.querySelector('.pref-btn');
       let atual = null;
-      for (const item of menu.querySelectorAll('[data-lingua], [data-tema]')) {
-        const chave = item.dataset.lingua !== undefined ? 'lingua' : 'tema';
+      for (const item of menu.querySelectorAll('[data-lingua], [data-tema], [data-moeda]')) {
+        const chave = item.dataset.lingua !== undefined ? 'lingua' : item.dataset.moeda !== undefined ? 'moeda' : 'tema';
         const ativa = item.dataset[chave] === escolhas[chave];
         item.setAttribute('aria-checked', String(ativa));
         if (ativa) atual = item;
@@ -117,8 +125,8 @@
       item.querySelector('.pref-nome').textContent = t('prefs.tema.' + item.dataset.tema);
     }
     for (const menu of document.querySelectorAll('.pref-menu')) {
-      const eLingua = !!menu.querySelector('[data-lingua]');
-      menu.setAttribute('aria-label', t(eLingua ? 'prefs.lingua' : 'prefs.tema'));
+      const tipo = menu.querySelector('[data-lingua]') ? 'prefs.lingua' : menu.querySelector('[data-moeda]') ? 'prefs.moeda' : 'prefs.tema';
+      menu.setAttribute('aria-label', t(tipo));
     }
   }
 
@@ -151,6 +159,7 @@
       for (const [i, item] of itens.entries()) {
         item.addEventListener('click', () => {
           if (item.dataset.lingua !== undefined) { mudarLingua(item.dataset.lingua); retraduzirMenus(); marcarEscolhas(); }
+          else if (item.dataset.moeda !== undefined) { if (item.getAttribute('aria-checked') !== 'true') mudarMoeda(item.dataset.moeda); }
           else mudarTema(item.dataset.tema);
           menu.hidden = true;
           botao.setAttribute('aria-expanded', 'false');

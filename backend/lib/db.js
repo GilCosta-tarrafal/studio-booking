@@ -506,12 +506,15 @@ const DEFAULT_SETTINGS = {
   lead_hours: '12',
   max_advance_days: '90',
   auto_confirm: '0',
+  // Percentagem do preço (o sinal) que o cliente paga online para a marcação
+  // ficar confirmada; o resto paga no estúdio (ou tudo de uma vez, se quiser).
+  deposit_percent: '50',
   terms: 'O pedido fica pendente até ser confirmado pelo estúdio. Receberá a confirmação por telefone ou WhatsApp.',
   // A frase de apresentação e o texto antes de enviar, noutras línguas (JSON).
   traducoes: '',
 };
 
-const INT_SETTINGS = ['slot_minutes', 'min_minutes', 'max_minutes', 'lead_hours', 'max_advance_days'];
+const INT_SETTINGS = ['slot_minutes', 'min_minutes', 'max_minutes', 'lead_hours', 'max_advance_days', 'deposit_percent'];
 
 function getSettings() {
   const out = { ...DEFAULT_SETTINGS };
@@ -520,6 +523,7 @@ function getSettings() {
   }
   for (const k of INT_SETTINGS) out[k] = parseInt(out[k], 10) || parseInt(DEFAULT_SETTINGS[k], 10);
   out.auto_confirm = out.auto_confirm === '1' || out.auto_confirm === 1;
+  out.deposit_percent = Math.min(100, Math.max(1, out.deposit_percent));
   // Enquanto o dono não guardar traduções, a frase e o texto que ainda forem
   // os de origem levam as suas traduções de exemplo.
   out.traducoes = out.traducoes ? TR.ler(out.traducoes) : traducoesExemplo(out, TR.CAMPOS.settings);
@@ -624,6 +628,12 @@ const BOOKING_SELECT = `
     JOIN studios s ON s.id = r.studio_id
     LEFT JOIN services sv ON sv.id = b.service_id`;
 
+// O sinal de uma marcação: a parte do preço (Definições, por omissão metade)
+// que basta pagar para ficar confirmada.
+function sinalDe(b) {
+  return Math.ceil(((b.price || 0) * getSettings().deposit_percent) / 100);
+}
+
 function priceFor(room, start, end) {
   return Math.round((room.hourly_rate * (end - start)) / 60);
 }
@@ -711,6 +721,6 @@ function ensureRbacOwners() {
 
 module.exports = {
   db, getSettings, saveSettings, DEFAULT_HOURS, parseHours, hoursFor,
-  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, ensureRbacOwners, expirarPedidos,
+  findConflict, busyIntervals, newCode, BOOKING_SELECT, priceFor, sinalDe, ensureRbacOwners, expirarPedidos,
   alargarCheck, acrescentaColuna,
 };

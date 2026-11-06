@@ -78,11 +78,10 @@ async function stripe(caminho, corpo) {
   });
 }
 
-// Cria a página de pagamento do valor em falta e devolve o endereço dela.
-async function criarCheckout({ booking, textoMoeda, siteUrl, lingua }) {
+// Cria a página de pagamento (por omissão, do valor em falta) e devolve o endereço dela.
+async function criarCheckout({ booking, valor = emFalta(booking), textoMoeda, siteUrl, lingua }) {
   const m = moeda(textoMoeda);
   if (!m) throw new Error('A moeda das Definições não é um código que o Stripe conheça. Defina STRIPE_CURRENCY (por exemplo, eur ou cve).');
-  const valor = emFalta(booking);
   const volta = `${siteUrl}/consultar?code=${encodeURIComponent(booking.code)}`;
   const sessao = await stripe('/v1/checkout/sessions', {
     mode: 'payment',
@@ -146,13 +145,12 @@ async function lerCartao(pmId, customer) {
   return { externo_id: pm.id, marca: pm.card.brand, ultimos: pm.card.last4, mes: pm.card.exp_month, ano: pm.card.exp_year, titular: (pm.billing_details && pm.billing_details.name) || '' };
 }
 
-// Cobra o valor em falta da marcação com um cartão guardado. Pode pedir uma
-// confirmação extra ao banco (3D Secure): aí devolve o client_secret, o
-// browser trata disso e depois chama confirmarIntent.
-async function pagarComCartao({ booking, customer, pmId, textoMoeda }) {
+// Cobra com um cartão guardado o valor pedido (por omissão, o que falta da
+// marcação). Pode pedir uma confirmação extra ao banco (3D Secure): aí
+// devolve o client_secret, o browser trata disso e depois chama confirmarIntent.
+async function pagarComCartao({ booking, valor = emFalta(booking), customer, pmId, textoMoeda }) {
   const m = moeda(textoMoeda);
   if (!m) throw new Error('A moeda das Definições não é um código que o Stripe conheça. Defina STRIPE_CURRENCY.');
-  const valor = emFalta(booking);
   const pi = await stripe('/v1/payment_intents', {
     amount: paraStripe(valor, m), currency: m, customer, payment_method: pmId, confirm: 'true',
     'payment_method_types[0]': 'card', description: `${booking.code} · ${booking.studio_name}, ${booking.room_name}`,

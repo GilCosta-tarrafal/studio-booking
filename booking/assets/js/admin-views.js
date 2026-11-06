@@ -197,8 +197,9 @@
         const qs = new URLSearchParams();
         if (ui.tab === 'pending') qs.set('status', 'pedido');
         if (ui.tab === 'upcoming') { qs.set('from', app.today); qs.set('status', 'pedido,confirmado,em_curso,concluido'); }
-        if (ui.tab === 'past') { qs.set('to', addDays(app.today, -1)); qs.set('order', 'desc'); }
-        if (ui.tab === 'all') qs.set('order', 'desc');
+        if (ui.tab === 'past') qs.set('to', addDays(app.today, -1));
+        // Em todos os separadores, quem marcou há menos tempo aparece em cima.
+        qs.set('order', 'recentes');
         if (ui.studio) qs.set('studio_id', ui.studio);
         if (ui.q) qs.set('q', ui.q);
         try {
@@ -838,18 +839,29 @@
       lead_hours: h('input', { type: 'number', min: 0, value: s.lead_hours, disabled: dis }),
       max_advance_days: h('input', { type: 'number', min: 1, value: s.max_advance_days, disabled: dis }),
       auto_confirm: h('input', { type: 'checkbox', checked: !!s.auto_confirm, disabled: dis }),
+      deposit_percent: h('input', { type: 'number', min: 1, max: 100, value: s.deposit_percent, disabled: dis }),
+      converter_precos: h('input', { type: 'checkbox', checked: true, disabled: dis }),
       terms: h('textarea', { maxlength: 500, disabled: dis }, s.terms),
     };
     const traducoes = blocoTraducoes([['tagline', 'Frase de apresentação', 160], ['terms', 'Texto mostrado antes de enviar o pedido', 500, true]],
       s.traducoes, { disabled: dis });
+    // Ao trocar de moeda, pergunta-se se os preços guardados passam para a nova
+    // com a taxa do dia (2500 CVE -> 23 EUR) ou ficam com o mesmo número.
+    const caixaConverter = h('div', { hidden: true },
+      h('label', { class: 'check' }, f.converter_precos, 'Converter os preços para a moeda nova, com a taxa de câmbio do dia'),
+      h('p', { class: 'hint' }, 'Salas, marcações e artigos à venda. Desmarque se os preços já estão escritos na moeda nova.'));
+    f.currency.addEventListener('change', () => { caixaConverter.hidden = f.currency.value === s.currency; });
     const err = h('div', { class: 'notice error', role: 'alert', hidden: true });
     const submit = async (e) => {
       e.preventDefault();
       err.hidden = true;
       const body = { traducoes: traducoes.valor() };
       for (const [k, el] of Object.entries(f)) body[k] = el.type === 'checkbox' ? el.checked : el.value;
+      body.converter_precos = !caixaConverter.hidden && f.converter_precos.checked;
       try {
         const r = await api('/api/admin/settings', { method: 'PUT', body });
+        if (r.convertido) toast(`Preços convertidos de ${s.currency} para ${r.settings.currency} (1 ${s.currency} = ${r.convertido.toLocaleString('pt-PT', { maximumSignificantDigits: 6 })} ${r.settings.currency}).`);
+        s = r.settings; caixaConverter.hidden = true;
         app.settings = r.settings;
         // A marca do menu é só o emblema (sem texto); o nome vive no rótulo
         // acessível e no alt da imagem, e é isso que se atualiza ao guardar.
@@ -874,6 +886,7 @@
       h('div', { class: 'grid-2' },
         field('Moeda', f.currency, { hint: 'O código aparece a seguir aos preços, por exemplo 2500 CVE.' }),
         field('Indicativo do país', f.country_code, { hint: 'Acrescentado a números locais nos links de WhatsApp.' })),
+      caixaConverter,
       h('h3', {}, 'Regras de marcação'),
       h('div', { class: 'grid-3' },
         field('Bloco de tempo', f.slot_minutes, { hint: 'As horas de início seguem este intervalo.' }),
@@ -882,6 +895,7 @@
       h('div', { class: 'grid-2' },
         field('Antecedência mínima (horas)', f.lead_hours, { hint: 'Quanto tempo antes do início o cliente ainda pode marcar.' }),
         field('Marcar até (dias)', f.max_advance_days, { hint: 'Com quantos dias de avanço se aceitam marcações.' })),
+      field('Sinal a pagar online (%)', f.deposit_percent, { hint: 'Ao pagar, o cliente escolhe: só esta parte do preço (fica confirmada e paga o resto no estúdio) ou tudo de uma vez.' }),
       h('label', { class: 'check' }, f.auto_confirm, 'Confirmar automaticamente os pedidos feitos no site'),
       h('p', { class: 'hint' }, 'Desligado: os pedidos ficam "por confirmar" até os aceitar no painel. O horário fica reservado em ambos os casos.'),
       field('Texto mostrado antes de enviar o pedido', f.terms, { hint: 'Por exemplo, política de cancelamento ou de sinal.' }),

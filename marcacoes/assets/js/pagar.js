@@ -12,12 +12,16 @@
   const { h, t, api, money } = S;
   const app = document.getElementById('pg-app');
   const code = (new URLSearchParams(location.search).get('code') || '').trim().toUpperCase();
-  const est = { modo: 'off', publicavel: '', resumo: null, cartoes: [], sel: null, stripe: null, destaque: false };
+  const est = { modo: 'off', publicavel: '', resumo: null, cartoes: [], sel: null, stripe: null, destaque: false, opcao: 'sinal' };
 
   const cur = () => est.resumo.moeda;
   const valor = (n) => money(n, cur());
   const dia = (iso) => iso.split('-').reverse().join('/');
   const compra = () => est.resumo && est.resumo.tipo === 'encomenda';
+  // Numa marcação com sinal por pagar, o cliente escolhe: só o sinal (o resto
+  // paga no estúdio) ou tudo agora.
+  const comEscolha = () => !compra() && est.resumo.sinal > 0 && est.resumo.sinal < est.resumo.total;
+  const aPagar = () => (comEscolha() && est.opcao === 'sinal' ? est.resumo.sinal : est.resumo.total);
   const MARCAS = { visa: 'VISA', mastercard: 'mastercard', amex: 'AMEX', discover: 'DISCOVER', diners: 'DINERS', jcb: 'JCB', unionpay: 'UnionPay' };
   // Cartões de teste aceites na demonstração (os mesmos do Stripe em teste).
   const TESTE = { '4242424242424242': 'visa', '5555555555554444': 'mastercard', '4000056655665556': 'visa' };
@@ -72,11 +76,11 @@
         ? h('div', { class: 'pg-cc pg-cc-frente' },
           h('div', { class: 'pg-cc-topo' }, marca(frente.marca, true), h('span', { class: 'pg-cc-num' }, '•••• •••• ' + frente.ultimos)),
           h('div', { class: 'pg-cc-meio' },
-            h('div', {}, h('small', {}, t('pg.totalPagar')), h('strong', {}, valor(r.total))),
+            h('div', {}, h('small', {}, t('pg.totalPagar')), h('strong', {}, valor(aPagar()))),
             h('div', { class: 'pg-cc-val' }, h('small', {}, t('pg.validade')), h('span', {}, validade(frente)))),
           h('div', { class: 'pg-cc-pe' }, h('div', {}, h('small', {}, t('pg.titular')), h('span', {}, frente.titular || '—'))))
         : h('div', { class: 'pg-cc pg-cc-frente pg-cc-nada' },
-          h('small', {}, t('pg.totalPagar')), h('strong', {}, valor(r.total)), h('p', {}, t('pg.semCartoes'))),
+          h('small', {}, t('pg.totalPagar')), h('strong', {}, valor(aPagar())), h('p', {}, t('pg.semCartoes'))),
       adicionar);
 
     const remover = frente && h('button', {
@@ -211,6 +215,16 @@
         h('span', { class: 'pg-metodo-txt' }, h('strong', {}, (MARCAS[c.marca] || c.marca).replace(/^mastercard$/, 'Mastercard')), h('small', {}, '•••• ' + c.ultimos)),
         h('input', { type: 'radio', name: 'pg-cartao', value: c.id, checked: c.id === est.sel, onchange: () => { est.sel = c.id; resumoEcra(); } }))));
 
+    const opcao = (k, titulo, sub, v) => h('label', { class: 'pg-metodo' + (est.opcao === k ? ' sel' : '') },
+      h('span', { class: 'pg-metodo-txt' }, h('strong', {}, titulo), h('small', {}, sub)),
+      h('strong', { class: 'pg-opcao-valor' }, valor(v)),
+      h('input', { type: 'radio', name: 'pg-opcao', value: k, checked: est.opcao === k, onchange: () => { est.opcao = k; resumoEcra(); } }));
+    const escolha = comEscolha() && [
+      h('h2', { class: 'pg-sub' }, t('pg.comoPagar')),
+      h('div', { class: 'pg-metodos', role: 'radiogroup', 'aria-label': t('pg.comoPagar') },
+        opcao('sinal', t('pg.opSinal', { pct: r.sinal_pct }), t('pg.opSinalSub', { resto: valor(r.total - r.sinal) }), r.sinal),
+        opcao('total', t('pg.opTotal'), t('pg.opTotalSub'), r.total))];
+
     ecra(
       h('button', { class: 'pg-link pg-voltar', type: 'button', onclick: carteira }, '← ' + t('pg.voltar')),
       compra()
@@ -235,10 +249,11 @@
         r.taxa != null && linha(t('pg.imposto', { imposto: r.imposto_nome, taxa: String(r.taxa).replace('.', ',') }), valor(r.imposto), 'suave'),
         h('hr'),
         linha(t('pg.total'), valor(r.total), 'total')),
+      escolha,
       h('h2', { class: 'pg-sub' }, t('pg.metodo')),
       metodos,
       err,
-      h('div', { class: 'pg-rodape' }, h('div', {}, h('small', {}, t('pg.total')), h('strong', {}, valor(r.total))), pagar));
+      h('div', { class: 'pg-rodape' }, h('div', {}, h('small', {}, t('pg.totalPagar')), h('strong', {}, valor(aPagar()))), pagar));
   }
 
   async function pagarAgora(btn) {
@@ -246,7 +261,7 @@
     err.hidden = true;
     btn.disabled = true; btn.textContent = t('pg.aPagar');
     try {
-      let r = await api('/api/pagamento/pagar', { method: 'POST', body: { code, cartao_id: est.sel } });
+      let r = await api('/api/pagamento/pagar', { method: 'POST', body: { code, cartao_id: est.sel, opcao: comEscolha() ? est.opcao : 'total' } });
       if (r.estado === 'acao') {
         // O banco pede uma confirmação extra (3D Secure): trata-a o Stripe.
         const stripe = await carregarStripe();

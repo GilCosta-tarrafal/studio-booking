@@ -874,6 +874,28 @@ function futureWeekday(offset = 3) {
   ok(pdf.status === 200 && bytes.slice(0, 4).toString() === '%PDF', 'o recibo do pagamento descarrega-se em PDF');
   r = await call('POST', '/api/pagamento/pagar', { cookie: clientCookie, body: { code: codeP, cartao_id: cartaoP } });
   ok(r.status === 400, 'já pago: não se paga duas vezes');
+
+  // Sinal: o cliente pode pagar só metade; a marcação fica confirmada e o
+  // resto fica por pagar (no estúdio).
+  r = await call('POST', '/api/public/bookings', { cookie: clientCookie, body: { room_id: salaX, date: futureWeekday(13), start: '15:00', duration_minutes: 120 } });
+  const codeS = r.json.booking.code;
+  const idS = db.prepare('SELECT id FROM bookings WHERE code=?').get(codeS).id;
+  const precoS = db.prepare('SELECT price FROM bookings WHERE id=?').get(idS).price;
+  r = await call('POST', '/api/pagamento/marcacao', { cookie: clientCookie, body: { code: codeS } });
+  ok(r.json.resumo.sinal === Math.ceil(precoS / 2) && r.json.resumo.sinal_pct === 50 && r.json.resumo.total === precoS, 'o resumo traz o sinal (50%) e o total');
+  r = await call('POST', '/api/pagamento/pagar', { cookie: clientCookie, body: { code: codeS, cartao_id: cartaoP, opcao: 'sinal' } });
+  const comSinal = db.prepare('SELECT status, paid FROM bookings WHERE id=?').get(idS);
+  ok(r.status === 200 && r.json.recibo.valor === Math.ceil(precoS / 2) && comSinal.status === 'confirmado' && comSinal.paid === Math.ceil(precoS / 2),
+    'pagar só o sinal: cobra metade e a marcação fica confirmada');
+  r = await call('POST', '/api/pagamento/marcacao', { cookie: clientCookie, body: { code: codeS } });
+  ok(r.json.resumo.sinal === 0 && r.json.resumo.total === precoS - Math.ceil(precoS / 2), 'pago o sinal: já não há sinal em falta, só o resto');
+  db.prepare('DELETE FROM int_pagamentos WHERE booking_id=?').run(idS);
+  db.prepare('DELETE FROM bookings WHERE id=?').run(idS);
+
+  // A lista do painel com order=recentes: a marcada há menos tempo em cima.
+  r = await call('GET', '/api/admin/bookings?order=recentes', { cookie: dono });
+  const criadas = r.json.bookings.map((b) => b.created_at);
+  ok(r.status === 200 && criadas.length > 1 && criadas.every((c, i) => i === 0 || criadas[i - 1] >= c), 'lista por ordem de marcação: as mais recentes primeiro');
   console.log('\nLoja: artigos à venda');
   r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: { tipo: 'vendas', titulo: 'T-shirt', stock: 3 } });
   ok(r.status === 400 && /preço/.test(r.json.error), 'vendas: o preço é obrigatório');
