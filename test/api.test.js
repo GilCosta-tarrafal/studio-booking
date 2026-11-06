@@ -32,12 +32,11 @@ const mapas = http.createServer((req, res) => {
 mapas.listen(0);
 process.env.GEOCODER_URL = 'http://127.0.0.1:' + mapas.address().port + '/search';
 
-const { start } = require('../backend/server');
-const U = require('../backend/lib/util');
-const contaAuth = require('../backend/lib/conta-auth');
-const { db } = require('../backend/lib/db');
+const U = require('../api/lib/util');
+const contaAuth = require('../api/lib/conta-auth');
+const { db } = require('../api/lib/db');
 
-let server, base, passed = 0, failed = 0;
+let base, siteBase, adminBase, passed = 0, failed = 0;
 // Marcar passou a exigir sessão de cliente. Guarda-se aqui o cookie da conta de
 // teste e, para não o repetir em cada marcação, o call() liga-o sozinho aos
 // pedidos de marcação do site. Quem quiser testar sem conta passa anon: true.
@@ -69,9 +68,8 @@ function futureWeekday(offset = 3) {
 }
 
 (async () => {
-  server = start(0);
-  await new Promise((r) => server.on('listening', r));
-  base = 'http://127.0.0.1:' + server.address().port;
+  // A API em base; as páginas no site e no painel, que têm servidores à parte.
+  ({ api: base, site: siteBase, admin: adminBase } = await require('./arranque').arrancar());
   const day = futureWeekday();
 
   console.log('\nPúblico');
@@ -101,7 +99,7 @@ function futureWeekday(offset = 3) {
 
   const payload = (o = {}) => ({ room_id: room1, date: day, start: '10:00', duration_minutes: 120, title: 'Single novo', ...o });
   // Apanha os emails que o servidor manda (sem fornecedor, iriam só para o registo).
-  const notify = require('../backend/lib/notify');
+  const notify = require('../api/lib/notify');
   const enviarOriginal = notify.sendEmail;
   const emails = [];
   notify.sendEmail = async (m) => { emails.push(m); return { sent: false, channel: 'email', provider: 'teste' }; };
@@ -204,7 +202,7 @@ function futureWeekday(offset = 3) {
   // Login único: uma conta da equipa entra pelo mesmo login do site e é levada
   // ao painel, com sessão de painel válida (cookie sid, não csid).
   r = await call('POST', '/api/conta/login', { body: { identifier: 'dono@teste.cv', password: 'palavra-passe-teste' } });
-  ok(r.status === 200 && r.json.redirect === '/admin' && !r.json.client, 'conta de equipa entra pelo /conta e é mandada para /admin');
+  ok(r.status === 200 && r.json.redirect === process.env.PAINEL_URL + '/admin' && !r.json.client, 'conta de equipa entra pelo /conta e é mandada para o /admin do painel');
   const sidEquipa = r.res.headers.get('set-cookie').split(';')[0];
   r = await call('GET', '/api/auth/me', { cookie: sidEquipa });
   ok(r.status === 200 && r.json.user.email === 'dono@teste.cv', 'e fica com sessão de painel válida');
@@ -640,17 +638,48 @@ function futureWeekday(offset = 3) {
   ok(r.json.booking.style.length === 60, 'um estilo demasiado longo é cortado, não recusado');
 
   console.log('\nPáginas');
-  for (const p of ['/', '/marcar', '/consultar', '/conta', '/admin']) {
-    const res = await fetch(base + p);
+  for (const [b, p] of [[siteBase, '/'], [siteBase, '/marcar'], [siteBase, '/consultar'], [siteBase, '/conta'], [adminBase, '/admin']]) {
+    const res = await fetch(b + p);
     const html = await res.text();
     ok(res.status === 200 && !html.includes('{{'), `página ${p} carrega e não tem marcadores por substituir`);
   }
-  let res = await fetch(base + '/css/base.css'); ok(res.status === 200, 'CSS estático servido');
-  res = await fetch(base + '/js/common.js'); ok(res.status === 200, 'JS estático servido');
-  res = await fetch(base + '/inexistente'); ok(res.status === 404, '404 para páginas inexistentes');
+  let res = await fetch(siteBase + '/css/base.css'); ok(res.status === 200, 'CSS estático servido');
+  res = await fetch(siteBase + '/js/common.js'); ok(res.status === 200, 'JS estático servido');
+  res = await fetch(adminBase + '/js/admin.js'); ok(res.status === 200, 'o painel serve os seus ficheiros');
+  res = await fetch(siteBase + '/inexistente'); ok(res.status === 404, '404 para páginas inexistentes');
+
+  // Três partes: a API não serve páginas, o site não tem o painel, e ambos
+  // passam /api à API como se ela estivesse no mesmo endereço.
+  console.log('\nSite, painel e API separados');
+  const atrasadas = require('../scripts/copiar-comum').sincronizar({ corrigir: false });
+  ok(atrasadas.length === 0, 'as cópias de comum/ em api, site e admin estão iguais ao original' + (atrasadas.length ? ': ' + atrasadas.join(', ') : ''));
+  res = await fetch(base + '/');
+  ok(res.status === 404 && (res.headers.get('content-type') || '').includes('json'), 'a API não serve páginas');
+  res = await fetch(siteBase + '/api/public/config');
+  ok(res.status === 200 && (await res.json()).studios.length > 0, 'o site reencaminha /api para a API');
+  res = await fetch(siteBase + '/js/estilos.js');
+  ok(res.status === 200 && (await res.text()).includes('window.ESTILOS'), 'o site serve os estilos gerados pela API');
+  res = await fetch(siteBase + '/admin');
+  ok(res.status === 404, 'o painel não existe no endereço do site');
+  res = await fetch(siteBase + '/api/admin/settings', { headers: { Cookie: ckDono } });
+  ok(res.status === 404, 'nem a API do painel, mesmo com sessão');
+  res = await fetch(siteBase + '/api/auth/login', { method: 'POST', headers: { 'X-Requested-With': 'studio', 'Content-Type': 'application/json' }, body: '{}' });
+  ok(res.status === 404, 'nem o login da equipa');
+  res = await fetch(adminBase + '/', { redirect: 'manual' });
+  ok(res.status === 302 && res.headers.get('location') === '/admin', 'a raiz do painel leva a /admin');
+  res = await fetch(adminBase + '/marcar?room=1', { redirect: 'manual' });
+  ok(res.status === 302 && res.headers.get('location') === siteBase + '/marcar?room=1', 'uma página do site aberta no painel leva ao site');
+  res = await fetch(adminBase + '/api/auth/login', { method: 'POST', headers: { 'X-Requested-With': 'studio', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'dono@teste.cv', password: 'nova-palavra-1' }) });
+  const ckPainel = (res.headers.get('set-cookie') || '').split(';')[0];
+  ok(res.status === 200 && ckPainel, 'entrar pelo painel: o cookie de sessão atravessa o reencaminhamento');
+  res = await fetch(adminBase + '/api/auth/me', { headers: { Cookie: ckPainel } });
+  ok(res.status === 200 && (await res.json()).site_url === siteBase + '/', 'com a sessão, o painel fala com a API e sabe onde está o site');
+  res = await fetch(adminBase + '/api/admin/settings', { method: 'PUT', headers: { Cookie: ckPainel, 'Content-Type': 'application/json' }, body: '{}' });
+  ok(res.status === 403, 'a proteção CSRF continua a valer através do painel');
 
   console.log('\nLínguas');
-  const pagina = (url, lingua) => fetch(base + url, { headers: lingua ? { Cookie: 'lingua=' + lingua } : {} }).then((r) => r.text());
+  const pagina = (url, lingua) => fetch((url === '/admin' ? adminBase : siteBase) + url, { headers: lingua ? { Cookie: 'lingua=' + lingua } : {} }).then((r) => r.text());
   let html = await pagina('/');
   ok(/<html lang="pt"/.test(html) && html.includes('Tempo de estúdio, marcado em minutos.'), 'sem cookie, a página sai em português');
   ok(html.includes('data-tema="escuro"'), 'sem cookie, o tema é o escuro');
@@ -662,7 +691,7 @@ function futureWeekday(offset = 3) {
   ok(html.includes('placeholder="Combien de personnes viennent'), 'os placeholders também são traduzidos');
   html = await pagina('/', 'xx');
   ok(/<html lang="pt"/.test(html), 'língua desconhecida no cookie volta ao português');
-  res = await fetch(base + '/');
+  res = await fetch(siteBase + '/');
   ok((res.headers.get('vary') || '').toLowerCase().includes('cookie'), 'resposta marcada com Vary: Cookie');
   // O painel é interno: fica em português seja qual for a escolha no site.
   html = await pagina('/admin', 'fr');
@@ -674,7 +703,7 @@ function futureWeekday(offset = 3) {
   ok(await erro('pt') === 'Data inválida.', 'erro da API em português');
   ok(await erro('en') === 'Invalid date.', 'erro da API em inglês');
   ok(await erro('fr') === 'Date invalide.', 'erro da API em francês');
-  res = await fetch(base + '/inexistente', { headers: { Cookie: 'lingua=fr' } });
+  res = await fetch(siteBase + '/inexistente', { headers: { Cookie: 'lingua=fr' } });
   ok((await res.text()).includes('Page introuvable'), 'página 404 traduzida');
 
   // O que o dono escreve no painel (serviços, salas, estúdios, frase, termos)
@@ -721,8 +750,9 @@ function futureWeekday(offset = 3) {
   // O texto português está escrito nos próprios ficheiros e é ele que a página
   // em português mostra (o servidor nem lhe toca). Se o dicionário disser outra
   // coisa, as três línguas deixam de dizer o mesmo sem ninguém dar por isso.
-  const D = require('../comum/assets/js/dicionario.js');
-  const VISTAS = ['publico', 'marcacoes'].map((p) => path.join(__dirname, '..', p, 'views'));
+  // A cópia do site: é ela que o servidor das páginas tem em memória (mais abaixo mexe-se nela).
+  const D = require('../site/comum/assets/js/dicionario.js');
+  const VISTAS = [path.join(__dirname, '..', 'site', 'views')];
   const TAGS = 'a|b|button|div|h1|h2|h3|h4|label|legend|li|option|output|p|small|span|strong|title';
   const reTexto = new RegExp(`<(${TAGS})\\b[^>]*\\bdata-i18n="([^"]+)"[^>]*>([^<]*)</\\1>`, 'gi');
   const reAttr = /<[a-z][a-z0-9]*\b[^>]*\bdata-i18n-attr="([^"]+)"[^>]*>/gi;
@@ -773,7 +803,7 @@ function futureWeekday(offset = 3) {
   // Expirado: um pedido que ninguém confirmou até à hora passa a "expirado" e
   // deixa a sala livre.
   console.log('\nExpirado');
-  const { expirarPedidos, findConflict } = require('../backend/lib/db');
+  const { expirarPedidos, findConflict } = require('../api/lib/db');
   const ontem = U.addDays(U.nowLocal().date, -1);
   const salaX = db.prepare('SELECT id FROM rooms ORDER BY id LIMIT 1').get().id;
   const agoraIso = new Date().toISOString();
@@ -854,7 +884,7 @@ function futureWeekday(offset = 3) {
   ok(r.json.fiscal.codigo === 'pt' && r.json.fiscal.regiao === 'Açores' && r.json.fiscal.taxa === 16, 'Ponta Delgada → Portugal (Açores), IVA 16%');
   r = await call('GET', '/api/admin/fiscal?lat=48.86&lon=2.35', { cookie: dono });
   ok(r.json.fiscal.codigo === 'fr' && r.json.fiscal.taxa === 20, 'Paris → França, IVA 20%');
-  ok(require('../backend/lib/fiscal').aproximar(16.89, -24.98).codigo === 'cv', 'sem serviço de mapas, a tabela local reconhece Cabo Verde (São Vicente)');
+  ok(require('../api/lib/fiscal').aproximar(16.89, -24.98).codigo === 'cv', 'sem serviço de mapas, a tabela local reconhece Cabo Verde (São Vicente)');
   r = await call('PUT', `/api/admin/studios/${estR.id}`, { cookie: dono, body: { ...estR, ...estR2, hours: JSON.parse(estR.hours), lat: 14.93, lon: -23.51, vat_rate: '' } });
   let estF = db.prepare('SELECT country_code, tax_name, vat_rate FROM studios WHERE id=?').get(estR.id);
   ok(r.status === 200 && estF.country_code === 'cv' && estF.vat_rate === 15, 'guardar o estúdio sem taxa: fica com a do país onde está (15%)');
@@ -1053,7 +1083,6 @@ function futureWeekday(offset = 3) {
   db.prepare('DELETE FROM bookings WHERE id=?').run(marcR);
 
   console.log(`\n${passed} certos, ${failed} falhados`);
-  server.close();
   mapas.close();
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

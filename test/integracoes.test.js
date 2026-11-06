@@ -94,12 +94,11 @@ process.env.GRAVADORA_FEED_URL = FORA + '/feed';
 process.env.YOUTUBE_API_URL = FORA + '/youtube/v3';
 process.env.CAMBIO_API_URL = FORA + '/cambio';
 
-const { start } = require('../backend/server');
-const U = require('../backend/lib/util');
-const { cabecalho } = require('../integracoes/lib/assinatura');
-const { db } = require('../backend/lib/db');
+const U = require('../api/lib/util');
+const { cabecalho } = require('../api/integracoes/lib/assinatura');
+const { db } = require('../api/lib/db');
 
-let server, base, passed = 0, failed = 0;
+let base, siteBase, passed = 0, failed = 0;
 const ok = (cond, msg) => { if (cond) { passed++; console.log('  ✓', msg); } else { failed++; console.log('  ✗ FALHOU:', msg); } };
 
 async function call(method, url, { body, cookie, headers = {} } = {}) {
@@ -141,9 +140,7 @@ function futureWeekday(offset = 3) {
 }
 
 (async () => {
-  server = start(0);
-  await new Promise((r) => server.on('listening', r));
-  base = 'http://127.0.0.1:' + server.address().port;
+  ({ api: base, site: siteBase } = await require('./arranque').arrancar());
   const login = await call('POST', '/api/auth/login', { body: { email: 'dono@teste.cv', password: 'palavra-passe-teste' } });
   const cookie = login.res.headers.get('set-cookie').split(';')[0];
   // Marcar exige sessão de cliente; cria-se uma conta para as marcações do site.
@@ -399,7 +396,7 @@ function futureWeekday(offset = 3) {
     && r.json.lancamento.data === '2026-10-30' && /^\/capas-integracao\/env-/.test(r.json.lancamento.capa), 'guardar só com o link: a música fica com título, artista, data e capa');
   r = await call('POST', '/api/admin/integracoes/musica', { cookie, body: { link: FORA + '/musica-og', titulo: 'Título meu' } });
   ok(r.json.lancamento.titulo === 'Título meu', 'o que se escreve à mão não é trocado pelo do link');
-  const { limparTituloVideo } = require('../integracoes/lib/ler-link');
+  const { limparTituloVideo } = require('../api/integracoes/lib/ler-link');
   ok(limparTituloVideo('Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)', 'Rick Astley') === 'Never Gonna Give You Up', 'no YouTube, o título perde o nome do canal e o "(Official Video)"');
 
   console.log('\nTaxas de câmbio');
@@ -417,15 +414,15 @@ function futureWeekday(offset = 3) {
   ok(r.status === 404, 'moeda sem taxa (taxa inválida na resposta): 404 com explicação');
   r = await call('GET', '/api/integracoes/cambio');
   ok(r.json.base === 'CVE' && r.json.taxas.EUR === 0.0090689 && !('x1' in r.json.taxas), 'lista as taxas do dia, sem códigos inválidos');
-  ok(require('../integracoes').cambio.converter(100, 'USD', 'USD') === 100, 'o backend converte com cambio.converter()');
+  ok(require('../api/integracoes').cambio.converter(100, 'USD', 'USD') === 100, 'o backend converte com cambio.converter()');
   r = await call('GET', '/api/admin/integracoes', { cookie });
   cb = r.json.fornecedores.find((f) => f.id === 'cambio');
   ok(cb.conversor && cb.detalhes.some(([k, v]) => k === 'Taxas atuais' && /1 EUR = 110,2\d+ CVE/.test(v)), 'o painel mostra as taxas atuais e o conversor');
 
   // O visitante escolhe ver os preços noutra moeda: a página traz a taxa.
-  let pagina = await (await fetch(base + '/', { headers: { Cookie: 'moeda=EUR' } })).text();
+  let pagina = await (await fetch(siteBase + '/', { headers: { Cookie: 'moeda=EUR' } })).text();
   ok(!/pref-moeda-btn/.test(pagina) && /data-moeda="EUR" data-moeda-base="CVE" data-moeda-taxa="0.0090689"/.test(pagina), 'sem botão de moeda no cabeçalho; com EUR escolhido, a página traz a taxa do dia');
-  pagina = await (await fetch(base + '/')).text();
+  pagina = await (await fetch(siteBase + '/')).text();
   ok(/<div class="prefs">/.test(pagina), 'sem escolha: preços só na moeda do estúdio');
 
   // A moeda escolhe-se no perfil do cliente (/conta) e fica guardada na conta.
@@ -470,14 +467,13 @@ function futureWeekday(offset = 3) {
     .run(salaE.id, new Date().toISOString(), new Date().toISOString()).lastInsertRowid;
   r = await call('GET', '/api/admin/reports?from=2020-01-01&to=2020-01-31', { cookie });
   ok(r.status === 200 && Math.abs(r.json.totals.billed - 11027) <= 1, 'relatórios: 100 EUR somam-se como 11027 CVE (convertido para a moeda principal)');
-  pagina = await (await fetch(base + '/', { headers: { Cookie: 'moeda=USD' } })).text();
+  pagina = await (await fetch(siteBase + '/', { headers: { Cookie: 'moeda=USD' } })).text();
   ok(/data-moeda-taxas="[^"]*EUR/.test(pagina), 'o site traz as taxas das moedas dos estúdios, para converter qualquer preço');
   db.prepare('DELETE FROM bookings WHERE id=?').run(bE);
   db.prepare('UPDATE studios SET currency=? WHERE id=?').run(est.currency, est.id);
   db.prepare('UPDATE rooms SET hourly_rate=? WHERE id=?').run(salaE.hourly_rate, salaE.id);
 
   console.log(`\n${passed} certos, ${failed} falhados`);
-  server.close();
   fora.close();
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

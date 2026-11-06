@@ -28,9 +28,17 @@ Para trabalhar no projeto, arranque com:
 npm run dev
 ```
 
-O servidor reinicia sozinho sempre que muda o código. O terminal mostra onde abrir o site — normalmente http://localhost:3005, e também o endereço na rede local para abrir noutro aparelho ligado ao mesmo Wi-Fi. Se a porta estiver ocupada por outro programa, salta para a seguinte e diz qual.
+Arrancam as três partes de uma vez, cada uma na sua porta, e reiniciam sozinhas sempre que muda o código:
 
-Na primeira vez, o terminal mostra também o email e a palavra-passe do administrador. Guarde-os, entre em /admin e mude a palavra-passe em **Definições**.
+| Parte | Endereço |
+| --- | --- |
+| Site | http://localhost:3005 |
+| Painel | http://localhost:3006/admin |
+| API | http://localhost:3007 (o site e o painel falam com ela; não se abre no browser) |
+
+O terminal mostra também os endereços na rede local, para abrir noutro aparelho ligado ao mesmo Wi-Fi. Se uma porta estiver ocupada por outro programa, o arranque para e diz qual. Para usar outras, defina `SITE_PORT`, `ADMIN_PORT` e `API_PORT` no `.env` da raiz (copie-o de `api/.env.example`).
+
+Na primeira vez, o terminal mostra também o email e a palavra-passe do administrador. Guarde-os, entre no painel e mude a palavra-passe em **Definições**.
 
 Para escolher você a conta inicial: `ADMIN_EMAIL=... ADMIN_PASSWORD=... npm start`.
 
@@ -47,36 +55,52 @@ Dia a dia: os pedidos novos aparecem no **Painel** e no selo junto a "Marcaçõe
 
 ## Pôr online
 
-Isto é uma aplicação Node.js com base de dados SQLite (um ficheiro). Precisa de um serviço que corra Node e que tenha **disco persistente**: se o disco for apagado a cada reinício (comum em planos gratuitos), perde as marcações.
+O projeto vai para o ar em **três partes separadas**, cada uma com a sua pasta, o seu `package.json` e o seu `npm start`. Cada pasta leva tudo o que precisa (incluindo a sua cópia de `comum/`), por isso pode ser posta num serviço sozinha:
+
+| Pasta | O que é | Endereço típico | Precisa de |
+| --- | --- | --- | --- |
+| `api/` | Base de dados, regras, integrações | `api.o-seu-dominio` | Node 22 e **disco persistente** |
+| `site/` | Site público (início, marcar, consultar, pagar, conta) | `o-seu-dominio` | Node 22 |
+| `admin/` | Painel de gestão | `painel.o-seu-dominio` | Node 22 |
+
+O site e o painel não têm base de dados: pedem à API o que precisam e reencaminham-lhe `/api`. Para o browser, a API está no mesmo endereço da página, por isso os cookies de sessão e a proteção contra pedidos forjados funcionam sem configurar nada (nem CORS).
+
+A API guarda tudo num ficheiro SQLite. Se o disco for apagado a cada reinício (comum em planos gratuitos), perde as marcações.
 
 Duas opções comuns:
 
-- **Servidor virtual (VPS)** com Linux: instale Node 22, copie o projeto, corra-o com `systemd` ou `pm2` e ponha o Caddy ou o Nginx à frente para o HTTPS.
-- **Serviços de alojamento de aplicações** (Render, Railway, Fly.io e semelhantes): ligue o repositório, comando de arranque `npm start`, e anexe um volume/disco persistente. Confirme no serviço que escolher se o plano inclui o disco e quanto custa.
+- **Servidor virtual (VPS)** com Linux: instale Node 22, copie as três pastas, corra cada uma com `systemd` ou `pm2` e ponha o Caddy ou o Nginx à frente para o HTTPS e os domínios. O site e o painel falam com a API em `http://127.0.0.1:3007`.
+- **Serviços de alojamento de aplicações** (Render, Railway, Fly.io e semelhantes): crie três serviços a partir do mesmo repositório, cada um com a sua pasta como *root directory* e o comando `npm start`. Anexe o disco persistente só à API. Se o serviço tiver rede privada entre serviços, aponte o `API_URL` para o endereço interno da API.
 
-Variáveis de ambiente (ver `.env.example`):
+Variáveis de ambiente de cada parte (ver o `.env.example` de cada pasta):
 
-| Variável | Para quê |
-| --- | --- |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Conta do proprietário, criada só no primeiro arranque. |
-| `TIMEZONE` | Fuso horário do estúdio. Por omissão `Atlantic/Cape_Verde`. Afeta "hoje" e a antecedência mínima. |
-| `DATA_DIR` | Pasta da base de dados. Em produção, aponte para o disco persistente. |
-| `COOKIE_SECURE=1` | Ative quando o site estiver em HTTPS (deve estar sempre). |
-| `TRUST_PROXY=1` | Ative atrás do proxy do serviço, para os limites de pedidos verem o IP real. |
-| `PORT` | Porta (a maioria dos serviços define-a sozinha). |
-| `BLOQUEIO_MIN` | Minutos sem mexer até o painel se bloquear e pedir a palavra-passe. Por omissão `15`. |
-| `ADMIN_PORT` | Põe o painel numa porta só dele (ex.: `3006`): o site fica na `PORT` sem o painel, e o painel deixa de existir na porta do site. Sem ela, o painel fica em `/admin` na mesma porta. Com túnel ou domínio por porta, defina também `SITE_URL` e `PAINEL_URL`. |
-| `SMTP_USER`, `SMTP_PASS` | Envio de emails aos clientes (referência da marcação, pagamento, recuperar a palavra-passe) pelo Gmail: o endereço e uma palavra-passe de aplicação. Também há `RESEND_API_KEY` ou `BREVO_API_KEY`. Teste com `npm run testar-email -- voce@exemplo.com`. |
-| `ANTHROPIC_API_KEY` | Chave da API da Claude para o "Assistente IA" do painel (botão de auriculares). Sem ela, o assistente avisa que não está configurado; o chat da equipa funciona na mesma. |
+| Parte | Variável | Para quê |
+| --- | --- | --- |
+| site, painel | `API_URL` | Onde está a API. |
+| painel | `SITE_URL` | Endereço do site, para onde vai quem abrir no painel uma página do site. |
+| todas | `PORT` | Porta (a maioria dos serviços define-a sozinha). |
+| api | `SITE_URL`, `PAINEL_URL` | Endereços públicos do site e do painel, para os links dos emails, o "Ver o site" do painel e o regresso do Stripe. |
+| api | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Conta do proprietário, criada só no primeiro arranque. |
+| api | `TIMEZONE` | Fuso horário do estúdio. Por omissão `Atlantic/Cape_Verde`. Afeta "hoje" e a antecedência mínima. |
+| api | `DATA_DIR` | Pasta da base de dados. Em produção, aponte para o disco persistente. |
+| api | `COOKIE_SECURE=1` | Ative quando o site estiver em HTTPS (deve estar sempre). |
+| api | `TRUST_PROXY` | Só se o site e o painel falarem com a API pela internet e não por uma rede privada: o número de proxies pelo meio, para os limites de pedidos verem o IP real de quem visita. |
+| api | `BLOQUEIO_MIN` | Minutos sem mexer até o painel se bloquear e pedir a palavra-passe. Por omissão `15`. |
+| api | `SMTP_USER`, `SMTP_PASS` | Envio de emails aos clientes (referência da marcação, pagamento, recuperar a palavra-passe) pelo Gmail: o endereço e uma palavra-passe de aplicação. Também há `RESEND_API_KEY` ou `BREVO_API_KEY`. Teste com `npm run testar-email -- voce@exemplo.com`. |
+| api | `ANTHROPIC_API_KEY` | Chave da API da Claude para o "Assistente IA" do painel (botão de auriculares). Sem ela, o assistente avisa que não está configurado; o chat da equipa funciona na mesma. |
 
-O nome de domínio e o HTTPS são configurados no serviço de alojamento.
+Os nomes de domínio e o HTTPS são configurados no serviço de alojamento. Os avisos do Stripe e da plataforma da gravadora podem apontar para a API ou para o site, porque o site também os reencaminha.
+
+O site e o painel ficam em domínios diferentes, por isso cada um tem a sua sessão. Quem é da equipa e entra pela página **A minha conta** do site é levado ao painel, mas aí pode ter de iniciar sessão outra vez.
+
+**Antes de pôr no ar uma alteração a `comum/`**, corra `npm run comum`. Isso atualiza as cópias dentro de `api/`, `site/` e `admin/`, que são as que vão para o ar. O `npm run dev` e o `npm test` já o fazem, e um teste avisa se alguma cópia ficar desatualizada.
 
 ### Os trechos de música
 
 Ao carregar num estilo, toca um trecho de 5 segundos. Há dois caminhos:
 
-1. **O trecho do estúdio.** Grave (ou corte) cerca de 5 segundos do instrumental, guarde o ficheiro em `marcacoes/assets/audio/` e aponte-lhe a linha certa em `marcacoes/assets/js/sons.js`. Use música sua ou com licença: o trecho fica no site, à vista de toda a gente.
-2. **A batida sintetizada**, enquanto não houver ficheiro. O `marcacoes/assets/js/som.js` desenha a percussão e o baixo do género com osciladores e ruído — dá o andamento e o feitio, mas **não é música nem substitui uma gravação**. Serve para o formulário funcionar sem ficheiro nenhum. Para mexer num ritmo, ou acrescentar um para um estilo novo, a tabela `RITMOS` está no topo desse ficheiro: cada compasso são 16 passos, `x` é toque e `.` é silêncio.
+1. **O trecho do estúdio.** Grave (ou corte) cerca de 5 segundos do instrumental, guarde o ficheiro em `site/assets/audio/` e aponte-lhe a linha certa em `site/assets/js/sons.js`. Use música sua ou com licença: o trecho fica no site, à vista de toda a gente.
+2. **A batida sintetizada**, enquanto não houver ficheiro. O `site/assets/js/som.js` desenha a percussão e o baixo do género com osciladores e ruído — dá o andamento e o feitio, mas **não é música nem substitui uma gravação**. Serve para o formulário funcionar sem ficheiro nenhum. Para mexer num ritmo, ou acrescentar um para um estilo novo, a tabela `RITMOS` está no topo desse ficheiro: cada compasso são 16 passos, `x` é toque e `.` é silêncio.
 
 Nada toca sozinho — só ao carregar numa etiqueta — e há um botão para silenciar que fica guardado no aparelho.
 
@@ -92,11 +116,11 @@ Duas variáveis de ambiente, para quem precise: `GEOCODER_URL` aponta para outro
 
 ## Integrações
 
-Pagamentos online com o **Stripe** e ligação à **plataforma da gravadora**: os lançamentos entram sozinhos nas novidades do site, e os que passam de um certo número de reproduções entram em "Saíram deste estúdio". Estão na pasta `integracoes/`, à parte do resto do backend, e ficam desligadas até lhes dar as variáveis de ambiente. Tudo o que é preciso, incluindo o formato que a plataforma da gravadora tem de enviar, está em [integracoes/README.md](integracoes/README.md). No painel, a secção **Integrações** mostra o estado de cada uma.
+Pagamentos online com o **Stripe** e ligação à **plataforma da gravadora**: os lançamentos entram sozinhos nas novidades do site, e os que passam de um certo número de reproduções entram em "Saíram deste estúdio". Estão na pasta `api/integracoes/`, à parte do resto da API, e ficam desligadas até lhes dar as variáveis de ambiente. Tudo o que é preciso, incluindo o formato que a plataforma da gravadora tem de enviar, está em [api/integracoes/README.md](api/integracoes/README.md). No painel, a secção **Integrações** mostra o estado de cada uma.
 
 ## Cópias de segurança
 
-`npm run backup` cria uma cópia consistente em `backend/data/backups/` (pode correr com o site ligado; guarda as 30 mais recentes). Agende-a uma vez por dia e **copie os ficheiros para fora do servidor**. Se perder o servidor sem cópia, perde as marcações.
+`npm run backup` cria uma cópia consistente em `api/data/backups/` (pode correr com o site ligado; guarda as 30 mais recentes). Agende-a uma vez por dia e **copie os ficheiros para fora do servidor**. Se perder o servidor sem cópia, perde as marcações.
 
 ## Segurança, em resumo
 
@@ -114,13 +138,13 @@ Pagamentos online com o **Stripe** e ligação à **plataforma da gravadora**: o
 ## Personalizar
 
 - Textos do site: `comum/assets/js/dicionario.js` — as três línguas lado a lado, com a mesma chave. O português é o original: se faltar uma tradução, é ele que aparece.
-- Novidades e singles: `publico/assets/js/novidades.js` e `singles.js`. O `texto` e o `botao` de uma novidade (e a `descricao` de um single) podem levar as três línguas: `{ pt: '...', en: '...', fr: '...' }`.
+- Novidades e singles: `site/assets/js/novidades.js` e `singles.js`. O `texto` e o `botao` de uma novidade (e a `descricao` de um single) podem levar as três línguas: `{ pt: '...', en: '...', fr: '...' }`.
 - Onde fica cada estúdio: **Estúdios**, no painel, no campo *Onde fica*. Cole aí o link do Google Maps (as coordenadas vêm dentro do próprio link — não é preciso chave nem se fala com a Google) ou escreva a morada e carregue em *Procurar*, que pergunta ao OpenStreetMap.
-- Trechos de música dos estilos: `marcacoes/assets/js/sons.js` — ver abaixo.
-- Estilos de música do formulário: `marcacoes/assets/js/estilos.js` — uma linha por estilo. A lista não tem de ser exaustiva: quem não se revir em nenhum escolhe "Outro" e escreve. A lista vazia faz o campo desaparecer.
+- Trechos de música dos estilos: `site/assets/js/sons.js` — ver abaixo.
+- Estilos de música do formulário: `site/assets/js/estilos.js` — uma linha por estilo. A lista não tem de ser exaustiva: quem não se revir em nenhum escolhe "Outro" e escreve. A lista vazia faz o campo desaparecer.
 - Desenho de fundo de cada serviço: sai do nome que lhe deu (microfone para "Gravação", mesa para "Mistura"...). A lista de palavras está em `DESENHOS_SERVICO`, em `comum/assets/js/common.js`; um serviço que não encaixe em nenhuma fica com as barras de som.
-- Estrutura das páginas: `publico/views/index.html`, `marcacoes/views/marcar.html`, `marcacoes/views/consultar.html`.
-- Fotografia de fundo das páginas de marcar e consultar: `publico/assets/img/many.jpg` (trocar o ficheiro chega; o enquadramento e o véu estão em `.page-inner::before`, em `site.css`).
+- Estrutura das páginas: `site/views/` (`index.html`, `marcar.html`, `consultar.html`, `pagar.html`, `conta.html`) e `admin/views/admin.html`.
+- Fotografia de fundo das páginas de marcar e consultar: `comum/assets/img/many.jpg` (trocar o ficheiro chega; o enquadramento e o véu estão em `.page-inner::before`, em `site.css`).
 - Cores e tipos de letra: variáveis no topo de `comum/assets/css/base.css` — o primeiro bloco é o tema escuro, o segundo (`:root[data-tema="claro"]`) é o claro.
 - Regras (duração mínima e máxima, antecedência, bloco de tempo): **Definições**, no painel.
 
@@ -149,53 +173,57 @@ Para acrescentar uma língua: junte o código a `LINGUAS` e um bloco de textos e
 
 Fica preso ao topo durante toda a página: uma faixa de ponta a ponta e opaca, para nada se ver a passar por trás dela ao rolar. Em três zonas — o logótipo à esquerda, os links ao centro, as preferências e a ação principal à direita — com um limite próprio (1680 px, mais largo do que os 1120 px do resto da página), para o logótipo encostar ao canto.
 
-Está fora do fluxo, por isso o conteúdo por baixo precisa de saber a altura dela. Como essa altura muda com a largura do ecrã, é medida em `publico/assets/js/cabecalho.js` e deixada na variável `--altura-cabecalho`; o CSS traz um valor de reserva para quem tenha o JavaScript desligado. Num ecrã estreito a barra encolhe a uma linha (logótipo, preferências e o botão principal) — fixa, cada pixel que ocupa é um pixel que a página perde para sempre.
+Está fora do fluxo, por isso o conteúdo por baixo precisa de saber a altura dela. Como essa altura muda com a largura do ecrã, é medida em `site/assets/js/cabecalho.js` e deixada na variável `--altura-cabecalho`; o CSS traz um valor de reserva para quem tenha o JavaScript desligado. Num ecrã estreito a barra encolhe a uma linha (logótipo, preferências e o botão principal) — fixa, cada pixel que ocupa é um pixel que a página perde para sempre.
 
 ## Testes
 
 ```bash
-npm test                              # API (133) e integrações (48)
+npm test                              # API e integrações
 npm install --no-save jsdom           # só uma vez
-npm run test:frontend                 # site e painel: 153 verificações
+npm run test:frontend                 # site e painel num browser simulado
 ```
 
 ## Estrutura
 
 ```
-backend/             tudo o que corre no servidor
-  server.js            arranque, segurança, entrega das páginas
-  lib/                 base de dados, autenticação, limites, idioma e tema, utilitários
-  routes/              API pública, autenticação, API do painel
-  data/                a base de dados (estudio.db) e as cópias de segurança
-  scripts/backup.js    cópia de segurança
+api/                 a API — vai para o ar sozinha (precisa de disco persistente)
+  server.js            arranque, segurança, rotas
+  lib/                 base de dados, autenticação, limites, endereços, PDFs, utilitários
+  routes/              API pública, autenticação, conta do cliente, API do painel
+  integracoes/         serviços de fora (Stripe, gravadora, YouTube, câmbio) — ver o README lá dentro
+  data/                a base de dados (estudio.db), anexos, capas e cópias de segurança
+  scripts/             cópia de segurança, testar o email, repor o administrador
+  comum/               cópia de comum/ (não mexer aqui)
 
-comum/               o que é partilhado pelo público, pelas marcações e pelo painel
+site/                o site público — vai para o ar sozinho
+  server.js            monta as páginas e reencaminha /api para a API
+  views/               início, marcar, consultar, pagar, a minha conta
+  assets/              CSS, JavaScript, imagens e áudio do site
+    js/prefs.js          os botões de idioma e tema, no cabeçalho
+    js/rodape.js         o rodapé, partilhado pelas páginas
+    js/cabecalho.js      a barra presa ao topo (mede-se para o conteúdo lhe dar lugar)
+    js/book.js           o formulário de marcação
+    js/lookup.js         consultar e cancelar uma marcação
+    js/estilos.js        estilos de reserva (os ativos vêm de Configurações › Géneros musicais)
+    js/som.js, sons.js   a batida e os trechos que tocam ao escolher um estilo
+  comum/               cópia de comum/ (não mexer aqui)
+
+admin/               o painel de gestão — vai para o ar sozinho
+  server.js            monta a página do painel e reencaminha /api para a API
+  views/admin.html     a página do painel
+  assets/              CSS e JavaScript do painel
+  comum/               cópia de comum/ (não mexer aqui)
+
+comum/               o ORIGINAL do que as três partes partilham (mexa aqui e corra `npm run comum`)
   assets/css/base.css  cores, tipos de letra e os blocos de base (tema escuro e claro)
   assets/js/common.js  utilitários do lado do navegador, usados por todas as páginas
-  assets/js/dicionario.js  os textos em português, inglês e francês
-  assets/js/carregamento.js  o ecrã de carregamento com o logótipo (ao abrir e ao mudar de página)
+  assets/js/dicionario.js  os textos em português, inglês e francês (também usado pela API)
+  assets/js/carregamento.js  o ecrã de carregamento com o logótipo
+  assets/img/          logótipo, ícone e fotografia de fundo
+  servidor/prefs.js    língua, tema e moeda de quem visita; os botões do cabeçalho
+  servidor/paginas.js  montar e traduzir as páginas, segurança, reencaminhar para a API
 
-publico/             o site aberto a toda a gente
-  views/               página inicial
-  assets/              CSS, JavaScript e imagens do site (partilhados com marcacoes/)
-    js/prefs.js          os botões de idioma e tema, no cabeçalho
-    js/rodape.js         o rodapé, partilhado pelas três páginas
-    js/cabecalho.js      a barra presa ao topo (mede-se para o conteúdo lhe dar lugar)
-
-marcacoes/           o fluxo de marcação do cliente
-  views/               marcar sessão, consultar marcação
-  assets/js/book.js    o formulário de marcação
-  assets/js/lookup.js  consultar e cancelar uma marcação
-  assets/js/estilos.js os estilos de música do formulário
-  assets/js/som.js     a batida que toca ao escolher um estilo
-  assets/js/sons.js    os trechos do estúdio, se os houver
-  assets/audio/        os ficheiros desses trechos
-
-integracoes/         serviços de fora (Stripe, plataforma da gravadora) — ver o README lá dentro
-
-booking/             a área de gestão (painel), sem ligações à pasta do público
-  views/               painel de administração
-  assets/              CSS e JavaScript do painel
-
-test/                testes de ponta a ponta
+dev.js               no computador: arranca as três partes de uma vez (`npm run dev`)
+scripts/copiar-comum.js  põe as cópias de comum/ em dia
+test/                testes de ponta a ponta (arrancam as três partes)
 ```

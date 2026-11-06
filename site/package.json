@@ -1,0 +1,15 @@
+{
+  "name": "studio-booking-site",
+  "version": "1.0.0",
+  "description": "Site público do estúdio: página inicial, marcações e conta do cliente",
+  "main": "server.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

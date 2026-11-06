@@ -1,0 +1,15 @@
+{
+  "name": "studio-booking-admin",
+  "version": "1.0.0",
+  "description": "Painel de gestão do estúdio",
+  "main": "server.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

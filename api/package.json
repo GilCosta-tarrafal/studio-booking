@@ -1,0 +1,22 @@
+{
+  "name": "studio-booking-api",
+  "version": "1.0.0",
+  "description": "API do estúdio: base de dados, regras de marcação e integrações",
+  "main": "server.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "backup": "node scripts/backup.js",
+    "testar-email": "node --env-file-if-exists=.env scripts/testar-email.js",
+    "reset-admin": "node --env-file-if-exists=.env scripts/reset-admin.js"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1",
+    "nodemailer": "^10.3.1",
+    "pdfkit": "^0.20.2"
+  }
+}

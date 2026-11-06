@@ -8,8 +8,7 @@ process.env.DB_FILE = path.join(tmp, 'fe.db');
 process.env.ADMIN_EMAIL = 'dono@teste.cv';
 process.env.ADMIN_PASSWORD = 'palavra-passe-teste';
 const ROOT = path.join(__dirname, '..');
-const { start } = require(ROOT + '/backend/server');
-const U = require(ROOT + '/backend/lib/util');
+const U = require(ROOT + '/api/lib/util');
 const { JSDOM, VirtualConsole, requestInterceptor } = require(path.join(ROOT, 'node_modules', 'jsdom'));
 
 let passed = 0, failed = 0;
@@ -21,20 +20,23 @@ async function waitFor(fn, what, timeout = 4000) {
   throw new Error('Timeout à espera de: ' + what);
 }
 
-let base;
+let base, adminBase, apiBase;
 const errors = [];
 
 async function open(url, jar) {
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => errors.push(`${url}: ${e.message}`));
   vc.on('error', (...a) => errors.push(`${url} console.error: ${a.join(' ')}`));
-  const dom = await JSDOM.fromURL(base + url, {
-    runScripts: 'dangerously', resources: { interceptors: [requestInterceptor((req) => (req.url.startsWith(base) ? undefined : new Response('', { status: 200, headers: { 'Content-Type': 'text/css' } })))] }, pretendToBeVisual: true, virtualConsole: vc,
+  // As páginas do painel chegam com o endereço completo (adminBase + '/admin').
+  const alvo = /^https?:/.test(url) ? url : base + url;
+  const daCasa = (u) => u.startsWith(base) || u.startsWith(adminBase);
+  const dom = await JSDOM.fromURL(alvo, {
+    runScripts: 'dangerously', resources: { interceptors: [requestInterceptor((req) => (daCasa(req.url) ? undefined : new Response('', { status: 200, headers: { 'Content-Type': 'text/css' } })))] }, pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       w.fetch = async (u, opts = {}) => {
         const headers = { ...(opts.headers || {}) };
         if (jar.cookie) headers.Cookie = jar.cookie;
-        const res = await fetch(new URL(u, base), { ...opts, headers });
+        const res = await fetch(new URL(u, alvo), { ...opts, headers });
         const sc = res.headers.get('set-cookie');
         if (sc) jar.cookie = sc.split(';')[0].includes('=') && sc.includes('Max-Age') && /sid=;|sid=$/.test(sc.split(';')[0]) ? '' : sc.split(';')[0];
         return res;
@@ -53,9 +55,8 @@ const ev = (w, el, type) => el.dispatchEvent(new w.Event(type, { bubbles: true }
 const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
 (async () => {
-  const server = start(0);
-  await new Promise((r) => server.on('listening', r));
-  base = 'http://127.0.0.1:' + server.address().port;
+  // As páginas do site em base, as do painel em adminBase e a API em apiBase.
+  ({ site: base, admin: adminBase, api: apiBase } = await require('./arranque').arrancar());
   const day = (() => { let d = U.addDays(U.nowLocal().date, 4); while ([0, 6].includes(U.weekday(d))) d = U.addDays(d, 1); return d; })();
 
   console.log('\nPágina inicial');
@@ -78,7 +79,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
   // Marcar exige conta. Cria-se uma e guarda-se o cookie de sessão no jar, para
   // as páginas abertas a seguir chegarem já com sessão de cliente iniciada.
-  const assinar = async (nome, email, tel) => (await fetch(base + '/api/conta/signup', {
+  const assinar = async (nome, email, tel) => (await fetch(apiBase + '/api/conta/signup', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' },
     body: JSON.stringify({ name: nome, email, phone: tel, password: 'cliente-1234' }),
   })).headers.get('set-cookie').split(';')[0];
@@ -259,7 +260,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
   // criar 2 pedidos via API para o painel, cada um da sua conta de cliente
   // (os dados da marcação vêm da conta com sessão iniciada).
-  const post = (u, b, cookie) => fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(b) }).then((r) => r.json());
+  const post = (u, b, cookie) => fetch(apiBase + u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(b) }).then((r) => r.json());
   const ckBruno = await assinar('Bruno Lopes', 'bruno@teste.cv', '5551234');
   const ckCarla = await assinar('Carla Mendes', 'carla@teste.cv', '7778889');
   await post('/api/public/bookings', { room_id: 1, date: day, start: '10:00', duration_minutes: 120, title: 'EP' }, ckBruno);
@@ -267,7 +268,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
   console.log('\nPainel');
   jar = {};
-  dom = await open('/admin', jar); w = dom.window; d = w.document;
+  dom = await open(adminBase + '/admin', jar); w = dom.window; d = w.document;
   await waitFor(() => d.querySelector('.login-card'), 'ecrã de login');
   ok(!!d.querySelector('.login-card .strip'), 'login com a régua do dia');
   // Entrada introdutória: só o emblema do estúdio (o nome vive no alt da imagem).
@@ -479,7 +480,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, nomeEn, 'Vocal recording');
   linhaSv.querySelector('.row-actions .btn').click();
   let svEn = null;
-  await waitFor(() => { fetch(base + '/api/public/config').then((r) => r.json()).then((c) => { svEn = c.services[0].i18n.en.name; }); return svEn === 'Vocal recording'; }, 'tradução gravada');
+  await waitFor(() => { fetch(apiBase + '/api/public/config').then((r) => r.json()).then((c) => { svEn = c.services[0].i18n.en.name; }); return svEn === 'Vocal recording'; }, 'tradução gravada');
   ok(svEn === 'Vocal recording', 'escrever a tradução no painel e guardar chega ao site');
 
   // Integrações (dentro de Configurações): sem nada ligado, os dois fornecedores desligados.
@@ -539,7 +540,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   usado.querySelector('.cf-act.del').click();
   await waitFor(() => [...d.querySelectorAll('#toasts .toast')].some((t) => /em uso|usado em/.test(t.textContent)), 'aviso de item em uso');
   ok(true, 'um item usado numa marcação não se apaga (sugere desativar)');
-  const js = await (await w.fetch('/js/estilos.js')).text();
+  const js = await (await fetch(base + '/js/estilos.js')).text();   // é o site que o serve
   ok(js.includes('window.ESTILOS = ["Drill","Trap","Boom Bap","Rap / Hip-Hop","Afrobeats","R&B"]'),'os estilos do site vêm dos géneros ativos de Configurações');
 
   // Projetos › gravação prolongada: campos próprios (artista, sala, período) e
@@ -662,17 +663,17 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
 
   // Equipa não vê definições editáveis
   const staffPw = 'equipa-12345';
-  const owner = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' }, body: JSON.stringify({ email: 'dono@teste.cv', password: 'palavra-passe-teste' }) });
+  const owner = await fetch(apiBase + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio' }, body: JSON.stringify({ email: 'dono@teste.cv', password: 'palavra-passe-teste' }) });
   const ck = owner.headers.get('set-cookie').split(';')[0];
 
   // Projeto com duas imagens: o cartão do site faz um slide (15 s) com pontos.
   console.log('\nSlide das imagens de um projeto');
   const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const subir = async (buf) => (await (await fetch(base + '/api/admin/integracoes/imagens', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Requested-With': 'studio', Cookie: ck }, body: buf })).json()).caminho;
+  const subir = async (buf) => (await (await fetch(apiBase + '/api/admin/integracoes/imagens', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Requested-With': 'studio', Cookie: ck }, body: buf })).json()).caminho;
   const imgsSlide = [await subir(PNG1), await subir(Buffer.concat([PNG1, Buffer.from([1])]))];
-  await fetch(base + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'talentos', titulo: 'Projeto com slide', descricao: 'Texto completo da campanha.', capas_origem: imgsSlide }) });
-  await fetch(base + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'publicidade', titulo: 'Anúncio de verão', resumo: 'Promoção', aberto: true }) });
-  await fetch(base + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'vendas', titulo: 'Boné da gravadora', preco: 1200, stock: 5 }) });
+  await fetch(apiBase + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'talentos', titulo: 'Projeto com slide', descricao: 'Texto completo da campanha.', capas_origem: imgsSlide }) });
+  await fetch(apiBase + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'publicidade', titulo: 'Anúncio de verão', resumo: 'Promoção', aberto: true }) });
+  await fetch(apiBase + '/api/admin/integracoes/projetos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ tipo: 'vendas', titulo: 'Boné da gravadora', preco: 1200, stock: 5 }) });
   dom = await open('/', {}); w = dom.window; d = w.document;
   const cartaoSlide = await waitFor(() => [...d.querySelectorAll('.proj-card')].find((c) => c.querySelector('h3').textContent === 'Projeto com slide'), 'cartão com slide');
   const imgsC = cartaoSlide.querySelectorAll('.proj-slide-img');
@@ -717,9 +718,9 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => !dlgProj.querySelector('.proj-erro').hidden, 'pedir para entrar');
   ok(/entre na sua conta/i.test(dlgProj.querySelector('.proj-erro').textContent) && dlgProj.querySelector('.proj-erro a[href^="/conta?next="]'), 'sem conta: pede para entrar (e volta à loja)');
   w.close();
-  await fetch(base + '/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ name: 'Técnica', email: 'tec@teste.cv', password: staffPw, role: 'staff' }) });
+  await fetch(apiBase + '/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ name: 'Técnica', email: 'tec@teste.cv', password: staffPw, role: 'staff' }) });
   jar = {};
-  dom = await open('/admin#/definicoes', jar); w = dom.window; d = w.document;
+  dom = await open(adminBase + '/admin#/definicoes', jar); w = dom.window; d = w.document;
   await waitFor(() => d.querySelector('.login-card'), 'login equipa');
   setVal(w, d.querySelector('input[type=email]'), 'tec@teste.cv'); setVal(w, d.querySelector('input[type=password]'), staffPw);
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
@@ -748,7 +749,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   }
   ok(d.getElementById('root').inert === true, 'o painel por trás fica inacessível');
   await sleep(150);
-  let rb = await fetch(base + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
+  let rb = await fetch(apiBase + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
   ok(rb.status === 423, 'o servidor também bloqueou a sessão');
   setVal(w, d.querySelector('.bloq input[type=password]'), 'errada');
   d.querySelector('.bloq form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
@@ -758,7 +759,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   d.querySelector('.bloq form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => !d.querySelector('.bloq'), 'desbloqueio');
   ok(d.getElementById('root').inert === false, 'com a palavra-passe certa, o painel volta');
-  rb = await fetch(base + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
+  rb = await fetch(apiBase + '/api/admin/pending-count', { headers: { Cookie: jar.cookie } });
   ok(rb.status === 200, 'e o servidor volta a responder');
 
   // O Meu Perfil: abre pelo menu do chip, guarda os dados e troca a palavra-passe.
@@ -790,11 +791,11 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   w.close();
 
   // Vista de agente: barra de topo com estúdio, idioma, tema e identidade.
-  const studios = (await (await fetch(base + '/api/admin/studios', { headers: { 'X-Requested-With': 'studio', Cookie: ck } })).json()).studios;
+  const studios = (await (await fetch(apiBase + '/api/admin/studios', { headers: { 'X-Requested-With': 'studio', Cookie: ck } })).json()).studios;
   const agPw = 'agente-12345';
-  await fetch(base + '/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ name: 'Ailton Santos', email: 'ailton@teste.cv', password: agPw, role: 'agent', studio_id: studios[0].id }) });
+  await fetch(apiBase + '/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'studio', Cookie: ck }, body: JSON.stringify({ name: 'Ailton Santos', email: 'ailton@teste.cv', password: agPw, role: 'agent', studio_id: studios[0].id }) });
   jar = {};
-  dom = await open('/admin', jar); w = dom.window; d = w.document;
+  dom = await open(adminBase + '/admin', jar); w = dom.window; d = w.document;
   await waitFor(() => d.querySelector('.login-card'), 'login agente');
   setVal(w, d.querySelector('input[type=email]'), 'ailton@teste.cv'); setVal(w, d.querySelector('input[type=password]'), agPw);
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
@@ -914,6 +915,5 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   errors.slice(0, 10).forEach((e) => console.log('   ', e));
   ok(errors.length === 0, 'nenhuma página lançou erros');
   console.log(`\n${passed} certos, ${failed} falhados`);
-  server.close();
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error('\nERRO:', e.message); errors.slice(0, 10).forEach((x) => console.log('   ', x)); process.exit(1); });

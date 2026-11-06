@@ -2,28 +2,22 @@
   "name": "studio-booking",
   "version": "1.0.0",
   "description": "Site de marcações e painel de gestão para produtor com vários estúdios",
-  "main": "backend/server.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "workspaces": ["api", "site", "admin"],
   "scripts": {
-    "start": "node --env-file-if-exists=.env backend/server.js",
-    "start:env": "node --env-file=.env backend/server.js",
-    "dev": "node --env-file-if-exists=.env --watch-path=backend/lib --watch-path=backend/routes --watch-path=backend/server.js --watch-path=integracoes --watch-path=comum/assets/js/dicionario.js backend/server.js --pagamentos-demo",
+    "start": "node --env-file-if-exists=.env dev.js",
+    "dev": "node --env-file-if-exists=.env dev.js --vigiar --pagamentos-demo",
+    "comum": "node scripts/copiar-comum.js",
+    "pretest": "node scripts/copiar-comum.js",
     "test": "node test/api.test.js && node test/integracoes.test.js",
-    "test:integracoes": "node test/integracoes.test.js",
-    "backup": "node backend/scripts/backup.js",
-    "test:frontend": "node test/frontend.test.js",
-    "testar-email": "node --env-file-if-exists=.env backend/scripts/testar-email.js"
+    "test:integracoes": "node scripts/copiar-comum.js && node test/integracoes.test.js",
+    "test:frontend": "node scripts/copiar-comum.js && node test/frontend.test.js",
+    "backup": "node api/scripts/backup.js",
+    "testar-email": "node --env-file-if-exists=.env api/scripts/testar-email.js"
   },
   "engines": {
     "node": ">=22"
-  },
-  "license": "UNLICENSED",
-  "private": true,
-  "dependencies": {
-    "@anthropic-ai/sdk": "^1.4.0",
-    "better-sqlite3": "^13.0.3",
-    "express": "^5.2.1",
-    "nodemailer": "^10.3.1",
-    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
     "jsdom": "^30.1.2"
