@@ -30,6 +30,16 @@ function criar() {
   app.get('/admin', P.pagina(__dirname, 'admin.html', { traduzida: false }));
   // Páginas do site abertas aqui: leva-as para o site.
   app.get(['/marcar', '/consultar', '/pagar', '/conta'], (req, res) => res.redirect(302, siteUrl(req) + req.originalUrl));
+  // As fotografias do topo do site, para o CMS as pré-visualizar: vêm do site
+  // (a política de segurança do painel só deixa mostrar imagens daqui).
+  app.get('/img/slides/:ficheiro', async (req, res, next) => {
+    if (!/^[\w-]+\.(jpe?g|png|webp)$/i.test(req.params.ficheiro)) return next();
+    try {
+      const r = await fetch(`${siteUrl(req)}/img/slides/${req.params.ficheiro}`);
+      if (!r.ok) return res.sendStatus(r.status === 404 ? 404 : 502);
+      res.type(r.headers.get('content-type') || 'image/jpeg').set('Cache-Control', 'no-cache').send(Buffer.from(await r.arrayBuffer()));
+    } catch (_) { res.sendStatus(502); }
+  });
 
   app.use(express.static(path.join(__dirname, 'comum', 'assets'), P.estaticos));
   app.use(express.static(path.join(__dirname, 'assets'), P.estaticos));

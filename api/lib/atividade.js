@@ -19,7 +19,7 @@ const RECURSOS = {
   services: 'um serviço', settings: 'as definições', users: 'um utilizador', geocode: 'a localização de um estúdio',
   permissions: 'uma permissão', roles: 'um papel', assignments: 'uma atribuição de papel',
   musica: 'uma música', projetos: 'um projeto', lancamentos: 'um lançamento', inscricoes: 'uma inscrição',
-  definicoes: 'as definições das integrações',
+  definicoes: 'as definições das integrações', cms: 'o conteúdo do site',
 };
 // [feito, falhado]: "Criou um estúdio" / "Falhou ao criar um estúdio".
 const VERBOS = {

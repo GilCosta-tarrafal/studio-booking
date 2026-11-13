@@ -172,31 +172,61 @@
   }
 
   // ------------------------------------------------------------ Janela: inscrições
-  function cartaoInscricao(i, aoMudar) {
+  // A mensagem com que o estúdio responde a quem foi aceite, já escrita: segue
+  // no WhatsApp e no email, e o produtor escolhe o meio mais viável.
+  function mensagemAceite(i, p) {
+    const negocio = app.settings.business_name || 'o estúdio';
+    return {
+      assunto: `A sua inscrição em "${p.titulo}" — ${negocio}`,
+      texto: `Olá ${i.nome}! Daqui fala ${negocio}. A sua inscrição em "${p.titulo}" foi aceite. `
+        + 'Gostávamos de falar consigo sobre os próximos passos. Quando lhe dá jeito?',
+    };
+  }
+
+  function cartaoInscricao(i, aoMudar, p) {
+    const msg = mensagemAceite(i, p);
+    const wa = waLink(app.settings, i.contacto);
+    const waMsg = waLink(app.settings, i.contacto, msg.texto);
+    const mail = i.email && `mailto:${i.email}?subject=${encodeURIComponent(msg.assunto)}&body=${encodeURIComponent(msg.texto + '\n\n' + (app.settings.business_name || ''))}`;
+    // Muda o estado e volta a desenhar o cartão no mesmo sítio.
+    async function mudar(novo, aviso) {
+      try {
+        await api(`/api/admin/integracoes/inscricoes/${i.id}`, { method: 'PATCH', body: { estado: novo } });
+        i.estado = novo; toast(aviso);
+        el.replaceWith(cartaoInscricao(i, aoMudar, p));
+      } catch (ex) { toast(ex.message, true); estado.value = i.estado; }
+    }
     const estado = h('select', { value: i.estado, 'aria-label': 'Estado da inscrição' },
       ESTADOS.map(([v, nome]) => h('option', { value: v }, nome)));
-    estado.addEventListener('change', async () => {
-      try { await api(`/api/admin/integracoes/inscricoes/${i.id}`, { method: 'PATCH', body: { estado: estado.value } }); toast('Estado atualizado.'); }
-      catch (ex) { toast(ex.message, true); estado.value = i.estado; }
-    });
-    const wa = waLink(app.settings, i.contacto);
+    estado.addEventListener('change', () => mudar(estado.value, 'Estado atualizado.'));
     const apagar = async () => {
       if (!window.confirm(`Eliminar a inscrição de ${i.nome}?`)) return;
       try { await api(`/api/admin/integracoes/inscricoes/${i.id}`, { method: 'DELETE' }); toast('Inscrição eliminada.'); if (aoMudar) aoMudar(); }
       catch (ex) { toast(ex.message, true); }
     };
-    return h('li', { class: 'insc' },
+    const aceite = i.estado === 'aceite';
+    const el = h('li', { class: 'insc' + (i.estado === 'novo' ? ' nova' : '') },
       h('div', { class: 'insc-head' },
         h('strong', {}, i.nome),
+        i.estado === 'novo' && h('span', { class: 'badge' }, 'Nova'),
         h('span', { class: 'insc-data' }, S.fmtDateFull(i.criado_em.slice(0, 10)))),
       h('div', { class: 'insc-contactos' },
         i.contacto && (wa ? h('a', { href: wa, target: '_blank', rel: 'noopener' }, i.contacto) : h('span', {}, i.contacto)),
         i.email && h('a', { href: 'mailto:' + i.email }, i.email),
         i.link && h('a', { href: i.link, target: '_blank', rel: 'noopener' }, 'Trabalho')),
       i.mensagem && h('p', { class: 'insc-msg' }, i.mensagem),
+      // Aceite: o produtor contacta a pessoa pelo meio que achar mais viável.
+      aceite && h('div', { class: 'insc-aceite' },
+        h('p', {}, h('strong', {}, 'Inscrição aceite.'), ` Contacte ${i.nome} pelo meio mais viável — a mensagem já vai escrita:`),
+        h('div', { class: 'insc-aceite-acoes' },
+          waMsg ? h('a', { class: 'btn btn-sm insc-wa', href: waMsg, target: '_blank', rel: 'noopener' }, 'Contactar por WhatsApp')
+            : h('span', { class: 'hint' }, 'Sem telefone.'),
+          mail ? h('a', { class: 'btn btn-sm btn-outline', href: mail }, 'Contactar por email') : h('span', { class: 'hint' }, 'Sem email.'))),
       h('div', { class: 'insc-foot' },
+        !aceite && i.estado !== 'arquivado' && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => mudar('aceite', `Inscrição de ${i.nome} aceite. Contacte-a por WhatsApp ou email.`) }, 'Aceitar'),
         h('label', { class: 'field-inline' }, 'Estado', estado),
         h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: apagar }, 'Eliminar')));
+    return el;
   }
 
   function verInscricoes(p) {
@@ -206,7 +236,7 @@
         try {
           const { inscricoes } = await api(`/api/admin/integracoes/projetos/${p.id}/inscricoes`);
           lista.replaceChildren(...(inscricoes.length
-            ? inscricoes.map((i) => cartaoInscricao(i, carregar))
+            ? inscricoes.map((i) => cartaoInscricao(i, carregar, p))
             : [h('li', { class: 'hint' }, 'Ainda ninguém manifestou interesse neste projeto.')]));
         } catch (ex) { lista.replaceChildren(h('li', { class: 'notice error' }, ex.message)); }
       };
@@ -294,7 +324,7 @@
 
   A.views.projetos = {
     title: 'Projetos',
-    async render(box) {
+    async render(box, params) {
       const recarregar = () => A.refresh();
       const gestor = ehGestor();
       const novo = gestor && h('button', { class: 'btn btn-sm', type: 'button', onclick: () => editar(null, recarregar) }, 'Novo projeto');
@@ -309,6 +339,12 @@
         return;
       }
       for (const p of projetos) box.append(cartaoProjeto(p, recarregar));
+      // Vindo do sininho (ou do email): abre logo as inscrições desse projeto.
+      const abrir = params && projetos.find((p) => String(p.id) === params.get('inscricoes'));
+      if (abrir) {
+        history.replaceState(null, '', '#/projetos');
+        verInscricoes(abrir);
+      }
     },
   };
 })();

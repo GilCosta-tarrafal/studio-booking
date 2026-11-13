@@ -34,6 +34,10 @@ function criar() {
   // Os estilos do formulário de marcação vêm do catálogo "Géneros musicais"
   // de Configurações; o estilos.js da pasta fica como reserva.
   app.get('/js/estilos.js', (req, res, next) => { req.url = req.originalUrl = '/api/public/estilos.js'; api(req, res, next); });
+  // O que o CMS do site (no painel) mudou: os textos, para o navegador, e as
+  // fotografias do topo.
+  app.get('/js/cms.js', (req, res, next) => { req.url = req.originalUrl = '/api/public/cms.js'; api(req, res, next); });
+  app.get('/css/cms.css', (req, res, next) => { req.url = req.originalUrl = '/api/public/cms.css'; api(req, res, next); });
 
   app.use(prefs.middleware);
   const aqui = (f, o) => P.pagina(__dirname, f, o);

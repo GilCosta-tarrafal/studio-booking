@@ -135,7 +135,8 @@
     for (const menu of document.querySelectorAll('.pref-menu')) {
       if (menu === menos) continue;
       menu.hidden = true;
-      menu.closest('.pref').querySelector('.pref-btn').setAttribute('aria-expanded', 'false');
+      const botao = menu.closest('.pref').querySelector('.pref-btn');
+      if (!botao.hasAttribute('data-alternar')) botao.setAttribute('aria-expanded', 'false');
     }
   }
 
@@ -147,6 +148,16 @@
       const botao = caixa.querySelector('.pref-btn');
       const menu = caixa.querySelector('.pref-menu');
       const itens = [...menu.querySelectorAll('button')];
+
+      // O tema só tem duas opções: o botão troca logo para a outra.
+      if (botao.hasAttribute('data-alternar')) {
+        botao.addEventListener('click', () => {
+          fecharTodos();
+          const outra = itens.find((i) => i.getAttribute('aria-checked') !== 'true');
+          if (outra) mudarTema(outra.dataset.tema);
+        });
+        continue;
+      }
 
       botao.addEventListener('click', () => {
         const abrir = menu.hidden;

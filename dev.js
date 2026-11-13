@@ -2,12 +2,15 @@
 // Para trabalhar no computador. Cada parte arranca no seu terminal, na sua
 // porta (mude-as no .env com SITE_PORT, ADMIN_PORT e API_PORT):
 //
-//   npm run dev:start   a API      http://localhost:3007
-//   npm run dev:site    o site     http://localhost:3005
-//   npm run dev         o painel   http://localhost:3006/admin
+//   npm run api      a API      http://localhost:3007
+//   npm run site     o site     http://localhost:3005
+//   npm run painel   o painel   http://localhost:3006/admin
+//
+// (os nomes antigos dev:start, dev:site e dev continuam a funcionar.)
+// `npm run terminais` abre os três, cada um na sua janela.
 //
 // O site e o painel precisam da API ligada. `npm start` arranca as três de
-// uma vez. Antes de arrancar, põe as cópias de comum/ em dia (ver
+// uma vez, num só terminal. Antes de arrancar, põe as cópias de comum/ em dia (ver
 // scripts/copiar-comum.js).
 //
 // Com --vigiar, reinicia sozinho quando muda um .js da parte ou de comum/.
@@ -32,6 +35,13 @@ if (escolha && !PARTES[escolha]) {
   process.exit(1);
 }
 const partes = escolha ? [escolha] : Object.keys(PARTES);
+const NOMES = { api: 'API', site: 'Site', painel: 'Painel' };
+
+// Com uma parte só, o separador do terminal leva o nome dela, para não se
+// confundir com os outros terminais abertos.
+if (escolha && process.stdout.isTTY) {
+  process.stdout.write(`]0;${NOMES[escolha]} (porta ${PARTES[escolha].porta()})`);
+}
 
 if (process.argv.includes('--vigiar') && !process.env.DEV_FILHO) {
   const { spawn } = require('child_process');
@@ -67,7 +77,10 @@ require('./scripts/copiar-comum').sincronizar();
 process.env.API_URL = process.env.API_URL || `http://127.0.0.1:${PARTES.api.porta()}`;
 
 console.log('');
+if (escolha) console.log(`  ── ${NOMES[escolha].toUpperCase()} ── só esta parte corre neste terminal
+`);
 if (partes.includes('api')) require('./api/server').start(PARTES.api.porta());
 if (partes.includes('site')) require('./site/server').start(PARTES.site.porta());
 if (partes.includes('painel')) require('./admin/server').start(PARTES.painel.porta());
-if (escolha && escolha !== 'api') console.log(`  (a API tem de estar ligada: npm run dev:start, em ${process.env.API_URL})`);
+if (escolha && escolha !== 'api') console.log(`
+  (a API tem de estar ligada noutro terminal: npm run api, em ${process.env.API_URL})`);

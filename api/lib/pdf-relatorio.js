@@ -40,15 +40,12 @@ const COLUNAS = (cur) => [
   ['ESTADO', 0.085, 'left', (b) => STATUS_PT[b.status] || b.status],
 ];
 
-// d: resultado de computeReport; ctx: { business, estudio, periodo, geradoEm, dominio, cur }
-function gerar(res, d, ctx) {
-  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 36, bottom: 60, left: 40, right: 40 }, bufferPages: true, info: { Title: 'Folha de Marcações' } });
-  doc.pipe(res);
+// Cabeçalho comum aos PDFs de listas (este e o de clientes): logótipo, nome e
+// frase do negócio à esquerda, dados do estúdio à direita. Devolve o y onde
+// o conteúdo pode começar.
+function cabecalhoDoc(doc, ctx) {
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
-  const fundo = () => doc.page.height - doc.page.margins.bottom;
-  const biz = ctx.business || {}, st = ctx.estudio || {}, cur = ctx.cur || '';
-
-  // -------------------------------------------------- Cabeçalho
+  const biz = ctx.business || {}, st = ctx.estudio || {};
   let y = doc.page.margins.top;
   let yEsq = y;
   try { doc.image(LOGO, L, y, { fit: [64, 48] }); yEsq = y + 54; } catch (_) { /* segue sem logótipo */ }
@@ -65,6 +62,37 @@ function gerar(res, d, ctx) {
   }
   y = Math.max(fimEsq, doc.y) + 12;
   doc.moveTo(L, y).lineTo(R, y).lineWidth(0.7).strokeColor(COR.linha).stroke();
+  return y;
+}
+
+// Rodapé em todas as páginas: a origem do documento e o número da página.
+function rodapeDoc(doc, ctx) {
+  const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
+  const biz = ctx.business || {};
+  const plataforma = `Documento extraído da plataforma ${biz.business_name || ''}`
+    + `${ctx.dominio ? ' (' + ctx.dominio + ')' : ''} — gerado em ${ctx.geradoEm}`;
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    // Sem margem de baixo, o rodapé (desenhado nessa zona) não abre páginas novas.
+    doc.page.margins.bottom = 0;
+    const fy = doc.page.height - 44;
+    doc.moveTo(L, fy).lineTo(R, fy).lineWidth(0.6).strokeColor(COR.linha).stroke();
+    doc.font('Helvetica').fontSize(7.5).fillColor(COR.suave)
+      .text(plataforma, L, fy + 8, { width: W - 100, align: 'left', lineBreak: false })
+      .text(`Página ${i + 1} de ${range.count}`, R - 100, fy + 8, { width: 100, align: 'right', lineBreak: false });
+  }
+}
+
+// d: resultado de computeReport; ctx: { business, estudio, periodo, geradoEm, dominio, cur }
+function gerar(res, d, ctx) {
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 36, bottom: 60, left: 40, right: 40 }, bufferPages: true, info: { Title: 'Folha de Marcações' } });
+  doc.pipe(res);
+  const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
+  const fundo = () => doc.page.height - doc.page.margins.bottom;
+  const cur = ctx.cur || '';
+
+  let y = cabecalhoDoc(doc, ctx);
 
   // -------------------------------------------------- Título
   y += 14;
@@ -130,21 +158,8 @@ function gerar(res, d, ctx) {
     y += altoT;
   }
 
-  // -------------------------------------------------- Rodapé (todas as páginas)
-  const plataforma = `Documento extraído da plataforma ${biz.business_name || ''}`
-    + `${ctx.dominio ? ' (' + ctx.dominio + ')' : ''} — gerado em ${ctx.geradoEm}`;
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(range.start + i);
-    // Sem margem de baixo, o rodapé (desenhado nessa zona) não abre páginas novas.
-    doc.page.margins.bottom = 0;
-    const fy = doc.page.height - 44;
-    doc.moveTo(L, fy).lineTo(R, fy).lineWidth(0.6).strokeColor(COR.linha).stroke();
-    doc.font('Helvetica').fontSize(7.5).fillColor(COR.suave)
-      .text(plataforma, L, fy + 8, { width: W - 100, align: 'left', lineBreak: false })
-      .text(`Página ${i + 1} de ${range.count}`, R - 100, fy + 8, { width: 100, align: 'right', lineBreak: false });
-  }
+  rodapeDoc(doc, ctx);
   doc.end();
 }
 
-module.exports = { gerar };
+module.exports = { gerar, cabecalhoDoc, rodapeDoc, COR, dinheiro, ddmmaaaa };

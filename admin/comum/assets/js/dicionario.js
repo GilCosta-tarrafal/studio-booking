@@ -122,6 +122,9 @@
     'projetos.form.obrigadoTexto': 'O seu pedido foi enviado e vai ser analisado. Em breve receberá uma resposta.',
     'projetos.form.erroNome': 'Indica o teu nome.',
     'projetos.form.erroContacto': 'Deixa um contacto: telefone/WhatsApp ou email.',
+    'projetos.form.erroTelefone': 'Indica o teu telefone ou WhatsApp.',
+    'projetos.form.erroEmail': 'Indica o teu email.',
+    'projetos.form.talentosInfo': 'Só precisamos do teu nome e dos teus contactos. Se a tua inscrição for aceite, o estúdio fala contigo por WhatsApp ou email.',
 
     // ---- Serviços e "Como funciona" ----
     'servicos.titulo': 'Serviços',
@@ -561,6 +564,9 @@
     'projetos.form.obrigadoTexto': 'Your request has been sent and will be reviewed. You will receive a reply soon.',
     'projetos.form.erroNome': 'Please enter your name.',
     'projetos.form.erroContacto': 'Leave a contact: phone/WhatsApp or email.',
+    'projetos.form.erroTelefone': 'Please enter your phone or WhatsApp number.',
+    'projetos.form.erroEmail': 'Please enter your email.',
+    'projetos.form.talentosInfo': 'We only need your name and contact details. If your application is accepted, the studio will get in touch by WhatsApp or email.',
 
     'servicos.titulo': 'Services',
     'servicos.distancia': 'Can be done remotely',
@@ -987,6 +993,9 @@
     'projetos.form.obrigadoTexto': 'Votre demande a été envoyée et va être étudiée. Vous recevrez une réponse très bientôt.',
     'projetos.form.erroNome': 'Indiquez votre nom.',
     'projetos.form.erroContacto': 'Laissez un contact : téléphone/WhatsApp ou e-mail.',
+    'projetos.form.erroTelefone': 'Indiquez votre téléphone ou WhatsApp.',
+    'projetos.form.erroEmail': 'Indiquez votre e-mail.',
+    'projetos.form.talentosInfo': 'Nous avons seulement besoin de votre nom et de vos coordonnées. Si votre candidature est acceptée, le studio vous contactera par WhatsApp ou e-mail.',
 
     'servicos.titulo': 'Services',
     'servicos.distancia': 'Possible à distance',

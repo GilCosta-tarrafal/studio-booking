@@ -706,6 +706,51 @@ function futureWeekday(offset = 3) {
   res = await fetch(siteBase + '/inexistente', { headers: { Cookie: 'lingua=fr' } });
   ok((await res.text()).includes('Page introuvable'), 'página 404 traduzida');
 
+  // CMS do site: textos, secções e fotografias mudados no painel.
+  console.log('\nCMS do site');
+  r = await call('GET', '/api/admin/cms');
+  ok(r.status === 401, 'o CMS exige sessão');
+  r = await call('GET', '/api/admin/cms', { cookie: ckDono });
+  ok(r.status === 200 && r.json.grupos.some((g) => g.campos.some((c) => c.chave === 'inicio.h1' && c.origem.en === 'Studio time, booked in minutes.')),
+    'o painel recebe os campos com o texto de origem em cada língua');
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: {
+    textos: { 'inicio.h1': { pt: 'Grave connosco <hoje>', en: '', fr: 'Enregistrez avec nous' }, 'chave.inventada': { pt: 'x' } },
+    secoes: { como: false },
+  } });
+  ok(r.status === 200 && !r.json.cms.textos['chave.inventada'] && !('en' in r.json.cms.textos['inicio.h1']), 'guarda só chaves conhecidas e tira as caixas vazias');
+  html = await pagina('/');
+  ok(html.includes('Grave connosco &lt;hoje&gt;') && !html.includes('Tempo de estúdio, marcado em minutos.'), 'a página portuguesa mostra o texto mudado (escapado)');
+  ok(/<body[^>]*data-ocultar="como"/.test(html), 'a secção desligada fica marcada para o CSS a esconder');
+  ok((await pagina('/', 'fr')).includes('Enregistrez avec nous'), 'o texto mudado em francês aparece em francês');
+  ok((await pagina('/', 'en')).includes('Studio time, booked in minutes.'), 'sem texto em inglês, fica o de origem');
+  res = await fetch(siteBase + '/js/cms.js');
+  ok(res.status === 200 && (await res.text()).includes('Grave connosco <hoje>'), 'o site serve os textos ao navegador (troca de língua)');
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { imagens: { slides: ['/img/x.jpg");}*{color:red', '', ''] } } });
+  ok(r.status === 400, 'uma imagem que não é do site nem um link é recusada');
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { textos: {}, secoes: {} } });
+  ok(r.status === 200 && (await pagina('/')).includes('Tempo de estúdio, marcado em minutos.'), 'repor devolve o texto de origem');
+
+  // Secções novas: criadas no painel, desenhadas no site por /js/secoes-cms.js.
+  const secaoNova = { titulo: { pt: 'Aulas de produção', en: 'Production lessons' }, texto: { pt: 'Linha 1\n\n\n\nLinha 2' }, botao: { pt: 'Saber mais' }, link: '/marcar', depois: 'topo' };
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { extras: [secaoNova, { titulo: { pt: 'Escondida' }, visivel: false }] } });
+  ok(r.status === 200 && r.json.cms.extras.length === 2 && /^[a-f0-9]{12}$/.test(r.json.cms.extras[0].id) && r.json.cms.extras[0].texto.pt === 'Linha 1\n\nLinha 2',
+    'secção nova guardada com identificador e parágrafos arrumados');
+  res = await fetch(siteBase + '/js/cms.js');
+  let cmsJs = await res.text();
+  ok(cmsJs.includes('Aulas de produção') && !cmsJs.includes('Escondida'), 'o site recebe só as secções novas visíveis');
+  for (const link of ['javascript:alert(1)', '//outro-site.cv', 'mailto:x@y.cv']) {
+    r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { extras: [{ ...secaoNova, link }] } });
+    ok(r.status === 400, `link do botão recusado: ${link}`);
+  }
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { extras: [{ titulo: { en: 'Only English' } }] } });
+  ok(r.status === 400, 'uma secção sem título nem texto em português é recusada');
+  r = await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { extras: [{ titulo: { pt: '</script><script>alert(1)</script>' } }] } });
+  cmsJs = await (await fetch(siteBase + '/js/cms.js')).text();
+  ok(r.status === 200 && !cmsJs.includes('</script>'), 'o texto de uma secção não fecha o script do site');
+  res = await fetch(siteBase + '/js/secoes-cms.js');
+  ok(res.status === 200, 'o site serve o desenho das secções novas');
+  await call('PUT', '/api/admin/cms', { cookie: ckDono, body: { extras: [] } });
+
   // O que o dono escreve no painel (serviços, salas, estúdios, frase, termos)
   // também tem versão em inglês e francês; sem ela, fica o português.
   console.log('\nConteúdo traduzido');
@@ -875,6 +920,15 @@ function futureWeekday(offset = 3) {
   ok(pdf.status === 200 && pdf.headers.get('content-type') === 'application/pdf' && txtPdf.startsWith('%PDF'), 'o relatório descarrega-se em PDF');
   ok(/\/MediaBox \[0 0 841\.89 595\.28\]/.test(txtPdf), 'o relatório vem em A4 deitado');
   ok(/relatorio-inicio_a_hoje\.pdf/.test(pdf.headers.get('content-disposition') || ''), 'o ficheiro do relatório tem o período no nome');
+  // Lista de clientes em PDF, com a pesquisa do ecrã.
+  pdf = await fetch(base + '/api/admin/clients.pdf', { headers: { Cookie: dono } });
+  bytes = Buffer.from(await pdf.arrayBuffer());
+  ok(pdf.status === 200 && pdf.headers.get('content-type') === 'application/pdf' && bytes.toString('latin1').startsWith('%PDF'), 'a lista de clientes descarrega-se em PDF');
+  ok(/clientes-\d{4}-\d{2}-\d{2}\.pdf/.test(pdf.headers.get('content-disposition') || ''), 'o PDF dos clientes tem a data no nome');
+  pdf = await fetch(base + '/api/admin/clients.pdf?q=' + encodeURIComponent('ninguém-assim'), { headers: { Cookie: dono } });
+  ok(pdf.status === 200 && Buffer.from(await pdf.arrayBuffer()).toString('latin1').startsWith('%PDF'), 'uma pesquisa sem resultados também dá PDF');
+  pdf = await fetch(base + '/api/admin/clients.pdf');
+  ok(pdf.status === 401, 'sem sessão, não há lista de clientes em PDF');
   // Faturas internas: o IVA vem da localização do estúdio; numeração seguida
   // por série do ano; uma fatura em vigor por marcação; anular não liberta o número.
   console.log('\nIVA pela localização e faturas');
@@ -1048,6 +1102,22 @@ function futureWeekday(offset = 3) {
   ok(noSiteW && noSiteW.tipo_nome === 'Workshop' && noSiteW.aberto, 'no site aparece com o nome "Workshop" e aceita inscrições');
   r = await call('POST', `/api/integracoes/projetos/${projW.id}/interesse`, { body: { nome: 'Rui', email: 'rui@x.cv' } });
   ok(r.status === 200 || r.status === 201, 'e recebe inscrições');
+  // Campanha de talentos: só nome, telefone/WhatsApp e email; a equipa é avisada no sininho.
+  r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: { tipo: 'talentos', titulo: 'Talentos 2026', aberto: true } });
+  const projT = r.json.projeto;
+  r = await call('POST', `/api/integracoes/projetos/${projT.id}/interesse`, { body: { nome: 'Lia', email: 'lia@x.cv' } });
+  ok(r.status === 400 && /telefone/i.test(r.json.error), 'campanha de talentos: sem telefone a inscrição é recusada');
+  r = await call('POST', `/api/integracoes/projetos/${projT.id}/interesse`, { body: { nome: 'Lia', contacto: '9912345' } });
+  ok(r.status === 400 && /email/i.test(r.json.error), 'campanha de talentos: sem email também');
+  r = await call('POST', `/api/integracoes/projetos/${projT.id}/interesse`, { body: { nome: 'Lia', contacto: '9912345', email: 'lia@x.cv', link: 'https://x.cv/demo', mensagem: 'Olá' } });
+  ok(r.status === 200, 'campanha de talentos: com nome, telefone e email a inscrição entra');
+  const inscT = (await call('GET', `/api/admin/integracoes/projetos/${projT.id}/inscricoes`, { cookie: dono })).json.inscricoes[0];
+  ok(inscT && inscT.estado === 'novo' && inscT.link === '' && inscT.mensagem === '', 'na campanha de talentos não se guardam link nem mensagem');
+  const notifT = (await call('GET', '/api/admin/notificacoes', { cookie: dono })).json.items.find((n) => n.id === 'insc-' + inscT.id);
+  ok(notifT && notifT.unread && /Lia/.test(notifT.text) && notifT.href === '#/projetos?inscricoes=' + projT.id, 'a inscrição nova aparece no sininho e leva às inscrições do projeto');
+  r = await call('PATCH', `/api/admin/integracoes/inscricoes/${inscT.id}`, { cookie: dono, body: { estado: 'aceite' } });
+  ok(r.status === 200 && !(await call('GET', '/api/admin/notificacoes', { cookie: dono })).json.items.some((n) => n.id === 'insc-' + inscT.id), 'aceite, deixa de aparecer no sininho');
+  await call('DELETE', `/api/admin/integracoes/projetos/${projT.id}`, { cookie: dono });
   r = await call('DELETE', `/api/admin/catalogos/tipos_participa/${idWorkshop}`, { cookie: dono });
   ok(r.status === 409 && /1 projeto/.test(r.json.error), 'um tipo em uso não se apaga (desativa-se)');
   r = await call('POST', '/api/admin/integracoes/projetos', { cookie: dono, body: { tipo: 'INVENTADO', titulo: 'X' } });

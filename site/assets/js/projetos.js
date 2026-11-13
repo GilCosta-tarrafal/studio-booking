@@ -141,10 +141,14 @@
       ];
     }
 
+    // Numa campanha de talentos pede-se só o essencial: o nome, o telefone/WhatsApp
+    // e o email (os dois obrigatórios), para o estúdio responder por onde achar
+    // melhor. Nos outros projetos há também o link do trabalho e a mensagem.
     function verFormulario() {
+      const talentos = p.tipo === 'talentos';
       const nome = h('input', { type: 'text', maxlength: 80, required: true, autocomplete: 'name' });
-      const contacto = h('input', { type: 'tel', maxlength: 40, autocomplete: 'tel' });
-      const email = h('input', { type: 'email', maxlength: 120, autocomplete: 'email' });
+      const contacto = h('input', { type: 'tel', maxlength: 40, autocomplete: 'tel', required: talentos });
+      const email = h('input', { type: 'email', maxlength: 120, autocomplete: 'email', required: talentos });
       const link = h('input', { type: 'url', maxlength: 1000, placeholder: 'https://…' });
       const mensagem = h('textarea', { maxlength: 1000, rows: 3 });
       const err = h('p', { class: 'proj-erro', role: 'alert', hidden: true });
@@ -153,25 +157,30 @@
         h('span', {}, rotulo, opcional && h('span', { class: 'proj-opc' }, ' ' + t('campo.opcional'))), control);
       const enviar = h('button', { class: 'btn btn-amber', type: 'submit' }, t('projetos.form.enviar'));
       const voltar = h('button', { class: 'btn btn-outline', type: 'button', onclick: verDetalhe }, t('projetos.voltar'));
-      const form = h('form', { class: 'proj-form' },
+      const form = h('form', { class: 'proj-form', novalidate: true },
+        talentos && h('p', { class: 'proj-info' }, t('projetos.form.talentosInfo')),
         campo(t('projetos.form.nome'), nome),
-        campo(t('projetos.form.contacto'), contacto, true),
-        campo(t('projetos.form.email'), email, true),
-        campo(t('projetos.form.link'), link, true),
-        campo(t('projetos.form.mensagem'), mensagem, true),
+        campo(t('projetos.form.contacto'), contacto, !talentos),
+        campo(t('projetos.form.email'), email, !talentos),
+        !talentos && campo(t('projetos.form.link'), link, true),
+        !talentos && campo(t('projetos.form.mensagem'), mensagem, true),
         err,
         h('div', { class: 'proj-form-foot' }, voltar, enviar));
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         err.hidden = true;
         if (!nome.value.trim()) return falha(t('projetos.form.erroNome'));
+        if (talentos && !contacto.value.trim()) return falha(t('projetos.form.erroTelefone'));
+        if (talentos && !email.value.trim()) return falha(t('projetos.form.erroEmail'));
         if (!contacto.value.trim() && !email.value.trim()) return falha(t('projetos.form.erroContacto'));
         enviar.disabled = true;
         enviar.textContent = t('projetos.form.aEnviar');
         try {
           await api(`/api/integracoes/projetos/${p.id}/interesse`, {
             method: 'POST',
-            body: { nome: nome.value, contacto: contacto.value, email: email.value, link: link.value, mensagem: mensagem.value },
+            body: talentos
+              ? { nome: nome.value, contacto: contacto.value, email: email.value }
+              : { nome: nome.value, contacto: contacto.value, email: email.value, link: link.value, mensagem: mensagem.value },
           });
           for (const r of meus) clearInterval(r);
           pôr(h('div', { class: 'proj-feito', role: 'status' },

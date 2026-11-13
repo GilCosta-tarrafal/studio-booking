@@ -248,6 +248,7 @@
       const donutBox = h('div', {});
       const tituloDonut = h('h2', {}, 'Faturação por serviço');
       const tabela = h('tbody');
+      const totais = h('tfoot');
       const controlos = h('div', { class: 'dv-controls' });
 
       const visiveis = () => todos.slice(-est.meses);
@@ -267,8 +268,24 @@
         chipMes.textContent = mesLongo(est.sel);
         fluxo(grafBox, vis, { modo: est.modo, selIdx, animar, aoEscolher: (i) => { est.sel = vis[i].month; desenhar(false); } });
         donutBox.replaceChildren(donut(m, corDe));
-        tabela.replaceChildren(...vis.map((x) => h('tr', { class: x.month === est.sel ? 'sel' : '' },
-          h('td', {}, mesLongo(x.month)), h('td', {}, money(x.billed, cur())), h('td', {}, money(x.received, cur())), h('td', {}, String(x.sessions)))));
+        // Os zeros ficam apagados, para os meses com movimento saltarem à vista;
+        // por baixo do recebido, uma barra mostra quanto do faturado já entrou.
+        const num = (v, txt) => h('td', { class: 'n' + (v ? '' : ' zero') }, txt);
+        const parte = (x) => (x.billed ? Math.min(100, Math.round(x.received / x.billed * 100)) : 0);
+        const recebido = (x) => h('td', { class: 'n' + (x.received ? '' : ' zero') },
+          h('span', {}, money(x.received, cur())),
+          x.billed ? h('span', { class: 'dv-pct', title: parte(x) + '% do faturado' },
+            h('span', { class: 'dv-pct-bar c3' }, h('span', { style: 'width:' + parte(x) + '%' })), parte(x) + '%') : null);
+        tabela.replaceChildren(...vis.map((x) => h('tr', {
+          class: x.month === est.sel ? 'sel' : '', tabindex: '0', title: 'Ver ' + mesLongo(x.month) + ' no gráfico',
+          onclick: () => { est.sel = x.month; desenhar(false); },
+          onkeydown: (e) => { if (e.key === 'Enter') { est.sel = x.month; desenhar(false); } },
+        },
+          h('td', {}, mesLongo(x.month)), num(x.billed, money(x.billed, cur())), recebido(x), num(x.sessions, String(x.sessions)))));
+        const soma = (k) => vis.reduce((t, x) => t + (x[k] || 0), 0);
+        const tot = { billed: soma('billed'), received: soma('received'), sessions: soma('sessions') };
+        totais.replaceChildren(h('tr', {},
+          h('td', {}, 'Total (' + vis.length + ' meses)'), num(tot.billed, money(tot.billed, cur())), recebido(tot), num(tot.sessions, String(tot.sessions))));
         controlos.replaceChildren(
           segmentado('Tipo de gráfico', [['barras', 'Barras', '▮▮'], ['linha', 'Linha', '⟋'], ['area', 'Área', '◭']], est.modo, (v) => { est.modo = v; guardar(); desenhar(true); }),
           segmentado('Período', [[3, '3 meses'], [6, '6 meses'], [12, 'Ano']], est.meses, (v) => {
@@ -293,9 +310,12 @@
               grafBox,
               h('details', { class: 'dv-table' },
                 h('summary', {}, 'Ver os números em tabela'),
-                h('div', { class: 'table-wrap' }, h('table', {},
-                  h('thead', {}, h('tr', {}, h('th', {}, 'Mês'), h('th', {}, 'Faturado'), h('th', {}, 'Recebido'), h('th', {}, 'Sessões'))),
-                  tabela)))),
+                h('div', { class: 'table-wrap' }, h('table', { class: 'dv-nums' },
+                  h('thead', {}, h('tr', {}, h('th', {}, 'Mês'),
+                    h('th', { class: 'n' }, h('span', { class: 'dv-dot c1' }), 'Faturado'),
+                    h('th', { class: 'n' }, h('span', { class: 'dv-dot c3' }), 'Recebido'),
+                    h('th', { class: 'n' }, 'Sessões'))),
+                  tabela, totais)))),
             h('section', { class: 'dv-card dv-side', 'aria-label': 'Faturação por serviço' }, tituloDonut, donutBox)),
           h('h2', { class: 'dv-sub' }, 'Agenda'),
           h('div', { class: 'kpis dv-agenda' },

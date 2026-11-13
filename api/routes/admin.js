@@ -326,6 +326,22 @@ router.get('/notificacoes', (req, res) => {
     });
   }
 
+  // Inscrições por ver nos projetos ("Participa" do site), dos últimos 30 dias.
+  // Os projetos são da gestão geral: um agente de estúdio não os vê.
+  if (!scope) {
+    const inscricoes = db.prepare(
+      `SELECT i.id, i.nome, i.criado_em, p.id projeto_id, p.titulo, p.tipo
+         FROM int_inscricoes i JOIN int_projetos p ON p.id=i.projeto_id
+        WHERE i.estado='novo' AND i.criado_em>=? ORDER BY i.criado_em DESC LIMIT 15`
+    ).all(new Date(Date.now() - 30 * 86400000).toISOString());
+    for (const i of inscricoes) {
+      itens.push({
+        id: 'insc-' + i.id, kind: 'inscricao', title: i.tipo === 'talentos' ? 'Nova inscrição na campanha de talentos' : 'Nova inscrição num projeto',
+        text: `${i.nome} · ${i.titulo}`, at: i.criado_em, href: '#/projetos?inscricoes=' + i.projeto_id,
+      });
+    }
+  }
+
   const tentativas = db.prepare(
     `SELECT id, ip, created_at FROM user_activity
       WHERE user_id=? AND action='Tentativa de login falhada' AND created_at>=? ORDER BY id DESC LIMIT 5`
@@ -753,7 +769,9 @@ router.delete('/services/:id', auth.requireManager, (req, res) => {
 
 // ------------------------------------------------------------ Clientes
 
-router.get('/clients', (req, res) => {
+// A lista de clientes, juntada a partir das marcações (um cliente = o mesmo
+// telefone, ou o mesmo nome quando não há telefone).
+function listarClientes(req) {
   const scope = scopeStudio(req);
   const rows = db.prepare(
     `SELECT b.client_name, b.client_phone, b.client_email, b.date, ${pb('b.paid')} paid, ${pb('b.price')} price FROM bookings b`
@@ -771,7 +789,28 @@ router.get('/clients', (req, res) => {
     if (r.date > c.last) c.last = r.date;
     map.set(key, c);
   }
-  res.json({ clients: [...map.values()].sort((a, b) => (a.last < b.last ? 1 : -1)) });
+  return [...map.values()].sort((a, b) => (a.last < b.last ? 1 : -1));
+}
+
+router.get('/clients', (req, res) => res.json({ clients: listarClientes(req) }));
+
+// A mesma lista em PDF. ?q= aplica a pesquisa do ecrã (nome, telefone ou email).
+router.get('/clients.pdf', (req, res) => {
+  const pesquisa = String(req.query.q || '').trim().slice(0, 80);
+  const term = pesquisa.toLowerCase();
+  const clientes = listarClientes(req).filter((c) => !term || `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(term));
+  const settings = getSettings();
+  const scope = scopeStudio(req);
+  const estudio = scope
+    ? db.prepare('SELECT * FROM studios WHERE id=?').get(scope)
+    : db.prepare('SELECT * FROM studios ORDER BY sort, id LIMIT 1').get();
+  const geradoEm = new Intl.DateTimeFormat('pt-PT', {
+    timeZone: U.TZ, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(new Date());
+  const dominio = settings.email && settings.email.includes('@') ? settings.email.split('@')[1] : '';
+  res.setHeader('Content-Disposition', `attachment; filename="clientes-${U.nowLocal().date}.pdf"`);
+  res.setHeader('Content-Type', 'application/pdf');
+  require('../lib/pdf-clientes').gerar(res, clientes, { business: settings, estudio, geradoEm, dominio, cur: settings.currency, pesquisa });
 });
 
 // ------------------------------------------------------------ Definições

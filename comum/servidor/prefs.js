@@ -86,8 +86,10 @@ const VISTO = svg(['m5 12.6 4.4 4.4L19 7.4'], 'pref-visto');
 // ---- Os dois botões do cabeçalho ----------------------------------------
 // "marca" é o que vai à esquerda de cada linha da lista: as línguas levam a
 // sigla (PT, EN, FR), os temas levam o desenho do sol ou da lua. "curto" é o
-// que fica escrito no botão fechado.
-function menu(id, rotulo, atributo, icone, valor, opcoes) {
+// que fica escrito no botão fechado. "alternar": com só duas opções (o tema),
+// o botão troca logo para a outra em vez de abrir a lista — a lista fica no
+// HTML, escondida, porque é dela que saem os nomes e os desenhos.
+function menu(id, rotulo, atributo, icone, valor, opcoes, alternar = false) {
   const itens = opcoes.map((o) => {
     const ativa = o.valor === valor;
     return `<li role="none"><button type="button" role="menuitemradio" aria-checked="${ativa}"`
@@ -97,9 +99,10 @@ function menu(id, rotulo, atributo, icone, valor, opcoes) {
 
   const atual = opcoes.find((o) => o.valor === valor) || opcoes[0];
   return `<div class="pref">`
-    + `<button type="button" class="pref-btn" id="${id}-btn" aria-haspopup="true" aria-expanded="false"`
-    + ` aria-controls="${id}-menu" aria-label="${esc(rotulo)}: ${esc(atual.nome)}">`
-    + icone + `<span class="pref-val">${esc(atual.curto || atual.nome)}</span>` + SETA + `</button>`
+    + `<button type="button" class="pref-btn" id="${id}-btn"`
+    + (alternar ? ' data-alternar' : ` aria-haspopup="true" aria-expanded="false" aria-controls="${id}-menu"`)
+    + ` aria-label="${esc(rotulo)}: ${esc(atual.nome)}">`
+    + icone + `<span class="pref-val">${esc(atual.curto || atual.nome)}</span>` + (alternar ? '' : SETA) + `</button>`
     + `<ul class="pref-menu" id="${id}-menu" role="menu" aria-label="${esc(rotulo)}" hidden>${itens}</ul>`
     + `</div>`;
 }
@@ -136,7 +139,7 @@ function html(lingua, tema, moeda) {
   }
   return `<div class="prefs"${dados}>`
     + menu('pref-lingua', t('prefs.lingua'), 'lingua', GLOBO, lingua, linguas)
-    + menu('pref-tema', t('prefs.tema'), 'tema', tema === 'claro' ? SOL : LUA, tema, temas)
+    + menu('pref-tema', t('prefs.tema'), 'tema', tema === 'claro' ? SOL : LUA, tema, temas, true)
     + '</div>';
 }
 

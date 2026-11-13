@@ -2,56 +2,79 @@
    (base.css / site.css); aqui fica só o que é próprio desta página. */
 
 .conta-main {
-  max-width: 34rem;
+  max-width: 30rem;
   padding-top: calc(var(--altura-cabecalho, 5rem) + 2rem);
   padding-bottom: 4rem;
 }
+.conta-main > h1 { font: 800 clamp(2rem, 4.5vw, 2.6rem)/1.05 var(--display); letter-spacing: -.02em; margin: 0 0 10px; }
+.conta-main > .lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 8px; }
 
+/* O cartão usa as cores do tema em uso: claro no claro, escuro no escuro. */
 .conta-cartao {
-  background: var(--superficie, #15161b);
-  border: 1px solid var(--linha, rgba(255, 255, 255, .12));
-  border-radius: 1rem;
-  padding: 1.5rem;
-  margin-top: 1.25rem;
+  --cartao-sombra: 0 24px 60px rgba(0, 0, 0, .45), 0 2px 6px rgba(0, 0, 0, .3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px;
+  margin-top: 1.5rem;
+  box-shadow: var(--cartao-sombra);
 }
+:root[data-tema="claro"] .conta-cartao { --cartao-sombra: 0 24px 60px rgba(22, 24, 26, .1), 0 2px 6px rgba(22, 24, 26, .06); background: #fff; }
+@media (max-width: 480px) { .conta-cartao { padding: 20px; border-radius: 14px; } }
 
+/* Abas como um interruptor de duas posições: a escolhida "levanta". */
 .conta-abas {
-  display: flex;
-  gap: .5rem;
-  margin-bottom: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 24px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
-
 .conta-aba {
-  flex: 1;
-  padding: .6rem .5rem;
-  border: 1px solid var(--linha, rgba(255, 255, 255, .12));
-  border-radius: .6rem;
+  min-height: 42px;
+  padding: 0 .75rem;
+  border: 0;
+  border-radius: 9px;
   background: transparent;
-  color: inherit;
-  font: inherit;
+  color: var(--muted);
+  font: 600 .95rem/1.2 var(--body);
   cursor: pointer;
+  transition: background-color .15s, color .15s, box-shadow .15s;
 }
-
+.conta-aba:hover { color: var(--ink); }
 .conta-aba[aria-selected="true"] {
-  background: var(--acento, #e8b64a);
-  color: #1a1304;
-  border-color: transparent;
-  font-weight: 600;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 1px var(--line);
 }
+:root[data-tema="claro"] .conta-aba[aria-selected="true"] { background: #fff; box-shadow: 0 1px 3px rgba(22, 24, 26, .12), 0 0 0 1px var(--line); }
 
+.conta-form h2 { font: 700 1.3rem/1.2 var(--display); margin: 0 0 6px; }
+.conta-form > .hint { margin-bottom: 18px; }
 .conta-form .field,
-.conta-form .field-row { margin-bottom: 1rem; }
-.conta-form .submit-row { margin-top: 1.25rem; }
+.conta-form .field-row { margin-bottom: 18px; }
+.conta-form .field > label { font-size: .9rem; }
+.conta-form input { border-radius: 10px; min-height: 48px; }
+.conta-form .submit-row { margin: 24px 0 0; }
+/* O botão principal ocupa a largura do cartão: é a única ação do formulário. */
+#formularios .submit-row .btn { width: 100%; min-height: 50px; border-radius: 10px; }
 
 .link-botao {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--acento, #e8b64a);
-  font: inherit;
+  color: var(--muted);
+  font: 500 .92rem var(--body);
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--edge);
 }
+.link-botao:hover { color: var(--ink); text-decoration-color: currentColor; }
+.conta-form > p:has(> .link-botao) { margin: 16px 0 0; text-align: center; }
 
 /* Campo de palavra-passe com botão de olho para a ver enquanto se escreve. */
 .pw-wrap { position: relative; display: block; }

@@ -205,6 +205,29 @@ body { padding-top: var(--altura-cabecalho); }
   object-fit: cover; object-position: center 40%;
 }
 
+/* Secções escondidas no CMS do site (o servidor marca-as no <body>). */
+[data-ocultar~="novidades"] #novidades,
+[data-ocultar~="destaques"] #destaques, [data-ocultar~="destaques"] [data-secao="destaques"],
+[data-ocultar~="projetos"] #projetos,
+[data-ocultar~="faixa"] .faixa-foto,
+[data-ocultar~="servicos"] #servicos, [data-ocultar~="servicos"] [data-secao="servicos"],
+[data-ocultar~="servicos"] .footer-links a[href="/#servicos"],
+[data-ocultar~="como"] #como { display: none !important; }
+
+/* Secções novas criadas no CMS do site (desenhadas em /js/secoes-cms.js):
+   texto e botão, com a imagem ao lado quando a há. */
+.secao-cms { --de: #2A2A2A; --ate: #2A2A2A; }
+:root[data-tema="claro"] .secao-cms { --de: #F7F8F8; --ate: #F7F8F8; }
+.secao-cms-grelha { display: grid; gap: 28px 48px; align-items: center; }
+.secao-cms-grelha.com-imagem { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.secao-cms-texto h2 { margin-top: 0; }
+.secao-cms-texto p { color: var(--muted); max-width: 62ch; white-space: pre-line; }
+.secao-cms-texto .btn { margin-top: 8px; }
+.secao-cms img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 16px; }
+@media (max-width: 760px) {
+  .secao-cms-grelha.com-imagem { grid-template-columns: 1fr; }
+}
+
 /* ---------- Novidades (lançamentos) ---------- */
 .promo { position: relative; }
 .promo-janela { overflow: hidden; border-radius: 18px; border: 1px solid rgba(128, 128, 128, .22); }
@@ -859,6 +882,7 @@ body { padding-top: var(--altura-cabecalho); }
 .proj-dlg-head h3 { font: 800 1.5rem/1.15 var(--display); letter-spacing: -.02em; margin: 8px 0 0; }
 .proj-dlg-sub { color: var(--muted); margin: 6px 0 16px; }
 .proj-form { display: grid; gap: 12px; margin-top: 10px; }
+.proj-info { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--mist, rgba(255, 255, 255, .06)); color: var(--muted); font-size: .92rem; }
 .proj-campo { display: grid; gap: 5px; font-weight: 600; font-size: .92rem; }
 .proj-opc { color: var(--muted); font-weight: 400; }
 .proj-form-foot { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }

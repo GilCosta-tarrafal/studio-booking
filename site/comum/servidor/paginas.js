@@ -97,12 +97,17 @@ const RE_TEXTO = new RegExp(String.raw`<(${TEXTO_SIMPLES})\b([^>]*\bdata-i18n="(
 const RE_ATTR = /<[a-z][a-z0-9]*\b[^>]*\bdata-i18n-attr="([^"]+)"[^>]*>/gi;
 const RE_INLINE = /\{\{t:([\w.-]+)\}\}/g;
 
-function traduzir(html, lingua) {
-  const t = (chave) => esc(D.t(lingua, chave));
-  // Em português não há nada a trocar: o texto escrito no ficheiro já é o
-  // original. Além de poupar o trabalho, torna a página portuguesa imune a um
-  // dicionário desencontrado — que o Node guarda em memória desde o arranque.
-  if (lingua === 'pt') return html.replace(RE_INLINE, (_m, chave) => t(chave));
+// `mudados` são os textos que o CMS do site trocou nesta língua ({ chave: valor });
+// passam à frente do dicionário — também em português.
+function traduzir(html, lingua, mudados = {}) {
+  const tem = (chave) => Object.hasOwn(mudados, chave);
+  const t = (chave) => esc(tem(chave) ? mudados[chave] : D.t(lingua, chave));
+  // Em português, o que não foi mudado já está escrito no ficheiro: é o original.
+  const talvez = (chave) => (tem(chave) ? mudados[chave] : lingua === 'pt' ? null : D.talvez(lingua, chave));
+  // Em português sem nada mudado não há nada a trocar. Além de poupar o
+  // trabalho, torna a página portuguesa imune a um dicionário desencontrado —
+  // que o Node guarda em memória desde o arranque.
+  if (lingua === 'pt' && !Object.keys(mudados).length) return html.replace(RE_INLINE, (_m, chave) => t(chave));
 
   return html
     .replace(RE_ATTR, (tag, spec) => {
@@ -113,7 +118,7 @@ function traduzir(html, lingua) {
         const attr = par.slice(0, i);
         // Sem tradução, fica o que o ficheiro já trazia: mais vale o original
         // do que o nome da chave à vista de quem visita.
-        const valor = D.talvez(lingua, par.slice(i + 1));
+        const valor = talvez(par.slice(i + 1));
         if (valor === null) continue;
         const re = new RegExp(String.raw`\s${attr}="[^"]*"`);
         saida = re.test(saida)
@@ -123,7 +128,7 @@ function traduzir(html, lingua) {
       return saida;
     })
     .replace(RE_TEXTO, (m, tag, attrs, chave) => {
-      const valor = D.talvez(lingua, chave);
+      const valor = talvez(chave);
       return valor === null ? m : `<${tag}${attrs}>${esc(valor)}</${tag}>`;
     })
     .replace(RE_INLINE, (_m, chave) => t(chave));
@@ -151,7 +156,12 @@ function pagina(pasta, file, { traduzida = true } = {}) {
         .replaceAll('{{LANG}}', lingua)
         .replaceAll('{{TEMA}}', tema)
         .replaceAll('{{PREFS}}', traduzida ? prefs.html(lingua, tema, { escolhida: prefs.lerMoeda(req), base: s.moeda, taxas: s.taxas }) : '');
-      html = traduzir(html, lingua);
+      // O CMS do site (ver api/lib/cms.js) não mexe no painel.
+      const cms = (traduzida && s.cms) || {};
+      html = traduzir(html, lingua, cms.textos);
+      // Secções escondidas: o CSS do site esconde-as pelo atributo do <body>.
+      if (cms.ocultas && cms.ocultas.length) html = html.replace(/<body\b/, `<body data-ocultar="${esc(cms.ocultas.join(' '))}"`);
+      if (cms.faixa) html = html.replace('<img src="/img/many.jpg"', `<img src="${esc(cms.faixa)}"`);
       // A resposta muda com o cookie: sem isto, uma cache pública podia servir a
       // página portuguesa a quem escolheu francês.
       res.set('Vary', 'Cookie').set('Cache-Control', 'no-cache').type('html').send(html);

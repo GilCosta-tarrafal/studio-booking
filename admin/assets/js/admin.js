@@ -137,7 +137,9 @@
     return el;
   }
 
-  function campoImagem(label, input, { hint } = {}) {
+  // `aoMudar(valor)`: quem desenha a sua própria pré-visualização (o CMS do
+  // site) é avisado a cada mudança, e a miniatura de cá deixa de aparecer.
+  function campoImagem(label, input, { hint, aoMudar } = {}) {
     input.type = 'text';   // aceita um link ou o caminho de uma imagem enviada
     input.placeholder = 'https://…/imagem.jpg  ou escolha do computador';
     const ficheiro = h('input', { type: 'file', accept: IMG_TIPOS.join(','), hidden: true });
@@ -150,9 +152,10 @@
     const pintar = () => {
       const v = input.value.trim();
       const local = v.startsWith('/');
-      previa.hidden = !local;
-      if (local) previa.src = v;
+      previa.hidden = !local || !!aoMudar;
+      if (local && !aoMudar) previa.src = v;
       limpar.hidden = !v;
+      if (aoMudar) aoMudar(v);
     };
     async function enviar(f) {
       if (!f) return;
@@ -323,7 +326,7 @@
   const NAV = [
     ['dashboard', 'Dashboard', ''], ['painel', 'Painel', ''], ['calendario', 'Calendário', ''], ['marcacoes', 'Marcações', ''], ['clientes', 'Clientes', ''], ['relatorios', 'Relatórios', ''],
     ['estudios', 'Estúdios', ''], ['servicos', 'Serviços', 'manager'],
-    ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'],
+    ['musica', 'Música', 'manager'], ['projetos', 'Projetos', 'manager'], ['cms', 'CMS do site', 'manager'],
     ['utilizadores', 'Utilizadores', 'owner'], ['acesso', 'Gestão de acesso', 'owner'], ['configuracoes', 'Configurações', 'manager'],
   ];
   // Definições e Integrações vivem agora dentro de Configurações; os endereços
@@ -408,6 +411,7 @@
     pagamento: ['M3 7h18v10H3z', 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', 'M6 10h.01', 'M18 14h.01'],
     seguranca: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', 'M12 9v4', 'M12 16h.01'],
     recebido: ['M3 7h18v10H3z', 'M3 11h18', 'M8 15l2 2 4-4'],
+    inscricao: ['M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M3 20a6 6 0 0 1 12 0', 'M18 8v6', 'M15 11h6'],
   };
   const SINO = ['M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20a2 2 0 0 0 4 0'];
 

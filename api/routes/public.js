@@ -7,6 +7,7 @@ const {
 } = require('../lib/db');
 const U = require('../lib/util');
 const TR = require('../lib/traducoes');
+const CMS = require('../lib/cms');
 const prefs = require('../comum/servidor/prefs');
 const { HttpError } = U;
 const { rateLimit } = require('../lib/ratelimit');
@@ -105,7 +106,21 @@ router.get('/pagina', (req, res) => {
     const dosEstudios = db.prepare("SELECT DISTINCT currency FROM studios WHERE currency<>''").all().map((r) => r.currency);
     for (const m of new Set([...prefs.MOEDAS_VER, ...dosEstudios])) { const t = cambio.taxa(moeda, m); if (t) taxas[m] = t; }
   }
-  res.json({ nome: s.business_name, tagline: TR.local(s.tagline, s.traducoes, req.lingua, 'tagline'), moeda, taxas });
+  // E o que o CMS do site mudou: os textos nesta língua, as secções escondidas
+  // e a fotografia da faixa (ver lib/cms.js).
+  const cms = CMS.ler();
+  res.json({
+    nome: s.business_name, tagline: TR.local(s.tagline, s.traducoes, req.lingua, 'tagline'), moeda, taxas,
+    cms: { textos: CMS.textosDe(cms, req.lingua), ocultas: CMS.ocultas(cms), faixa: cms.imagens.faixa },
+  });
+});
+
+// O site serve isto como /js/cms.js e /css/cms.css (ver site/server.js).
+router.get('/cms.js', (_req, res) => {
+  res.set({ 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' }).send(CMS.script(CMS.ler()));
+});
+router.get('/cms.css', (_req, res) => {
+  res.set({ 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-cache' }).send(CMS.css(CMS.ler()));
 });
 
 // Os estilos do formulário de marcação vêm do catálogo "Géneros musicais" de

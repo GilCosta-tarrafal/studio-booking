@@ -263,7 +263,9 @@ function listarInscricoes(projetoId) {
 }
 
 // Guarda o interesse vindo do site. Pede-se o nome e pelo menos uma forma de
-// contacto, para o estúdio poder responder.
+// contacto, para o estúdio poder responder. Numa campanha de talentos pede-se
+// só o essencial — nome, telefone/WhatsApp e email, os dois obrigatórios, para
+// o estúdio escolher por onde responder —, sem link nem mensagem.
 function registarInteresse(projetoId, d, ip) {
   const projeto = obter(projetoId);
   if (!projeto || !projeto.visivel) throw erro('Projeto não encontrado.', 404);
@@ -275,14 +277,44 @@ function registarInteresse(projetoId, d, ip) {
   if (!nome) throw erro('Indique o seu nome.');
   const contacto = texto(d.contacto, 40);
   const email = texto(d.email, 120);
+  const talentos = projeto.tipo === 'talentos';
+  if (talentos && !contacto) throw erro('Indique o seu telefone ou WhatsApp.');
+  if (talentos && !email) throw erro('Indique o seu email.');
   if (!contacto && !email) throw erro('Deixe um contacto: telefone/WhatsApp ou email.');
+  if (contacto && U.digits(contacto).length < 6) throw erro('O telefone não parece válido.');
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw erro('O email não parece válido.');
   const agora = new Date().toISOString();
   const r = db.prepare(
     `INSERT INTO int_inscricoes(projeto_id,nome,contacto,email,link,mensagem,estado,criado_em,ip)
      VALUES(?,?,?,?,?,?, 'novo', ?, ?)`
-  ).run(projetoId, nome, contacto, email, eUrl(d.link) ? d.link : '', texto(d.mensagem, 1000), agora, String(ip || '').slice(0, 45));
-  return db.prepare('SELECT * FROM int_inscricoes WHERE id=?').get(r.lastInsertRowid);
+  ).run(projetoId, nome, contacto, email, !talentos && eUrl(d.link) ? d.link : '', talentos ? '' : texto(d.mensagem, 1000), agora, String(ip || '').slice(0, 45));
+  const insc = db.prepare('SELECT * FROM int_inscricoes WHERE id=?').get(r.lastInsertRowid);
+  avisarEquipa(insc, projeto).catch((x) => console.error('aviso de inscrição:', x.message));
+  return insc;
+}
+
+// Avisa a equipa por email de uma inscrição nova: o email do negócio (Definições)
+// e o de cada proprietário. No painel, a inscrição aparece também no sininho.
+async function avisarEquipa(insc, projeto) {
+  const { getSettings } = require('../../lib/db');
+  const notify = require('../../lib/notify');
+  const s = getSettings();
+  const donos = db.prepare("SELECT email FROM users WHERE role='owner'").all().map((u) => u.email);
+  const para = [...new Set([s.email, ...donos].filter((e) => e && e.includes('@')).map((e) => e.toLowerCase()))];
+  const painel = (process.env.PAINEL_URL || '').replace(/\/$/, '');
+  const texto = [
+    `Nova inscrição em "${projeto.titulo}".`,
+    '',
+    `Nome: ${insc.nome}`,
+    insc.contacto ? `Telefone/WhatsApp: ${insc.contacto}` : null,
+    insc.email ? `Email: ${insc.email}` : null,
+    insc.link ? `Trabalho: ${insc.link}` : null,
+    insc.mensagem ? `Mensagem: ${insc.mensagem}` : null,
+    '',
+    'Veja-a no painel, em Projetos › Ver inscrições. Se a aceitar, contacte a pessoa por WhatsApp ou email a partir dali.',
+    painel ? `${painel}/admin#/projetos?inscricoes=${projeto.id}` : null,
+  ].filter((l) => l !== null).join('\n');
+  for (const to of para) await notify.sendEmail({ to, subject: `Nova inscrição — ${projeto.titulo}`, text: texto });
 }
 
 function mudarEstadoInscricao(id, estado) {

@@ -64,6 +64,7 @@ app.use('/api/admin', atividade.middleware);
 app.use('/api/admin/integracoes', auth.requireAuth, integracoes.admin);
 app.use('/api/admin/rbac', auth.requireAuth, auth.requireOwner, require('./routes/rbac'));
 app.use('/api/admin/catalogos', auth.requireAuth, require('./routes/catalogos'));
+app.use('/api/admin/cms', auth.requireAuth, require('./routes/cms'));
 // Botão de auriculares do painel: chat da equipa em tempo real e Assistente IA.
 app.use('/api/admin/chat', auth.requireAuth, chat.router);
 app.use('/api/admin/assistente', auth.requireAuth, require('./routes/assistente'));

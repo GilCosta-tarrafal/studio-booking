@@ -251,9 +251,14 @@
       const { clients } = await api('/api/admin/clients');
       const body = h('tbody');
       let table = null;
+      let pesquisa = '';
+      const filtrar = () => {
+        const term = pesquisa.toLowerCase();
+        return clients.filter((c) => !term || `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(term));
+      };
       const draw = (q) => {
-        const term = q.toLowerCase();
-        const rows = clients.filter((c) => !term || `${c.name} ${c.phone} ${c.email}`.toLowerCase().includes(term));
+        pesquisa = q.trim();
+        const rows = filtrar();
         body.replaceChildren(...(rows.length ? rows.map((c) => {
           const wa = waLink(app.settings, c.phone);
           return h('tr', {},
@@ -265,8 +270,40 @@
         }) : [h('tr', {}, h('td', { colspan: 5 }, 'Nenhum cliente encontrado.'))]));
         if (table) labelCells(table);
       };
+      // Imprimir: uma folha limpa (fundo branco, só a lista) montada à parte e
+      // mostrada só na impressão; sai da página quando a impressão acaba.
+      // Segue a pesquisa do ecrã, tal como o PDF.
+      const imprimir = () => {
+        const rows = filtrar();
+        const sessoes = rows.reduce((s, c) => s + c.sessions, 0);
+        const pago = rows.reduce((s, c) => s + c.paid, 0);
+        const folha = h('div', { class: 'folha-impressao' },
+          h('header', {},
+            h('div', {}, h('strong', {}, app.settings.business_name || ''), h('h1', {}, 'Lista de Clientes')),
+            h('p', {}, [`${rows.length} ${rows.length === 1 ? 'cliente' : 'clientes'}`, pesquisa && `Pesquisa: "${pesquisa}"`,
+              'Impresso em ' + S.fmtDateFull(app.today)].filter(Boolean).join(' · '))),
+          h('table', {},
+            h('thead', {}, h('tr', {}, h('th', {}, 'Cliente'), h('th', {}, 'Telefone'),
+              h('th', { class: 'num' }, 'Sessões'), h('th', { class: 'num' }, 'Total pago'), h('th', { class: 'num' }, 'Última sessão'))),
+            h('tbody', {}, rows.map((c) => h('tr', {},
+              h('td', {}, h('strong', {}, c.name), c.email && h('span', { class: 'sub' }, c.email)), h('td', {}, c.phone || '—'),
+              h('td', { class: 'num' }, String(c.sessions)), h('td', { class: 'num' }, money(c.paid, cur())),
+              h('td', { class: 'num' }, c.last ? S.fmtDateFull(c.last) : '—')))),
+            h('tfoot', {}, h('tr', {}, h('td', { colspan: 2 }, 'Totais'),
+              h('td', { class: 'num' }, String(sessoes)), h('td', { class: 'num' }, money(pago, cur())), h('td', {})))));
+        document.querySelectorAll('.folha-impressao').forEach((f) => f.remove());
+        document.body.append(folha);
+        window.addEventListener('afterprint', () => folha.remove(), { once: true });
+        window.print();
+      };
+      const baixarPDF = () => {
+        const a = h('a', { href: '/api/admin/clients.pdf' + (pesquisa ? '?q=' + encodeURIComponent(pesquisa) : '') });
+        document.body.append(a); a.click(); a.remove();
+      };
       const search = searchField({ placeholder: 'Pesquisar cliente', onSearch: (v) => draw(v) });
-      box.append(pageHead('Clientes', search));
+      box.append(pageHead('Clientes', search,
+        h('button', { class: 'btn btn-outline', type: 'button', onclick: imprimir }, 'Imprimir'),
+        h('button', { class: 'btn', type: 'button', onclick: baixarPDF }, 'Baixar PDF')));
       box.append(h('p', { class: 'hint', style: { marginBottom: '12px' } }, 'Construída a partir do histórico de marcações. Clique no telefone para abrir o WhatsApp.'));
       table = h('table', { class: 'data' },
         h('thead', {}, h('tr', {}, [['Cliente', ''], ['Telefone', ''], ['Sessões', 'num'], ['Total pago', 'num'], ['Última sessão', '']].map(([t, c]) => h('th', { scope: 'col', class: c }, t)))),

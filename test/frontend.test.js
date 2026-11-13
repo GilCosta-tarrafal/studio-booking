@@ -281,7 +281,7 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   setVal(w, d.querySelector('input[type=password]'), 'palavra-passe-teste');
   d.querySelector('.login-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side'), 'painel');
-  ok(d.querySelectorAll('.side .nav').length === 13, 'menu com 13 secções (inclui Dashboard, Relatórios, Utilizadores, Gestão de acesso e Configurações)');
+  ok(d.querySelectorAll('.side .nav').length === 14, 'menu com 14 secções (inclui Dashboard, Relatórios, CMS do site, Utilizadores, Gestão de acesso e Configurações)');
   ok(![...d.querySelectorAll('.side .nav')].some((a) => /^(Definições|Integrações)$/.test(a.textContent.trim())), 'Definições e Integrações saíram do menu (estão em Configurações)');
   // Sininho: os 2 pedidos e a tentativa falhada de há pouco estão por ler.
   await waitFor(() => !d.querySelector('.tb-bell-n').hidden, 'sininho com número');
@@ -442,6 +442,17 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => d.querySelector('table.data tbody tr'), 'clientes');
   ok(d.querySelectorAll('table.data tbody tr').length >= 3, 'clientes: pelo menos 3 (Bruno, Carla, balcão)');
   ok(!!d.querySelector('table.data a[href^="https://wa.me/2385551234"]'), 'telefone local ganha indicativo no link de WhatsApp');
+  const btnImprimir = [...d.querySelectorAll('.page-head button')].find((b) => b.textContent === 'Imprimir');
+  ok(!!btnImprimir && [...d.querySelectorAll('.page-head button')].some((b) => b.textContent === 'Baixar PDF'), 'clientes: botões Imprimir e Baixar PDF');
+  let imprimiu = false;
+  w.print = () => { imprimiu = true; };
+  btnImprimir.click();
+  const folha = d.querySelector('body > .folha-impressao');
+  ok(imprimiu && folha && folha.querySelectorAll('tbody tr').length === d.querySelectorAll('table.data tbody tr').length,
+    'imprimir monta a folha com a mesma lista e abre a impressão');
+  ok(/Totais/.test(folha.querySelector('tfoot').textContent), 'a folha impressa leva os totais');
+  w.dispatchEvent(new w.Event('afterprint'));
+  ok(!d.querySelector('.folha-impressao'), 'a folha sai da página depois de imprimir');
 
   // Estúdios
   w.location.hash = '#/estudios';
@@ -503,6 +514,60 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   sf.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => d.querySelector('.side .brand').getAttribute('aria-label') === 'Produções Teste', 'nome atualizado');
   ok(true, 'guardar definições atualiza o nome da marca no menu');
+
+  // CMS do site: textos por língua, com o de origem a cinzento.
+  console.log('\nCMS do site');
+  w.location.hash = '#/cms';
+  await waitFor(() => d.querySelector('.cf-card h2') && d.querySelector('.cf-card h2').textContent === 'Topo da página inicial', 'CMS do site');
+  ok(d.querySelector('.nav[data-k=cms][aria-current=page]'), 'o CMS do site está no menu e fica marcado');
+  const h1Pt = d.querySelector('.cms-campo input[lang=pt]');
+  ok(h1Pt && h1Pt.placeholder === 'Tempo de estúdio, marcado em minutos.' && d.querySelectorAll('.cms-campo')[0].querySelectorAll('.cms-lingua').length === 3,
+    'cada texto tem uma caixa por língua, com o de origem como sugestão');
+  setVal(w, h1Pt, 'Grave connosco');
+  d.querySelector('.cf-card form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => [...d.querySelectorAll('#toasts .toast')].some((t) => /Textos guardados/.test(t.textContent)), 'textos guardados');
+  const cmsGuardado = await (await w.fetch('/api/admin/cms')).json();
+  ok(cmsGuardado.cms.textos['inicio.h1'].pt === 'Grave connosco', 'guardar envia o texto para a API');
+  w.location.hash = '#/cms?sec=secoes';
+  await waitFor(() => d.querySelectorAll('.cms-secao').length === 6, 'secções visíveis');
+  ok(true, 'as seis secções da página inicial podem ser desligadas');
+  // Adicionar uma secção nova pela janela, com pré-visualização.
+  d.querySelector('.cf-card-head .cf-add').click();
+  const dlgSec = await waitFor(() => d.querySelector('dialog.modal[open]'), 'janela da secção nova');
+  setVal(w, dlgSec.querySelector('input[lang=pt]'), 'Aulas de produção');
+  ok(dlgSec.querySelector('.cms-pv-sec strong').textContent === 'Aulas de produção', 'a pré-visualização da secção segue o título');
+  setVal(w, dlgSec.querySelector('textarea[lang=pt]'), 'Primeiro parágrafo.\n\nSegundo.');
+  ok(dlgSec.querySelectorAll('.cms-pv-sec-p p').length === 2, 'uma linha em branco separa parágrafos na pré-visualização');
+  dlgSec.querySelector('form').dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  await waitFor(() => [...d.querySelectorAll('.cf-item strong')].some((s) => s.textContent === 'Aulas de produção'), 'secção na lista');
+  const cmsSec = await (await w.fetch('/api/admin/cms')).json();
+  ok(cmsSec.cms.extras.length === 1 && cmsSec.cms.extras[0].texto.pt === 'Primeiro parágrafo.\n\nSegundo.', 'adicionar secção grava-a e mostra-a na lista');
+  await w.Studio.api('/api/admin/cms', { method: 'PUT', body: { extras: [] } });
+  await w.Studio.api('/api/admin/cms', { method: 'PUT', body: { textos: {} } });
+  w.location.hash = '#/cms?sec=imagens';
+  await waitFor(() => d.querySelectorAll('.cms-pv-caixa').length === 4, 'fotografias');
+  ok(d.querySelector('.cms-pv-topo').style.backgroundImage.includes('/img/slides/slide-1.jpg') && /origem/.test(d.querySelector('.cms-pv-tag').textContent),
+    'cada fotografia tem pré-visualização; sem imagem nova mostra a de origem do site');
+  const pvTxt = () => d.querySelector('.cms-pv-txt');
+  ok(pvTxt().querySelector('strong').textContent === 'Tempo de estúdio, marcado em minutos.' && pvTxt().querySelector('em').textContent === 'Marcar sessão',
+    'a pré-visualização mostra o título e o botão que o site tem');
+  setVal(w, d.querySelector('.cms-bloco input[lang=pt]'), 'Grave hoje');
+  const botaoFr = [...d.querySelectorAll('.cms-bloco .cms-campo')].find((c) => /nav\.marcar/.test(c.textContent)).querySelector('input[lang=fr]');
+  setVal(w, botaoFr, 'Réservez');
+  ok(pvTxt().querySelector('em').textContent === 'Réservez' && /FR/.test(d.querySelector('.cms-pv-head span').textContent),
+    'escrever o botão em francês mostra-o na pré-visualização, em francês');
+  botaoFr.dispatchEvent(new w.Event('focus'));
+  setVal(w, d.querySelector('.cms-bloco input[lang=pt]'), 'Grave hoje');
+  ok(pvTxt().querySelector('strong').textContent === 'Grave hoje', 'escrever o título muda-o em todas as fotografias do topo');
+  const fotoTopo = d.querySelector('.img-campo input[type=text]');
+  setVal(w, fotoTopo, '/capas-integracao/env-0123456789abcdef0123.jpg');
+  ok(d.querySelector('.cms-pv-topo').style.backgroundImage.includes('env-0123456789abcdef0123') && d.querySelector('.cms-pv-tag').classList.contains('nova'),
+    'escolher outra imagem muda a pré-visualização antes de guardar');
+  setVal(w, fotoTopo, 'https://exemplo.cv/foto.jpg');
+  ok(d.querySelector('.cms-pv-topo').hidden && !d.querySelector('.cms-pv-aviso').hidden, 'um link de fora avisa que só se vê depois de guardar');
+  const slideRes = await w.fetch('/img/slides/slide-1.jpg');
+  ok(slideRes.status === 200 && /image/.test(slideRes.headers.get('content-type')), 'o painel vai buscar as fotografias de origem ao site');
+  await w.Studio.api('/api/admin/cms', { method: 'PUT', body: { textos: {} } });
 
   // Configurações › catálogos: listas editáveis; os estados do sistema têm cadeado.
   console.log('\nConfigurações');
@@ -591,6 +656,24 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => !dlgP.querySelector('.notice.error').hidden, 'erro de conflito da gravação');
   ok(/Conflito de horário/.test(dlgP.querySelector('.notice.error').textContent), 'uma marcação no período: o projeto não se guarda e aparece o conflito de horário');
   dlgP.querySelector('.modal-foot .btn-outline').click();
+
+  // Inscrição numa campanha de talentos: o sininho leva a ela; aceite, o
+  // produtor contacta a pessoa por WhatsApp ou email, com a mensagem escrita.
+  console.log('\nInscrições');
+  const projTal = (await w.Studio.api('/api/admin/integracoes/projetos', { method: 'POST', body: { tipo: 'talentos', titulo: 'Novos talentos', aberto: true } })).projeto;
+  await w.Studio.api(`/api/integracoes/projetos/${projTal.id}/interesse`, { method: 'POST', body: { nome: 'Lia Tavares', contacto: '9912345', email: 'lia@teste.cv' } });
+  w.location.hash = '#/projetos?inscricoes=' + projTal.id;
+  await waitFor(() => d.querySelector('dialog.modal[open] .insc'), 'inscrições abertas pelo endereço do sininho');
+  const dlgI = d.querySelector('dialog.modal[open]');
+  ok(w.location.hash === '#/projetos' && /Lia Tavares/.test(dlgI.textContent) && dlgI.querySelector('.insc.nova'), 'o endereço do sininho abre logo as inscrições do projeto, com a nova realçada');
+  [...dlgI.querySelectorAll('.insc .btn')].find((b) => b.textContent === 'Aceitar').click();
+  const aceiteBox = await waitFor(() => dlgI.querySelector('.insc-aceite'), 'inscrição aceite');
+  const waBtn = aceiteBox.querySelector('a.insc-wa');
+  const mailBtn = [...aceiteBox.querySelectorAll('a')].find((a) => a.href.startsWith('mailto:'));
+  ok(waBtn && /wa\.me\/2389912345\?text=/.test(waBtn.href) && /foi%20aceite/.test(waBtn.href), 'aceite: botão do WhatsApp com o número e a mensagem já escrita');
+  ok(mailBtn && /^mailto:lia@teste\.cv\?subject=/.test(mailBtn.href) && /Novos%20talentos/.test(mailBtn.href), 'aceite: botão do email com o assunto e a mensagem');
+  dlgI.querySelector('.modal-foot .btn-outline').click();
+  await w.Studio.api(`/api/admin/integracoes/projetos/${projTal.id}`, { method: 'DELETE' });
 
   // Utilizadores: a lista de contas, com o novo perfil de agente.
   w.location.hash = '#/utilizadores';
@@ -692,8 +775,14 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok(!!tenho, 'a janela tem o botão "Tenho interesse"');
   tenho.click();
   const formI = dlgProj.querySelector('.proj-form');
+  // Campanha de talentos: só nome, telefone/WhatsApp e email, os dois obrigatórios.
+  ok(!formI.querySelector('input[type=url]') && !formI.querySelector('textarea') && formI.querySelectorAll('input').length === 3 && formI.querySelector('.proj-info'),
+    'campanha de talentos: o formulário pede só o nome, o telefone e o email (sem link nem mensagem)');
   setVal(w, formI.querySelector('input[autocomplete=name]'), 'Rita');
   setVal(w, formI.querySelector('input[type=email]'), 'rita@teste.cv');
+  formI.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
+  ok(/telefone ou WhatsApp/.test(formI.querySelector('.proj-erro').textContent) && !dlgProj.querySelector('.proj-feito'), 'sem telefone, a inscrição não segue e diz o que falta');
+  setVal(w, formI.querySelector('input[type=tel]'), '9912345');
   formI.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true }));
   await waitFor(() => dlgProj.querySelector('.proj-feito'), 'pedido enviado');
   ok(/Pedido enviado/.test(dlgProj.textContent) && /vai ser analisado. Em breve receberá uma resposta/.test(dlgProj.textContent), 'depois de enviar: "o seu pedido foi enviado e vai ser analisado; em breve receberá uma resposta"');
@@ -882,10 +971,13 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   ok([...d.querySelectorAll('.board-row strong')].some((e) => /Studio/.test(e.textContent)), 'os nomes dos estúdios no quadro também');
 
   d.querySelector('#pref-tema-btn').click();
-  d.querySelector('.pref-menu [data-tema="claro"]').click();
-  ok(d.documentElement.dataset.tema === 'claro', 'escolher o tema claro muda o <html data-tema>');
+  ok(d.querySelector('#pref-tema-menu').hidden, 'o botão do tema não abre lista');
+  ok(d.documentElement.dataset.tema === 'claro', 'um clique no botão do tema passa ao claro');
+  ok(d.querySelector('#pref-tema-btn .pref-val').textContent === 'Light', 'o botão mostra o tema em uso');
   ok(d.querySelector('.pref-menu [data-tema="claro"]').getAttribute('aria-checked') === 'true'
     && d.querySelector('.pref-menu [data-tema="escuro"]').getAttribute('aria-checked') === 'false', 'a opção em uso fica marcada');
+  d.querySelector('#pref-tema-btn').click();
+  ok(d.documentElement.dataset.tema === 'escuro', 'outro clique volta ao escuro');
   w.close();
 
   // Trocar de idioma a meio do formulário não apaga o que já foi preenchido.

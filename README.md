@@ -25,11 +25,11 @@ Para trabalhar no projeto, cada parte arranca no seu terminal, na sua porta, e r
 
 | Parte | Comando | Endereço |
 | --- | --- | --- |
-| API | `npm run dev:start` | http://localhost:3007 (o site e o painel falam com ela; não se abre no browser) |
-| Site | `npm run dev:site` | http://localhost:3005 |
-| Painel | `npm run dev` | http://localhost:3006/admin |
+| API | `npm run api` | http://localhost:3007 (o site e o painel falam com ela; não se abre no browser) |
+| Site | `npm run site` | http://localhost:3005 |
+| Painel | `npm run painel` | http://localhost:3006/admin |
 
-Arranque primeiro a API: o site e o painel precisam dela para mostrar as páginas. Para ligar as três de uma vez, num só terminal e sem reinício automático, use `npm start`.
+Arranque primeiro a API: o site e o painel precisam dela para mostrar as páginas. `npm run terminais` abre as três de uma vez, cada uma na sua janela de terminal, com o nome da parte no título. (Os nomes antigos `dev:start`, `dev:site` e `dev` continuam a funcionar.) Para ligar as três de uma vez, num só terminal e sem reinício automático, use `npm start`.
 
 O terminal mostra também os endereços na rede local, para abrir noutro aparelho ligado ao mesmo Wi-Fi. Se uma porta estiver ocupada por outro programa, o arranque para e diz qual. Para usar outras, defina `SITE_PORT`, `ADMIN_PORT` e `API_PORT` no `.env` da raiz (copie-o de `api/.env.example`).
 
@@ -218,7 +218,7 @@ comum/               o ORIGINAL do que as três partes partilham (mexa aqui e co
   servidor/prefs.js    língua, tema e moeda de quem visita; os botões do cabeçalho
   servidor/paginas.js  montar e traduzir as páginas, segurança, reencaminhar para a API
 
-dev.js               no computador: arranca a API (`dev:start`), o site (`dev:site`) ou o painel (`dev`)
+dev.js               no computador: arranca a API (`npm run api`), o site (`npm run site`) ou o painel (`npm run painel`)
 scripts/copiar-comum.js  põe as cópias de comum/ em dia
 test/                testes de ponta a ponta (arrancam as três partes)
 ```
