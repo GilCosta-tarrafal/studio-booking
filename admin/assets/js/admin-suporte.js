@@ -1,4 +1,5 @@
-/* Painel de gestão: botão de auriculares (canto inferior direito). Ao carregar
+/* Painel de gestão: pílula "Mensagens" (canto inferior direito), com o número
+   por ler e as fotografias de quem escreveu. Ao carregar
    abre dois botões — "Assistente IA", para perguntar algo à IA, e "Chat —
    Agentes", para falar em tempo real com o administrador e com os agentes dos
    outros estúdios. Vale para todos os perfis. O chat recebe as mensagens por
@@ -13,7 +14,6 @@
 
   const SVG = 'http://www.w3.org/2000/svg';
   const ICO = {
-    headset: ['M4 14v-2a8 8 0 0 1 16 0v2', 'M4 14h3v6H5a1 1 0 0 1-1-1z', 'M20 14h-3v6h2a1 1 0 0 0 1-1z', 'M17 20a4 4 0 0 1-4 2h-1'],
     robot: ['M5 9h14v10H5z', 'M12 5v4', 'M12 4h.01', 'M9 13h.01', 'M15 13h.01', 'M9.5 16.5h5', 'M3 13v2', 'M21 13v2'],
     chat: ['M4 5h16v11H9l-5 4z'],
     close: ['M6 6l12 12', 'M18 6L6 18'],
@@ -47,7 +47,6 @@
     return d.toDateString() === new Date().toDateString() ? hora(iso)
       : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + ' ' + hora(iso);
   };
-  const iniciais = (nome) => String(nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
   const papel = (c) => (c.role === 'owner' ? 'Administrador' : c.role === 'agent' ? 'Agente · ' + c.studio_name : 'Equipa');
 
   // Estado do widget. `fonte` é a ligação em tempo real; `aberto` diz que
@@ -62,8 +61,7 @@
   function iniciar() {
     parar();
     const badge = h('span', { class: 'sup-badge', hidden: true });
-    const fab = h('button', { class: 'sup-fab', type: 'button', 'aria-label': 'Ajuda e conversas', 'aria-expanded': 'false', title: 'Ajuda e conversas' },
-      ico('headset', 26), badge);
+    const fab = h('button', { class: 'sup-fab', type: 'button', 'aria-expanded': 'false', title: 'Mensagens e assistente' });
     const opcoes = h('div', { class: 'sup-opcoes', hidden: true },
       opcao('Assistente IA', 'robot', () => abrir('ia')),
       opcao('Chat — Agentes', 'chat', () => abrir('chat')));
@@ -71,6 +69,7 @@
     fab.onclick = () => (st.aberto ? fechar() : alternarMenu());
     st.raiz = h('div', { class: 'sup' }, painel, opcoes, fab);
     st.badge = badge; st.fab = fab; st.opcoes = opcoes; st.painel = painel;
+    pintarFab();
     document.body.appendChild(st.raiz);
     document.addEventListener('keydown', onKey);
     ligar();
@@ -101,7 +100,7 @@
     st.opcoes.hidden = !st.menu;
     st.fab.classList.toggle('on', st.menu);
     st.fab.setAttribute('aria-expanded', String(st.menu));
-    st.fab.replaceChildren(ico(st.menu ? 'close' : 'headset', 26), st.badge);
+    pintarFab();
     if (st.menu) st.opcoes.querySelector('.sup-mini').focus();
   }
 
@@ -110,8 +109,7 @@
     st.aberto = qual;
     st.painel.hidden = false;
     st.fab.classList.add('on');
-    st.fab.replaceChildren(ico('close', 26), st.badge);
-    st.fab.setAttribute('aria-label', 'Fechar');
+    pintarFab();
     if (qual === 'ia') pintarIA(); else pintarChat();
   }
 
@@ -122,8 +120,26 @@
     st.painel.hidden = true;
     st.painel.replaceChildren();
     st.fab.classList.remove('on');
-    st.fab.replaceChildren(ico('headset', 26), st.badge);
-    st.fab.setAttribute('aria-label', 'Ajuda e conversas');
+    pintarFab();
+  }
+
+  // O botão é uma pílula "Mensagens": o ícone com o número por ler e, à
+  // direita, as fotografias de quem mandou mensagem (as mais recentes à frente,
+  // até três). Aberto, mostra "Fechar".
+  function pintarFab() {
+    const n = totalPorLer();
+    const aberto = st.menu || !!st.aberto;
+    st.badge.hidden = !n;
+    st.badge.textContent = n > 99 ? '99+' : String(n);
+    const quando = (c) => String((c.last || {}).created_at || '');
+    const quem = aberto || !st.lista ? []
+      : st.lista.contacts.filter((c) => c.unread).sort((a, b) => quando(b).localeCompare(quando(a))).slice(0, 3);
+    st.fab.replaceChildren(
+      h('span', { class: 'sup-fab-ico' }, ico(aberto ? 'close' : 'chat', 24), st.badge),
+      h('span', { class: 'sup-fab-txt' }, aberto ? 'Fechar' : 'Mensagens'),
+      quem.length ? h('span', { class: 'sup-fab-avs', 'aria-hidden': 'true' }, quem.map((c) => A.avatar(c, 'sup-fab-av'))) : null);
+    st.fab.setAttribute('aria-label', aberto ? 'Fechar'
+      : n ? `Mensagens: ${n} por ler, de ${quem.map((c) => c.name).join(', ')}` : 'Mensagens e assistente');
   }
 
   function cabecalho(titulo, sub, voltar) {
@@ -278,11 +294,7 @@
     if (!st.lista) return 0;
     return st.lista.contacts.reduce((n, c) => n + c.unread, 0);
   }
-  function pintarBadge() {
-    const n = totalPorLer();
-    st.badge.hidden = !n;
-    st.badge.textContent = n > 99 ? '99+' : String(n);
-  }
+  const pintarBadge = () => pintarFab();
 
   const conversaDe = (channel) => (st.lista ? st.lista.contacts.find((c) => c.channel === channel) : null);
 
@@ -317,7 +329,7 @@
       if (st.aberto !== 'chat' || st.conversa) return;
     }
     const linha = (c) => h('button', { class: 'sup-contacto', type: 'button', onclick: () => abrirConversa(c.channel) },
-      h('span', { class: 'sup-avatar' + (c.online ? ' online' : '') }, iniciais(c.name)),
+      A.avatar(c, 'sup-avatar' + (c.online ? ' online' : '')),
       h('span', { class: 'sup-contacto-txt' },
         h('strong', {}, c.name),
         h('span', {}, c.last ? (c.last.user_id === app.user.id ? 'Você: ' : '') + previa(c.last) : papel(c) + (c.online ? ' · ligado' : ''))),

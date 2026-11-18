@@ -1113,7 +1113,8 @@
           h('tbody', {}, vis.map((u) => {
             const eu = u.id === app.user.id;
             return h('tr', {},
-              h('td', {}, h('strong', {}, u.name, eu && h('span', { class: 'ut-eu' }, ' (você)')), h('span', { class: 'sub' }, u.email)),
+              h('td', {}, h('div', { class: 'ut-quem' }, A.avatar(u, 'ut-avatar'),
+                h('div', {}, h('strong', {}, u.name, eu && h('span', { class: 'ut-eu' }, ' (você)')), h('span', { class: 'sub' }, u.email)))),
               h('td', {}, u.phone || '—'),
               h('td', {}, u.funcao
                 ? h('span', { class: 'ut-funcao' }, svgIcon(UT_ICO.escudo, 14), u.funcao.name, u.studio_name && h('small', {}, ' · ' + u.studio_name))

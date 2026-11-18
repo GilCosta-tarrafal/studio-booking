@@ -71,7 +71,7 @@ function loadUser(req, _res, next) {
   req.user = null;
   if (token) {
     const row = db.prepare(
-      `SELECT u.id, u.name, u.email, u.role, u.active, u.studio_id, u.last_seen_at, s.expires_at, s.active_at, s.locked
+      `SELECT u.id, u.name, u.email, u.role, u.active, u.studio_id, u.photo, u.last_seen_at, s.expires_at, s.active_at, s.locked
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?`
     ).get(sha(token));
@@ -85,7 +85,7 @@ function loadUser(req, _res, next) {
         db.prepare('UPDATE sessions SET locked=1 WHERE token_hash=?').run(req.sessionHash);
         locked = true;
       }
-      req.user = { id: row.id, name: row.name, email: row.email, role: row.role, studio_id: row.studio_id || null, locked };
+      req.user = { id: row.id, name: row.name, email: row.email, role: row.role, studio_id: row.studio_id || null, photo: row.photo || '', locked };
       // "Último acesso" do perfil. Grava-se no máximo uma vez por minuto, para
       // não escrever na base a cada pedido.
       if (!row.last_seen_at || Date.now() - Date.parse(row.last_seen_at) > 60000) {

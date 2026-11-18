@@ -935,7 +935,7 @@ function gravarFuncao(userId, f) {
 
 router.get('/users', auth.requireOwner, (_req, res) => {
   const rows = db.prepare(
-    `SELECT u.id, u.name, u.email, u.phone, u.role, u.active, u.created_at, u.last_login_at, u.studio_id, s.name AS studio_name
+    `SELECT u.id, u.name, u.email, u.phone, u.role, u.active, u.created_at, u.last_login_at, u.studio_id, u.photo, s.name AS studio_name
        FROM users u LEFT JOIN studios s ON s.id = u.studio_id ORDER BY u.created_at DESC, u.id DESC`
   ).all();
   // A função principal: o perfil atribuído com maior prioridade.

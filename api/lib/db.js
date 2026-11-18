@@ -313,6 +313,8 @@ acrescentaColuna('users', 'last_seen_at', 'TEXT');
 acrescentaColuna('users', 'password_changed_at', 'TEXT');
 // Última vez que a pessoa abriu o sininho: o que for mais recente está "por ler".
 acrescentaColuna('users', 'notif_seen_at', 'TEXT');
+// Fotografia da pessoa (caminho servido em /capas-integracao/...); vazia = iniciais.
+acrescentaColuna('users', 'photo', "TEXT NOT NULL DEFAULT ''");
 // Chat da equipa: além de texto, fotografias e mensagens de voz (ver
 // routes/chat.js). O ficheiro fica na pasta privada do chat; aqui só o nome.
 acrescentaColuna('chat_messages', 'tipo', "TEXT NOT NULL DEFAULT 'texto'");

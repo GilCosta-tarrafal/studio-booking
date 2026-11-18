@@ -539,36 +539,35 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .figures div, .figures div:first-child { border-top: 0; padding-top: 0; }
 }
 
-/* Tablet e telemóvel: a barra lateral passa a faixa de cima, em duas linhas
-   fixas — logótipo e sair em cima, secções por baixo numa fila que rola para
-   o lado. Antes as oito secções quebravam em várias linhas e empurravam o
-   conteúdo para fora do ecrã. */
+/* Botão das três barras e véu da gaveta: só existem em ecrãs estreitos. */
+.tb-menu-btn, .side-veu { display: none; }
+.tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+body.sem-rolar { overflow: hidden; }
+
+/* Tablet e telemóvel: o menu deixa de ocupar uma faixa por cima do cabeçalho
+   e passa a gaveta que entra pela esquerda, aberta pelo botão das três barras
+   da barra de topo. Fechada fica invisível (e fora do Tab). */
 @media (max-width: 860px) {
   .app { grid-template-columns: 1fr; }
   .side {
-    position: static; height: auto; overflow: visible;
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand foot" "nav nav";
-    align-items: center; gap: 0 12px; padding: 6px 16px 0;
-    border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, .14);
+    position: fixed; inset: 0 auto 0 0; z-index: 40; width: min(280px, 84vw); height: 100vh; height: 100dvh;
+    transform: translateX(-100%); visibility: hidden; transition: transform .22s ease, visibility 0s linear .22s;
   }
-  .side .brand { grid-area: brand; padding: 6px 0; min-width: 0; }
-  .side .brand-mark { width: 38px; height: 38px; }
-  .side .brand-name { overflow: hidden; text-overflow: ellipsis; }
-  .side nav {
-    grid-area: nav; flex-direction: row; flex-wrap: nowrap; gap: 2px;
-    margin: 0 -16px; padding: 0 10px; overflow-x: auto; overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity; scrollbar-width: none;
-    /* Esbate a ponta direita: diz que há mais secções para lá do ecrã. */
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  body.admin .side { background: rgba(12, 12, 12, .96); }
+  .menu-aberto .side { transform: none; visibility: visible; transition: transform .22s ease; box-shadow: 16px 0 40px rgba(0, 0, 0, .45); }
+  .side-veu {
+    display: block; position: fixed; inset: 0; z-index: 35; background: rgba(0, 0, 0, .5);
+    opacity: 0; pointer-events: none; transition: opacity .22s;
   }
-  .side nav::-webkit-scrollbar { display: none; }
+  .menu-aberto .side-veu { opacity: 1; pointer-events: auto; }
   /* Alvos maiores do que no computador: aqui carrega-se com o dedo. */
-  .nav { flex: none; padding: 12px; min-height: 46px; border-radius: 0; white-space: nowrap; scroll-snap-align: start; }
-  .nav[aria-current="page"] { background: none; box-shadow: inset 0 -3px 0 var(--amber); }
-  .side-foot { grid-area: foot; margin: 0; padding: 0; border: 0; display: flex; gap: 16px; align-items: center; }
-  .side-foot .who { display: none; }
+  .nav { min-height: 46px; }
   .side-foot a, .side-foot button { min-height: 44px; }
+  .tb-menu-btn { display: inline-flex; position: relative; width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+  /* Há pedidos por confirmar: um ponto no botão, já que o selo do menu está escondido. */
+  .tb-menu-btn .tb-menu-ponto { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); border: 2px solid var(--paper); }
+  .tb-menu-btn .tb-menu-ponto[hidden] { display: none; }
+  .tb-left { flex: 0 1 auto; }
 
   .main { padding: 20px 16px 96px; }
   .bk-time { width: 96px; }
@@ -669,7 +668,7 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .main-foot a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .main-foot a:hover { color: var(--ink); }
 .topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: wrap;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: nowrap;
   padding: 12px 24px; border-bottom: 1px solid var(--line);
   background: rgba(10, 10, 10, .5); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
   position: sticky; top: 0; z-index: 10;
@@ -678,12 +677,24 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   display: flex; align-items: center; gap: 9px;
   background: rgba(255, 255, 255, .08); border: 1px solid var(--line);
   border-radius: 999px; padding: 7px 15px 7px 9px; font: 700 1rem/1.1 var(--display);
+  min-width: 0;
 }
 .tb-studio-ico { border-radius: 50%; flex: none; }
-/* Idioma, tema e identidade ficam sempre na mesma linha, nunca um por baixo do
-   outro. Se faltar espaço, é o chip do estúdio que passa para cima (a barra é
-   que quebra, não este grupo). */
-.tb-right { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; white-space: nowrap; }
+.tb-studio-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A barra de topo nunca parte em duas linhas. Quando os controlos com nome não
+   cabem ao lado do nome do estúdio, o painel põe-lhe .compacta (ver
+   ajustarTopo() em admin.js) e ficam só os ícones; se nem assim couber, é o
+   nome do estúdio que encolhe, com reticências. */
+.tb-right { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; white-space: nowrap; flex: none; }
+/* Enquanto se mede, nada encolhe: vê-se quanto ocupa tudo por extenso. */
+.topbar.medir .tb-left, .topbar.medir .tb-studio { flex-shrink: 0; }
+.topbar.compacta { gap: 8px; }
+.topbar.compacta .tb-right { gap: 6px; }
+.topbar.compacta .tb-lang > :not(:first-child), .topbar.compacta .tb-theme .tb-ico + span,
+.topbar.compacta .tb-user-txt, .topbar.compacta .tb-caret, .topbar.compacta .tb-sync-txt { display: none; }
+.topbar.compacta .tb-lang, .topbar.compacta .tb-theme, .topbar.compacta .tb-sync { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+.topbar.compacta .tb-lang svg { color: var(--ink); }
+.topbar.compacta .tb-user { padding: 2px; }
 .tb-btn, .tb-sel, .tb-user, .tb-avatar { flex: none; }
 .tb-btn, .tb-sel {
   width: auto; min-height: 38px; border-radius: 999px; border: 1px solid var(--edge);
@@ -719,25 +730,9 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .search input[hidden] { display: none; }
 .search .ico { display: inline-flex; }
 @media (max-width: 700px) {
-  /* Uma só linha: o chip do estúdio encolhe (nome com reticências) em vez de
-     empurrar os controlos para uma segunda linha e roubar altura ao conteúdo. */
-  .topbar { padding: 8px 16px; flex-wrap: nowrap; gap: 8px; }
-  .tb-studio { flex: 0 1 auto; min-width: 0; padding: 6px 12px 6px 8px; font-size: .92rem; }
-  .tb-studio-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tb-right { gap: 6px; }
-  .tb-btn, .tb-sel { min-height: 40px; padding: 0 10px; }
-  .tb-user-txt { display: none; }
-}
-/* Telemóvel estreito: o tema fica só com o ícone (o botão tem aria-label). */
-@media (max-width: 420px) {
-  .tb-btn .tb-ico + span { display: none; }
-  .tb-btn { width: 40px; justify-content: center; padding: 0; }
-}
-/* No telemóvel o idioma fica só com o código (PT/EN/FR), sem globo nem seta,
-   e os botões da direita ficam todos do mesmo tamanho. */
-@media (max-width: 700px) {
-  .tb-lang .tb-lang-flag, .tb-lang svg { display: none; }
-  .tb-lang { width: auto; min-width: 40px; padding: 0 10px; }
+  .topbar { padding: 8px 16px; }
+  .tb-studio { padding: 6px 12px 6px 8px; font-size: .92rem; }
+  .tb-btn, .tb-sel { min-height: 40px; }
   .tb-bell { width: 40px; flex: none; }
   .tb-bell-n { top: -5px; right: -6px; }
 }
@@ -760,6 +755,8 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 :root[data-tema="claro"] .nav[aria-current="page"] { background: rgba(0, 0, 0, .07); color: var(--ink); }
 :root[data-tema="claro"] .side-foot { border-top-color: rgba(0, 0, 0, .12); }
 :root[data-tema="claro"] .side-foot .who { color: rgba(0, 0, 0, .7); }
+/* A gaveta do telemóvel fica quase opaca, para o menu se ler por cima da página. */
+@media (max-width: 860px) { :root[data-tema="claro"] body.admin .side { background: rgba(255, 255, 255, .97); } }
 :root[data-tema="claro"] .topbar { background: rgba(255, 255, 255, .72); border-bottom-color: var(--line); }
 :root[data-tema="claro"] .main-foot { background: rgba(255, 255, 255, .72); border-top-color: var(--line); }
 :root[data-tema="claro"] .tb-studio { background: rgba(0, 0, 0, .05); }
@@ -767,13 +764,6 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 :root[data-tema="claro"] .tag.off { background: rgba(0, 0, 0, .06); }
 :root[data-tema="claro"] .cal-closed { background: repeating-linear-gradient(135deg, #E6E8EA 0 2px, #F2F3F4 2px 7px); opacity: .85; }
 :root[data-tema="claro"] .cal-block { background: repeating-linear-gradient(135deg, #E4E6E8 0 2px, #F4F5F6 2px 6px); }
-:root[data-tema="claro"] .side nav {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-@media (max-width: 860px) {
-  :root[data-tema="claro"] .side { border-bottom-color: rgba(0, 0, 0, .12); }
-}
 
 @media (max-width: 560px) {
   .bk-side .btn { flex: 1 1 auto; }
@@ -893,12 +883,7 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .tb-sync[data-estado="a-sincronizar"] .tb-sync-dot { width: 10px; height: 10px; background: none; border: 2px solid currentColor; border-top-color: transparent; animation: sync-roda .8s linear infinite; }
 @keyframes sync-pulsa { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sync) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
 @keyframes sync-roda { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .tb-sync-dot { animation: none !important; } }
-/* No telemóvel fica só a bola; o nome continua no aria-label. */
-@media (max-width: 700px) {
-  .tb-sync { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
-  .tb-sync-txt { display: none; }
-}
+@media (prefers-reduced-motion: reduce) { .tb-sync-dot { animation: none !important; } .side, .side-veu { transition: none !important; } }
 
 /* Sininho: botão redondo com o número por ler; a lista abre por baixo. */
 .tb-bell { position: relative; width: 38px; padding: 0; justify-content: center; }
@@ -1129,12 +1114,23 @@ body.admin .cf-card, body.admin .cf-links { -webkit-backdrop-filter: blur(14px);
 :root[data-tema="claro"] .cf-act.lock { background: #FDF3D3; color: #A8751B; }
 :root[data-tema="claro"] .cf-act.edit { background: #FDEDE5; color: #D45A23; }
 :root[data-tema="claro"] .cf-act.del { background: #FBE7E5; color: var(--danger); }
+/* Ecrã estreito (CMS e Configurações): a coluna da esquerda passa para cima e
+   as partes viram botões em pílula que quebram de linha — vê-se tudo, sem
+   rolar para o lado. minmax(0, 1fr): com 1fr só, a fila das partes alargava a
+   coluna e empurrava os cartões para fora do ecrã. */
 @media (max-width: 900px) {
-  .cf-layout { grid-template-columns: 1fr; }
-  .cf-nav { position: static; }
-  .cf-links { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .cf-link { border-top: 0; border-left: 1px solid var(--line); white-space: nowrap; flex: none; }
-  .cf-link:first-child { border-left: 0; }
+  .cf-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .cf-nav { position: static; gap: 12px; }
+  .cf-group-t { margin: 0 0 6px 2px; }
+  .cf-links { display: flex; flex-wrap: wrap; gap: 6px; background: none; border: 0; border-radius: 0; overflow: visible; }
+  body.admin .cf-links { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .cf-link {
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; min-height: 40px;
+    display: inline-flex; align-items: center; background: var(--surface); font-size: .9rem;
+  }
+  .cf-link:first-child { border-top: 1px solid var(--line); }
+  .cf-link[aria-current="page"] { border-color: var(--amber); }
+  .cf-link[aria-current="page"]::before { display: none; }
 }
 /* CMS do site (admin-cms.js): reaproveita o desenho de Configurações. */
 .cms-campo { padding: 16px 0; border-top: 1px solid var(--line); display: grid; gap: 8px; }
@@ -1195,9 +1191,18 @@ body.admin .cf-card, body.admin .cf-links { -webkit-backdrop-filter: blur(14px);
 @media (max-width: 560px) { .cms-pv-sec-grelha.com-imagem { grid-template-columns: 1fr; } }
 .cms-foot { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 @media (max-width: 560px) {
-  .cf-card { padding: 16px; }
-  .cf-item { flex-wrap: wrap; }
+  .cf-card { padding: 16px; border-radius: 14px; }
+  .cf-card-head > div { flex-basis: 100%; }
+  .cf-add { width: 100%; }
+  .cf-item { flex-wrap: wrap; padding: 14px; }
   .cf-acts { margin-left: auto; }
+  /* A sigla da língua vai para cima da caixa: o texto ganha a largura toda. */
+  .cms-lingua { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .cms-lingua label { padding-top: 0; }
+  .cms-campo-top .btn { margin-left: 0; }
+  .cms-bloco { padding: 4px 12px; }
+  /* Os botões do fim (Ver o site, Guardar) ficam da largura toda, fáceis de carregar. */
+  .cms-foot > * { flex: 1 1 100%; }
 }
 
 /* ---------- Listas de escolha e campos com cantos suaves ---------- */
@@ -1248,7 +1253,18 @@ body.admin .tb-sel { border-radius: 999px; }
 .sup > * { pointer-events: auto; }
 .sup-fab, .sup-mini { display: grid; place-items: center; border: 1px solid var(--chrome-edge); border-radius: 50%; color: var(--chrome-ink); background: var(--chrome);
   cursor: pointer; box-shadow: 0 0 18px var(--chrome-glow), 0 6px 18px rgba(0, 0, 0, .35); transition: background .15s, transform .15s; }
-.sup-fab { position: relative; width: 60px; height: 60px; }
+/* Pílula "Mensagens": ícone com o número por ler, o nome e as fotografias de
+   quem escreveu, sobrepostas. */
+.sup-fab { position: relative; display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 20px; border-radius: 999px; font: 700 1rem/1 var(--body); }
+.sup-fab-ico { position: relative; display: grid; place-items: center; }
+.sup-fab-ico .sup-badge { top: auto; bottom: -8px; right: -9px; }
+.sup-fab-txt { padding-right: 8px; white-space: nowrap; }
+.sup-fab-avs { display: flex; }
+.sup-fab-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-left: -10px;
+  background: var(--amber); color: #1A1204; font: 800 .74rem/1 var(--display); box-shadow: 0 0 0 2px var(--chrome); }
+.sup-fab-av:first-child { margin-left: 0; }
+.sup-fab-av:has(.av-foto) { background: var(--mist); }
+.sup-avatar:has(.av-foto) { background: var(--mist); }
 .sup-mini { width: 50px; height: 50px; }
 .sup-fab:hover, .sup-mini:hover { background: var(--chrome-hover); transform: translateY(-1px); }
 .sup-fab.on { background: var(--chrome-hover); }
@@ -1324,6 +1340,9 @@ body.admin .tb-sel { border-radius: 999px; }
 
 @media (max-width: 600px) {
   .sup { right: 14px; bottom: 14px; }
+  /* No telemóvel a pílula fica mais baixa e, com fotografias, sem o nome. */
+  .sup-fab { height: 50px; padding: 0 10px 0 16px; gap: 10px; }
+  .sup-fab:has(.sup-fab-avs) .sup-fab-txt { display: none; }
   .sup-painel { height: calc(100vh - 110px); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1431,6 +1450,25 @@ body.bloqueado #toasts { display: none; }
 .ut-filtro select { min-width: 150px; }
 .ut-count { margin-left: auto; color: var(--muted); font-size: .88rem; }
 .ut-eu { color: var(--muted); font-weight: 400; font-size: .85rem; }
+.ut-quem { display: flex; align-items: center; gap: 10px; }
+.ut-quem .sub { display: block; }
+.ut-avatar { width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--amber); color: #1A1204; font: 800 .82rem/1 var(--display); }
+
+/* Fotografia da pessoa dentro de qualquer avatar (barra de topo, perfil, utilizadores). */
+.av-foto { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+.tb-avatar:has(.av-foto), .pf-avatar:has(.av-foto), .ut-avatar:has(.av-foto), .pf-foto-vista:has(.av-foto) { background: var(--mist); }
+
+/* Caixa da fotografia no perfil: pré-visualização e botões; aceita arrastar. */
+.pf-foto { display: flex; align-items: center; gap: 18px; padding: 16px; margin-bottom: 20px; border: 1px dashed var(--edge); border-radius: 14px; transition: border-color .15s, background .15s; }
+.pf-foto.arrastar { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+.pf-foto-vista { width: 84px; height: 84px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--amber); color: #1A1204; font: 800 1.7rem/1 var(--display); }
+.pf-foto-txt { display: grid; gap: 6px; min-width: 0; }
+.pf-foto-estado { margin: 0; }
+.pf-foto-estado.erro { color: var(--danger); }
+.pf-foto-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.pf-foto-acoes .btn { display: inline-flex; align-items: center; gap: 6px; }
+.pf-foto-tirar[hidden] { display: none; }
+@media (max-width: 520px) { .pf-foto { flex-direction: column; text-align: center; } .pf-foto-acoes { justify-content: center; } }
 .ut-funcao { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--amber-soft, rgba(245, 166, 35, .14)); color: var(--amber); font-weight: 600; font-size: .85rem; }
 .ut-funcao small { font-weight: 400; opacity: .8; }
 .ut-sem { color: var(--muted); font-size: .88rem; }

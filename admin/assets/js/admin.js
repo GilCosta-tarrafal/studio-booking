@@ -258,7 +258,7 @@
   // ---------------------------------------------------------- Sessão
   function showLogin() {
     stopPolling();
-    if (window.AdminSuporte) window.AdminSuporte.parar();   // botão de auriculares e chat
+    if (window.AdminSuporte) window.AdminSuporte.parar();   // pílula "Mensagens" e chat
     if (window.AdminBloqueio) window.AdminBloqueio.parar();  // bloqueio por inatividade
     app.user = null;
     Object.assign(notif, { items: [], unread: 0, avisado: false, pintar: null });
@@ -329,6 +329,8 @@
     app.pending = n;
     const b = document.getElementById('pending-badge');
     if (b) { b.textContent = n; b.hidden = !n; }
+    const ponto = document.getElementById('menu-ponto');
+    if (ponto) ponto.hidden = !n;
     document.title = (n ? `(${n}) ` : '') + document.title.replace(/^\(\d+\)\s/, '');
   }
 
@@ -579,16 +581,29 @@
     return svg;
   }
 
+  // Fotografia da pessoa (u.photo) ou, sem ela ou se não carregar, as iniciais.
+  // `extra` são filhos que ficam por cima (ex.: a bola de "ativo" do perfil).
+  const iniciaisDe = (nome) => (nome || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
+  function avatar(u, cls, ...extra) {
+    const el = h('span', { class: cls }, ...extra);
+    if (u.photo) {
+      const img = h('img', { src: u.photo, alt: '', class: 'av-foto' });
+      img.onerror = () => img.replaceWith(iniciaisDe(u.name));
+      el.prepend(img);
+    } else el.prepend(iniciaisDe(u.name));
+    return el;
+  }
+
   // Chip com o nome: ao clicar abre um menu com o perfil, alterar palavra-passe e sair.
   function userMenu(papel) {
-    const iniciais = (app.user.name || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
     const menu = h('div', { class: 'tb-menu', role: 'menu', hidden: true },
       h('div', { class: 'tb-menu-who' }, h('strong', {}, app.user.name), h('span', {}, app.user.email)),
       h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); location.hash = '#/perfil'; } }, menuIco('perfil'), 'O Meu Perfil'),
       h('button', { class: 'tb-menu-item', type: 'button', role: 'menuitem', onclick: () => { fechar(); changePasswordModal(); } }, menuIco('senha'), 'Alterar palavra-passe'),
       h('button', { class: 'tb-menu-item danger', type: 'button', role: 'menuitem', onclick: () => { fechar(); logout(); } }, menuIco('sair'), 'Terminar sessão'));
-    const btn = h('button', { class: 'tb-user', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' },
-      h('span', { class: 'tb-avatar' }, iniciais),
+    // aria-label: em ecrãs estreitos só se vê a fotografia.
+    const btn = h('button', { class: 'tb-user', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': `${app.user.name}, ${papel}` },
+      avatar(app.user, 'tb-avatar'),
       h('span', { class: 'tb-user-txt' }, h('strong', {}, app.user.name), h('span', {}, papel)),
       h('span', { class: 'tb-caret', 'aria-hidden': 'true' }, '▾'));
     const wrap = h('div', { class: 'tb-usermenu' }, btn, menu);
@@ -619,8 +634,10 @@
         : sync.lentos || sync.estado !== 'vivo' ? 'a-sincronizar' : 'vivo';
       const nome = { vivo: 'Ao vivo', 'a-sincronizar': 'A sincronizar', off: 'Sem ligação' }[est];
       const hora = sync.ultima ? sync.ultima.toLocaleTimeString('pt-PT') : '';
+      const mudou = txt.textContent !== nome;
       btn.dataset.estado = est;
       txt.textContent = nome;
+      if (mudou && btn.isConnected) ajustarTopo();   // "A sincronizar" é mais comprido
       btn.title = (hora ? `Última sincronização às ${hora}. ` : '') + 'Clique para sincronizar agora.';
       btn.setAttribute('aria-label', `Ligação ao servidor: ${nome}` + (hora ? `, última sincronização às ${hora}` : ''));
     }
@@ -635,10 +652,18 @@
   // responsável) veem o nome do negócio.
   function topBar() {
     const st = app.user.studio_id && app.studios.find((s) => s.id === app.user.studio_id);
+    const aberto = !!document.querySelector('.app.menu-aberto');
     return h('header', { class: 'topbar on-dark' },
-      h('div', { class: 'tb-studio' },
-        h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
-        h('span', { class: 'tb-studio-name' }, st ? st.name : app.settings.business_name)),
+      h('div', { class: 'tb-left' },
+        // Só aparece em ecrãs estreitos (ver o CSS): abre o menu em gaveta.
+        h('button', {
+          class: 'tb-btn tb-menu-btn', type: 'button', 'aria-controls': 'menu-lateral',
+          'aria-expanded': String(aberto), 'aria-label': aberto ? 'Fechar o menu' : 'Abrir o menu',
+          onclick: () => abrirMenu(!document.querySelector('.app.menu-aberto')),
+        }, svgIco(['M4 7h16', 'M4 12h16', 'M4 17h16'], 20), h('span', { class: 'tb-menu-ponto', id: 'menu-ponto', hidden: !app.pending, 'aria-hidden': 'true' })),
+        h('div', { class: 'tb-studio' },
+          h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
+          h('span', { class: 'tb-studio-name' }, st ? st.name : app.settings.business_name))),
       h('div', { class: 'tb-right' },
         syncControl(),
         bellControl(),
@@ -661,13 +686,50 @@
         ' · © ' + new Date().getFullYear()));
   }
 
+  // A barra de topo fica sempre numa linha: mede-se com tudo por extenso e,
+  // se não couber ao lado do nome do estúdio, passa a só ícones (.compacta).
+  // Lê e escreve no mesmo frame, por isso não pisca.
+  function ajustarTopo() {
+    const tb = document.querySelector('.topbar');
+    if (!tb) return;
+    tb.classList.add('medir');
+    tb.classList.remove('compacta');
+    const falta = tb.scrollWidth > tb.clientWidth;
+    tb.classList.remove('medir');
+    tb.classList.toggle('compacta', falta);
+  }
+  window.addEventListener('resize', ajustarTopo);
+  // As letras do Google Fonts chegam depois e mudam as larguras.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(ajustarTopo);
+
+  // Menu em gaveta (ecrãs estreitos): abre pelo botão das três barras; fecha
+  // pelo mesmo botão, pelo véu, com Esc ou ao escolher uma secção.
+  function abrirMenu(abrir) {
+    const appEl = document.querySelector('.app');
+    if (!appEl || appEl.classList.contains('menu-aberto') === abrir) return;
+    appEl.classList.toggle('menu-aberto', abrir);
+    document.body.classList.toggle('sem-rolar', abrir);
+    const btn = document.querySelector('.tb-menu-btn');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(abrir));
+      btn.setAttribute('aria-label', abrir ? 'Fechar o menu' : 'Abrir o menu');
+    }
+    if (abrir) {
+      const alvo = document.querySelector('.side .nav[aria-current="page"]') || document.querySelector('.side .nav');
+      if (alvo) setTimeout(() => alvo.focus(), 50);   // depois de a gaveta ficar visível
+    } else if (btn && document.activeElement && document.querySelector('.side').contains(document.activeElement)) btn.focus();
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') abrirMenu(false); });
+  // Ao voltar a um ecrã largo, a gaveta deixa de existir: não fica a página presa.
+  window.addEventListener('resize', () => { if (window.innerWidth > 860) abrirMenu(false); });
+
   function renderShell() {
     // O logo leva à área de entrada: pergunta primeiro, para não sair por engano.
     const goToLogin = (e) => {
       e.preventDefault();
       if (window.confirm('Terminar sessão e voltar ao ecrã de entrada?')) logout();
     };
-    const side = h('aside', { class: 'side on-dark' },
+    const side = h('aside', { class: 'side on-dark', id: 'menu-lateral' },
       h('a', { class: 'brand', href: '#/painel', title: 'Terminar sessão e voltar à entrada', 'aria-label': app.settings.business_name, onclick: goToLogin },
         h('img', { class: 'brand-mark', src: '/img/logo.png', alt: app.settings.business_name, width: 48, height: 48 })),
       h('nav', { 'aria-label': 'Secções do painel' }, NAV.filter(([, , perm]) => canSee(perm)).map(([k, label]) => h('a', { class: 'nav', href: '#/' + k, 'data-k': k },
@@ -681,7 +743,12 @@
     // de topo — nome/estúdio, idioma, tema e identidade — e o rodapé a condizer.
     const viewEl = h('main', { class: 'main', id: 'view', tabindex: '-1' });
     const col = h('div', { class: 'main-col' }, topBar(), viewEl, mainFooter());
-    root.replaceChildren(h('div', { class: 'app' }, side, col));
+    // A secção que já está aberta não muda o endereço (nem chama route()).
+    side.addEventListener('click', (e) => { if (e.target.closest('.nav')) abrirMenu(false); });
+    const veu = h('div', { class: 'side-veu', 'aria-hidden': 'true', onclick: () => abrirMenu(false) });
+    document.body.classList.remove('sem-rolar');
+    root.replaceChildren(h('div', { class: 'app' }, side, veu, col));
+    ajustarTopo();
   }
 
   function parseHash() {
@@ -702,12 +769,7 @@
     for (const a of document.querySelectorAll('.nav')) {
       if (a.dataset.k === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     }
-    // No telemóvel as secções rolam para o lado: traz a atual para dentro do ecrã.
-    const nav = document.querySelector('.side nav');
-    const atual = nav && nav.querySelector('[aria-current="page"]');
-    if (atual && nav.scrollWidth > nav.clientWidth) {
-      nav.scrollLeft = atual.offsetLeft - (nav.clientWidth - atual.offsetWidth) / 2;
-    }
+    abrirMenu(false);   // no telemóvel, escolher uma secção fecha a gaveta
     const main = document.getElementById('view');
     if (!main) return;
     document.title = `${view.title} | ${app.settings.business_name}`;
@@ -1032,12 +1094,13 @@
   function renderTopBar() {
     const atual = document.querySelector('.topbar');
     if (atual) atual.replaceWith(topBar());
+    ajustarTopo();
     const who = document.querySelector('.side-foot .who');
     if (who) who.textContent = `${app.user.name} (${roleLabel()})`;
   }
 
   window.Admin = {
-    app, ui, views, api, toast, field, campoImagem, campoImagens, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
+    app, ui, views, api, toast, field, avatar, campoImagem, campoImagens, pageHead, labelCells, studioFilter, openModal, openBooking, openBlock,
     bookingItem, reloadRefs, refresh: route, refreshPending, boot, renderTopBar,
   };
 })();

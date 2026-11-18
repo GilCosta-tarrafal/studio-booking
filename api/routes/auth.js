@@ -7,6 +7,7 @@ const atividade = require('../lib/atividade');
 const U = require('../lib/util');
 const { HttpError } = U;
 const { rateLimit } = require('../lib/ratelimit');
+const capas = require('../integracoes/lib/capas');
 
 const router = express.Router();
 const loginLimiter = rateLimit({
@@ -121,7 +122,7 @@ function papel(u) {
 
 function perfil(userId) {
   const u = db.prepare(
-    `SELECT u.id, u.name, u.email, u.phone, u.role, u.active, u.studio_id, u.created_at,
+    `SELECT u.id, u.name, u.email, u.phone, u.photo, u.role, u.active, u.studio_id, u.created_at,
             u.last_login_at, u.last_login_ip, u.last_seen_at, u.password_changed_at, s.name AS studio_name
        FROM users u LEFT JOIN studios s ON s.id = u.studio_id WHERE u.id=?`
   ).get(userId);
@@ -168,6 +169,25 @@ router.put('/profile', auth.requireAuth, (req, res) => {
   }
   db.prepare('UPDATE users SET name=?, email=?, phone=? WHERE id=?').run(name, email, phone, req.user.id);
   atividade.registar(req.user.id, 'change', 'Atualizou os dados pessoais', { status: 200, ip: req.ip });
+  res.json({ profile: perfil(req.user.id) });
+});
+
+// Fotografia do perfil: o próprio ficheiro, em bruto (JPG, PNG ou WebP até
+// 5 MB), guardado como as imagens enviadas das integrações. Cada pessoa da
+// equipa muda só a sua.
+router.put('/profile/photo', auth.requireAuth,
+  express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: capas.MAX }),
+  (req, res) => {
+    let caminho;
+    try { caminho = capas.guardarEnviada(req.body); } catch (e) { throw new HttpError(400, e.message); }
+    db.prepare('UPDATE users SET photo=? WHERE id=?').run(caminho, req.user.id);
+    atividade.registar(req.user.id, 'change', 'Mudou a fotografia do perfil', { status: 200, ip: req.ip });
+    res.json({ profile: perfil(req.user.id) });
+  });
+
+router.delete('/profile/photo', auth.requireAuth, (req, res) => {
+  db.prepare("UPDATE users SET photo='' WHERE id=?").run(req.user.id);
+  atividade.registar(req.user.id, 'change', 'Removeu a fotografia do perfil', { status: 200, ip: req.ip });
   res.json({ profile: perfil(req.user.id) });
 });
 

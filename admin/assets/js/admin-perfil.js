@@ -30,6 +30,7 @@
     alert: ['M12 3l9 16H3z', 'M12 10v4', 'M12 17h.01'],
     refresh: ['M20 11a8 8 0 1 0-2.3 5.7', 'M20 4v7h-7'],
     eye: ['M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z'],
+    camera: ['M4 8h3l2-3h6l2 3h3v11H4z', 'M12 10a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z'],
   };
   function ico(nome, tam = 18) {
     const svg = document.createElementNS(SVG, 'svg');
@@ -61,7 +62,6 @@
   const data = (iso) => (iso ? new Date(iso).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
   const dataHora = (iso) => (iso ? new Date(iso).toLocaleString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const ip = (s) => String(s || '').replace(/^::ffff:/, '');
-  const iniciais = (nome) => (nome || '').trim().split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '·';
 
   // Mete o campo de um field() dentro de uma caixa com ícone/botão, sem perder
   // a ligação da etiqueta (o id fica no próprio input).
@@ -105,7 +105,7 @@
     return h('div', { class: 'pf-hero' },
       h('div', { class: 'pf-banner', 'aria-hidden': 'true' }),
       h('div', { class: 'pf-id' },
-        h('div', { class: 'pf-avatar' }, iniciais(p.name), p.active && h('span', { class: 'pf-online', title: 'Ativo' })),
+        A.avatar(p, 'pf-avatar', p.active && h('span', { class: 'pf-online', title: 'Ativo' })),
         h('div', { class: 'pf-id-txt' },
           h('div', { class: 'pf-name' }, h('strong', {}, p.name), h('span', { class: 'pf-pill ' + (p.active ? 'ok' : 'off') }, p.active ? 'Ativo' : 'Inativo')),
           h('div', { class: 'pf-meta' },
@@ -116,6 +116,76 @@
         h('span', { class: 'pf-tile-k' }, ico(i, 15), k),
         h('strong', {}, v),
         extra && h('code', {}, extra)))));
+  }
+
+  // ---------------------------------------------------------- Fotografia
+  // A imagem escolhida é cortada ao quadrado e reduzida a 512 px no próprio
+  // browser antes de seguir: uma foto do telemóvel com vários MB fica com
+  // poucos KB, e o servidor guarda sempre um JPEG pequeno.
+  const FOTO_LADO = 512;
+  async function prepararFoto(f) {
+    if (!/^image\/(jpeg|png|webp)$/.test(f.type)) throw new Error('Escolha uma imagem JPG, PNG ou WebP.');
+    if (f.size > 20 * 1024 * 1024) throw new Error('A imagem tem mais de 20 MB. Escolha uma mais pequena.');
+    let bmp;
+    try { bmp = await createImageBitmap(f); } catch (_) { throw new Error('Não foi possível ler esta imagem.'); }
+    const lado = Math.min(bmp.width, bmp.height);
+    const c = document.createElement('canvas');
+    c.width = c.height = Math.min(FOTO_LADO, lado);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';   // um PNG com transparência fica com fundo branco
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado, 0, 0, c.width, c.height);
+    if (bmp.close) bmp.close();
+    return new Promise((ok, falha) => c.toBlob((b) => (b ? ok(b) : falha(new Error('Não foi possível preparar a imagem.'))), 'image/jpeg', 0.9));
+  }
+
+  // Caixa da fotografia: pré-visualização, escolher (ou arrastar) e remover.
+  // Guarda logo, sem esperar pelo "Guardar alterações" dos dados pessoais.
+  function fotografia(p, aoMudar) {
+    const ficheiro = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', hidden: true });
+    const escolher = h('button', { class: 'btn btn-outline btn-sm', type: 'button' }, ico('camera', 16), p.photo ? 'Mudar fotografia' : 'Carregar fotografia');
+    const remover = h('button', { class: 'btn btn-outline btn-sm pf-foto-tirar', type: 'button', hidden: !p.photo }, 'Remover');
+    const DICA = 'JPG, PNG ou WebP. Fica quadrada; também pode arrastá-la para aqui.';
+    const estado = h('p', { class: 'hint pf-foto-estado', 'aria-live': 'polite' }, DICA);
+    const caixaEl = h('div', { class: 'pf-foto' },
+      A.avatar(p, 'pf-foto-vista'),
+      h('div', { class: 'pf-foto-txt' },
+        h('strong', {}, 'Fotografia'), estado,
+        h('div', { class: 'pf-foto-acoes' }, escolher, remover)),
+      ficheiro);
+    const ocupado = (txt) => { escolher.disabled = remover.disabled = true; estado.textContent = txt; estado.classList.remove('erro'); };
+    const erro = (m) => { escolher.disabled = remover.disabled = false; estado.textContent = m; estado.classList.add('erro'); };
+
+    async function enviar(f) {
+      if (!f) return;
+      ocupado('A enviar…');
+      try {
+        const blob = await prepararFoto(f);
+        const res = await fetch('/api/auth/profile/photo', {
+          method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'image/jpeg', 'X-Requested-With': 'studio' }, body: blob,
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'Não foi possível guardar a fotografia.');
+        toast('Fotografia atualizada.');
+        aoMudar(d.profile);
+      } catch (ex) { erro(ex.message); }
+      ficheiro.value = '';
+    }
+    escolher.onclick = () => ficheiro.click();
+    ficheiro.addEventListener('change', () => enviar(ficheiro.files[0]));
+    remover.onclick = async () => {
+      if (!window.confirm('Remover a sua fotografia? Passa a aparecer com as iniciais.')) return;
+      ocupado('A remover…');
+      try {
+        const r = await api('/api/auth/profile/photo', { method: 'DELETE' });
+        toast('Fotografia removida.');
+        aoMudar(r.profile);
+      } catch (ex) { erro(ex.message); }
+    };
+    caixaEl.addEventListener('dragover', (e) => { e.preventDefault(); caixaEl.classList.add('arrastar'); });
+    caixaEl.addEventListener('dragleave', (e) => { if (!caixaEl.contains(e.relatedTarget)) caixaEl.classList.remove('arrastar'); });
+    caixaEl.addEventListener('drop', (e) => { e.preventDefault(); caixaEl.classList.remove('arrastar'); enviar(e.dataTransfer.files[0]); });
+    return caixaEl;
   }
 
   // ---------------------------------------------------------- Dados pessoais
@@ -313,6 +383,12 @@
         A.refresh();
       };
       const aoMudarSenha = () => A.refresh();
+      // A fotografia nova aparece também no chip da barra de topo.
+      const aoMudarFoto = (novo) => {
+        app.user.photo = novo.photo;
+        A.renderTopBar();
+        A.refresh();
+      };
 
       const links = SECOES.map(([id, i, label]) => h('a', { class: 'pf-nav-a', href: '#/perfil?sec=' + id, 'data-sec': id }, ico(i, 18), label));
       const marcar = (id) => links.forEach((a) => (a.dataset.sec === id ? a.setAttribute('aria-current', 'true') : a.removeAttribute('aria-current')));
@@ -326,7 +402,7 @@
       }
 
       const secoes = [
-        secao('dados', 'user', 'Dados pessoais', 'Nome e contactos usados no painel e nas notificações.', dadosPessoais(p, aoGuardarDados)),
+        secao('dados', 'user', 'Dados pessoais', 'Fotografia, nome e contactos usados no painel e nas notificações.', fotografia(p, aoMudarFoto), dadosPessoais(p, aoGuardarDados)),
         secao('conta', 'shield', 'Conta e acessos', 'O seu papel, estado e o que pode fazer no painel.', contaAcessos(p)),
         secao('seguranca', 'key', 'Segurança', 'Use uma palavra-passe forte que não utilize noutros sítios.', seguranca(p, aoMudarSenha)),
         secao('atividade', 'activity', 'Atividade', 'Logins, saídas e alterações feitas com esta conta.', atividade(p)),

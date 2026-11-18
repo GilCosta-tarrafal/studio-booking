@@ -132,11 +132,11 @@ router.get('/', (req, res) => {
   const me = req.user.id;
   const ids = new Set(online());
   const colegas = db.prepare(
-    `SELECT u.id, u.name, u.role, u.studio_id, s.name AS studio_name
+    `SELECT u.id, u.name, u.role, u.studio_id, u.photo, s.name AS studio_name
        FROM users u LEFT JOIN studios s ON s.id = u.studio_id
       WHERE u.active=1 AND u.id<>? ORDER BY u.role='owner' DESC, u.name`
   ).all(me).map((u) => ({
-    id: u.id, name: u.name, studio_name: u.studio_name || '',
+    id: u.id, name: u.name, photo: u.photo || '', studio_name: u.studio_name || '',
     role: u.role === 'owner' ? 'owner' : u.studio_id ? 'agent' : 'staff',
     online: ids.has(u.id), channel: dm(me, u.id), ...resumo(me, dm(me, u.id)),
   }));
