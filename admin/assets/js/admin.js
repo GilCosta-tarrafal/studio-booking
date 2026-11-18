@@ -10,12 +10,39 @@
   const views = {};
   let routeSeq = 0;
   let pollTimer = null;
+  let pollSeq = 0;
+
+  // Estado da ligação ao servidor, para o selo da barra de topo: 'vivo' (o
+  // último pedido teve resposta), 'off' (falhou a rede ou a API não respondeu)
+  // ou, enquanto não se sabe, 'a-sincronizar'. `lentos` = pedidos há mais de
+  // 1,5 s à espera; `agora` = verificar já (definido em startPolling).
+  const sync = { estado: 'a-sincronizar', ultima: null, emCurso: 0, lentos: 0, pintar: null, agora: null };
+  function marcarSync(ok) {
+    const antes = sync.estado;
+    sync.estado = ok ? 'vivo' : 'off';
+    if (ok) sync.ultima = new Date();
+    if (sync.pintar) sync.pintar();
+    if (!app.user || antes === sync.estado) return;
+    if (!ok) toast('Sem ligação ao servidor. A tentar de novo…', true);
+    else if (antes === 'off') { toast('Ligação ao servidor restabelecida.'); loadNotifs(); }
+  }
 
   // 423 = sessão bloqueada por inatividade (ver admin-bloqueio.js).
-  const api = (url, opts = {}) => S.api(url, { ...opts, onUnauthorized: showLogin }).catch((e) => {
-    if (e.status === 423 && window.AdminBloqueio) window.AdminBloqueio.mostrar();
-    throw e;
-  });
+  // Qualquer resposta do servidor (mesmo um erro 4xx) prova que há ligação;
+  // só a falta de resposta ou um 5xx (a API em baixo) conta como sem ligação.
+  const api = (url, opts = {}) => {
+    let lento = false;
+    const espera = setTimeout(() => { lento = true; sync.lentos++; if (sync.pintar) sync.pintar(); }, 1500);
+    sync.emCurso++;
+    if (sync.pintar) sync.pintar();
+    const fim = () => { clearTimeout(espera); sync.emCurso--; if (lento) sync.lentos--; };
+    return S.api(url, { ...opts, onUnauthorized: showLogin }).then((d) => { fim(); marcarSync(true); return d; }, (e) => {
+      fim();
+      marcarSync(!!e.status && e.status < 500);
+      if (e.status === 423 && window.AdminBloqueio) window.AdminBloqueio.mostrar();
+      throw e;
+    });
+  };
 
   // ---------------------------------------------------------- Preferências (tema e idioma)
   // Guardadas no navegador de quem usa o painel. O tema vale para todo o painel;
@@ -305,18 +332,34 @@
     document.title = (n ? `(${n}) ` : '') + document.title.replace(/^\(\d+\)\s/, '');
   }
 
+  // Pergunta ao servidor de 15 em 15 s (é também o que mantém o selo "Ao vivo"
+  // certo); sem ligação, tenta de 5 em 5 s. As notificações vêm de minuto a minuto.
   function startPolling() {
     stopPolling();
-    pollTimer = setInterval(async () => {
+    const seq = pollSeq;
+    let voltas = 0;
+    const volta = async () => {
+      clearTimeout(pollTimer);
       try {
         const r = await api('/api/admin/pending-count');
         if (r.pending > app.pending) toast('Novo pedido de marcação.');
         setPending(r.pending);
-        loadNotifs();
+        if (++voltas % 4 === 0) loadNotifs();
       } catch (_) { /* tenta na próxima */ }
-    }, 60000);
+      if (seq !== pollSeq) return;   // entretanto saiu ou recomeçou
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(volta, sync.estado === 'off' ? 5000 : 15000);
+    };
+    sync.agora = volta;
+    pollTimer = setTimeout(volta, 15000);
   }
-  function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+  function stopPolling() { clearTimeout(pollTimer); pollTimer = null; pollSeq++; sync.agora = null; }
+
+  // A rede do computador caiu: mostra logo, sem esperar pela próxima volta.
+  // Voltou a rede, ou a pessoa voltou a este separador: verifica já.
+  window.addEventListener('offline', () => marcarSync(false));
+  window.addEventListener('online', () => { if (sync.agora) sync.agora(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && sync.agora) sync.agora(); });
 
   // ---------------------------------------------------------- Estrutura e navegação
   // A terceira coluna é quem vê a secção: '' = todos; 'manager' = proprietário
@@ -566,6 +609,27 @@
     return 'Responsável';
   }
 
+  // Selo da ligação ao servidor: "Ao vivo" (verde), "A sincronizar" (âmbar) ou
+  // "Sem ligação" (vermelho). Ao clicar, verifica já.
+  function syncControl() {
+    const txt = h('span', { class: 'tb-sync-txt' });
+    const btn = h('button', { class: 'tb-sync', type: 'button' }, h('span', { class: 'tb-sync-dot', 'aria-hidden': 'true' }), txt);
+    function pintar() {
+      const est = sync.estado === 'off' ? (sync.emCurso ? 'a-sincronizar' : 'off')
+        : sync.lentos || sync.estado !== 'vivo' ? 'a-sincronizar' : 'vivo';
+      const nome = { vivo: 'Ao vivo', 'a-sincronizar': 'A sincronizar', off: 'Sem ligação' }[est];
+      const hora = sync.ultima ? sync.ultima.toLocaleTimeString('pt-PT') : '';
+      btn.dataset.estado = est;
+      txt.textContent = nome;
+      btn.title = (hora ? `Última sincronização às ${hora}. ` : '') + 'Clique para sincronizar agora.';
+      btn.setAttribute('aria-label', `Ligação ao servidor: ${nome}` + (hora ? `, última sincronização às ${hora}` : ''));
+    }
+    btn.onclick = () => { if (sync.agora) sync.agora(); };
+    sync.pintar = pintar;
+    pintar();
+    return btn;
+  }
+
   // Barra de topo do painel: identidade à esquerda, idioma, tema e quem está à
   // direita. O agente vê o nome do seu estúdio; os outros perfis (administrador,
   // responsável) veem o nome do negócio.
@@ -576,6 +640,7 @@
         h('img', { class: 'tb-studio-ico', src: '/img/logo.png', alt: '', width: 20, height: 20 }),
         h('span', { class: 'tb-studio-name' }, st ? st.name : app.settings.business_name)),
       h('div', { class: 'tb-right' },
+        syncControl(),
         bellControl(),
         langControl(),
         themeControl(),

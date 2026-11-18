@@ -877,6 +877,29 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
 .tb-menu-item { display: flex; align-items: center; gap: 10px; }
 .tb-menu-item svg { flex: none; opacity: .85; }
 
+/* Selo da ligação ao servidor: verde ao vivo, âmbar a sincronizar, vermelho sem ligação. */
+.tb-sync {
+  --sync: #2FB36A; flex: none; display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px 0 10px;
+  border-radius: 999px; border: 1px solid color-mix(in srgb, var(--sync) 35%, transparent);
+  background: color-mix(in srgb, var(--sync) 14%, transparent); color: var(--sync); font: 700 .82rem/1 var(--body); cursor: pointer;
+}
+.tb-sync[data-estado="a-sincronizar"] { --sync: #E0A33A; }
+.tb-sync[data-estado="off"] { --sync: #E4695D; }
+:root[data-tema="claro"] .tb-sync { --sync: #1E8A4C; }
+:root[data-tema="claro"] .tb-sync[data-estado="a-sincronizar"] { --sync: #A86A06; }
+:root[data-tema="claro"] .tb-sync[data-estado="off"] { --sync: #C2392C; }
+.tb-sync-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.tb-sync[data-estado="vivo"] .tb-sync-dot { animation: sync-pulsa 2s ease-out infinite; }
+.tb-sync[data-estado="a-sincronizar"] .tb-sync-dot { width: 10px; height: 10px; background: none; border: 2px solid currentColor; border-top-color: transparent; animation: sync-roda .8s linear infinite; }
+@keyframes sync-pulsa { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sync) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+@keyframes sync-roda { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tb-sync-dot { animation: none !important; } }
+/* No telemóvel fica só a bola; o nome continua no aria-label. */
+@media (max-width: 700px) {
+  .tb-sync { width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+  .tb-sync-txt { display: none; }
+}
+
 /* Sininho: botão redondo com o número por ler; a lista abre por baixo. */
 .tb-bell { position: relative; width: 38px; padding: 0; justify-content: center; }
 .tb-bell svg { color: var(--ink); }
