@@ -1,10 +1,8 @@
 /* Painel de gestão: pílula "Mensagens" (canto inferior direito), com o número
-   por ler e as fotografias de quem escreveu. Ao carregar
-   abre dois botões — "Assistente IA", para perguntar algo à IA, e "Chat —
-   Agentes", para falar em tempo real com o administrador e com os agentes dos
+   por ler e as fotografias de quem escreveu. Ao carregar abre logo o chat da
+   equipa, para falar em tempo real com o administrador e com os agentes dos
    outros estúdios. Vale para todos os perfis. O chat recebe as mensagens por
-   Server-Sent Events (/api/admin/chat/stream); ver api/routes/chat.js e
-   api/routes/assistente.js. */
+   Server-Sent Events (/api/admin/chat/stream); ver api/routes/chat.js. */
 (function () {
   'use strict';
   const S = window.Studio;
@@ -14,7 +12,6 @@
 
   const SVG = 'http://www.w3.org/2000/svg';
   const ICO = {
-    robot: ['M5 9h14v10H5z', 'M12 5v4', 'M12 4h.01', 'M9 13h.01', 'M15 13h.01', 'M9.5 16.5h5', 'M3 13v2', 'M21 13v2'],
     chat: ['M4 5h16v11H9l-5 4z'],
     close: ['M6 6l12 12', 'M18 6L6 18'],
     back: ['M15 5l-7 7 7 7'],
@@ -49,11 +46,10 @@
   };
   const papel = (c) => (c.role === 'owner' ? 'Administrador' : c.role === 'agent' ? 'Agente · ' + c.studio_name : 'Equipa');
 
-  // Estado do widget. `fonte` é a ligação em tempo real; `aberto` diz que
-  // painel está à vista ('ia', 'chat' ou null).
+  // Estado do widget. `fonte` é a ligação em tempo real; `aberto` diz se o
+  // chat está à vista ('chat' ou null).
   const st = {
-    raiz: null, fonte: null, aberto: null, menu: false,
-    ia: [], // histórico do assistente nesta sessão: [{ role, content }]
+    raiz: null, fonte: null, aberto: null,
     lista: null, online: new Set(), conversa: null, mensagens: [],
   };
 
@@ -61,14 +57,11 @@
   function iniciar() {
     parar();
     const badge = h('span', { class: 'sup-badge', hidden: true });
-    const fab = h('button', { class: 'sup-fab', type: 'button', 'aria-expanded': 'false', title: 'Mensagens e assistente' });
-    const opcoes = h('div', { class: 'sup-opcoes', hidden: true },
-      opcao('Assistente IA', 'robot', () => abrir('ia')),
-      opcao('Chat — Agentes', 'chat', () => abrir('chat')));
+    const fab = h('button', { class: 'sup-fab', type: 'button', 'aria-expanded': 'false', title: 'Mensagens' });
     const painel = h('section', { class: 'sup-painel', hidden: true, 'aria-live': 'polite' });
-    fab.onclick = () => (st.aberto ? fechar() : alternarMenu());
-    st.raiz = h('div', { class: 'sup' }, painel, opcoes, fab);
-    st.badge = badge; st.fab = fab; st.opcoes = opcoes; st.painel = painel;
+    fab.onclick = () => (st.aberto ? fechar() : abrir());
+    st.raiz = h('div', { class: 'sup' }, painel, fab);
+    st.badge = badge; st.fab = fab; st.painel = painel;
     pintarFab();
     document.body.appendChild(st.raiz);
     document.addEventListener('keydown', onKey);
@@ -81,36 +74,20 @@
     if (st.fonte) st.fonte.close();
     if (st.raiz) st.raiz.remove();
     document.removeEventListener('keydown', onKey);
-    Object.assign(st, { raiz: null, fonte: null, aberto: null, menu: false, ia: [], lista: null, online: new Set(), conversa: null, mensagens: [] });
-  }
-
-  function opcao(texto, icone, acao) {
-    return h('div', { class: 'sup-opcao' },
-      h('button', { class: 'sup-opcao-txt', type: 'button', onclick: acao, tabindex: '-1' }, texto),
-      h('button', { class: 'sup-mini', type: 'button', onclick: acao, 'aria-label': texto }, ico(icone, 22)));
+    Object.assign(st, { raiz: null, fonte: null, aberto: null, lista: null, online: new Set(), conversa: null, mensagens: [] });
   }
 
   function onKey(e) {
-    if (e.key !== 'Escape') return;
-    if (st.aberto) fechar(); else if (st.menu) alternarMenu(false);
+    if (e.key === 'Escape' && st.aberto) fechar();
   }
 
-  function alternarMenu(forcar) {
-    st.menu = forcar === undefined ? !st.menu : forcar;
-    st.opcoes.hidden = !st.menu;
-    st.fab.classList.toggle('on', st.menu);
-    st.fab.setAttribute('aria-expanded', String(st.menu));
-    pintarFab();
-    if (st.menu) st.opcoes.querySelector('.sup-mini').focus();
-  }
-
-  function abrir(qual) {
-    alternarMenu(false);
-    st.aberto = qual;
+  function abrir() {
+    st.aberto = 'chat';
     st.painel.hidden = false;
     st.fab.classList.add('on');
+    st.fab.setAttribute('aria-expanded', 'true');
     pintarFab();
-    if (qual === 'ia') pintarIA(); else pintarChat();
+    pintarChat();
   }
 
   function fechar() {
@@ -120,26 +97,34 @@
     st.painel.hidden = true;
     st.painel.replaceChildren();
     st.fab.classList.remove('on');
+    st.fab.setAttribute('aria-expanded', 'false');
     pintarFab();
   }
 
   // O botão é uma pílula "Mensagens": o ícone com o número por ler e, à
   // direita, as fotografias de quem mandou mensagem (as mais recentes à frente,
-  // até três). Aberto, mostra "Fechar".
+  // até três). Com o chat aberto encolhe a um botão redondo só com o ✕.
   function pintarFab() {
     const n = totalPorLer();
-    const aberto = st.menu || !!st.aberto;
+    const aberto = !!st.aberto;
     st.badge.hidden = !n;
     st.badge.textContent = n > 99 ? '99+' : String(n);
+    st.fab.classList.toggle('fechar', aberto);
+    if (aberto) {
+      st.fab.replaceChildren(ico('close', 24));
+      st.fab.setAttribute('aria-label', 'Fechar as mensagens');
+      return;
+    }
     const quando = (c) => String((c.last || {}).created_at || '');
-    const quem = aberto || !st.lista ? []
+    const quem = !st.lista ? []
       : st.lista.contacts.filter((c) => c.unread).sort((a, b) => quando(b).localeCompare(quando(a))).slice(0, 3);
-    st.fab.replaceChildren(
-      h('span', { class: 'sup-fab-ico' }, ico(aberto ? 'close' : 'chat', 24), st.badge),
-      h('span', { class: 'sup-fab-txt' }, aberto ? 'Fechar' : 'Mensagens'),
-      quem.length ? h('span', { class: 'sup-fab-avs', 'aria-hidden': 'true' }, quem.map((c) => A.avatar(c, 'sup-fab-av'))) : null);
-    st.fab.setAttribute('aria-label', aberto ? 'Fechar'
-      : n ? `Mensagens: ${n} por ler, de ${quem.map((c) => c.name).join(', ')}` : 'Mensagens e assistente');
+    // (replaceChildren escreveria um null como o texto "null": só o que existe.)
+    st.fab.replaceChildren(...[
+      h('span', { class: 'sup-fab-ico' }, ico('chat', 24), st.badge),
+      h('span', { class: 'sup-fab-txt' }, 'Mensagens'),
+      quem.length && h('span', { class: 'sup-fab-avs', 'aria-hidden': 'true' }, quem.map((c) => A.avatar(c, 'sup-fab-av'))),
+    ].filter(Boolean));
+    st.fab.setAttribute('aria-label', n ? `Mensagens: ${n} por ler, de ${quem.map((c) => c.name).join(', ')}` : 'Mensagens');
   }
 
   function cabecalho(titulo, sub, voltar) {
@@ -149,70 +134,7 @@
       h('button', { class: 'sup-icobtn', type: 'button', onclick: fechar, 'aria-label': 'Fechar' }, ico('close', 20)));
   }
 
-  // Caixa de escrever: Enter envia, Shift+Enter muda de linha.
-  function caixaEnvio(placeholder, enviar) {
-    const txt = h('textarea', { rows: 1, maxlength: 2000, placeholder, 'aria-label': placeholder });
-    const btn = h('button', { class: 'sup-enviar', type: 'submit', 'aria-label': 'Enviar' }, ico('send', 20));
-    const form = h('form', { class: 'sup-form' }, txt, btn);
-    const ajustar = () => { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight, 120) + 'px'; };
-    txt.addEventListener('input', ajustar);
-    txt.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const v = txt.value.trim();
-      if (!v || btn.disabled) return;
-      btn.disabled = true;
-      try { if (await enviar(v) !== false) { txt.value = ''; ajustar(); } } finally { btn.disabled = false; txt.focus(); }
-    };
-    setTimeout(() => txt.focus(), 0);
-    return form;
-  }
-
   const rolarFim = (el) => { el.scrollTop = el.scrollHeight; };
-
-  // ============================================================ Assistente IA
-  function pintarIA() {
-    const corpo = h('div', { class: 'sup-corpo' });
-    const desenhar = () => {
-      corpo.replaceChildren();
-      if (!st.ia.length) {
-        corpo.append(h('div', { class: 'sup-vazio' },
-          h('p', {}, 'Olá, ' + app.user.name.split(' ')[0] + '! Pergunte o que precisar sobre o painel ou sobre a agenda'
-            + (app.user.studio_id ? ' do seu estúdio.' : ' dos estúdios.')),
-          h('div', { class: 'sup-sugestoes' },
-            ['O que tenho marcado hoje?', 'Há pedidos por confirmar?', 'Como bloqueio um horário?'].map((q) =>
-              h('button', { class: 'sup-chip', type: 'button', onclick: () => perguntar(q) }, q)))));
-      }
-      for (const m of st.ia) {
-        corpo.append(h('div', { class: 'sup-msg ' + (m.role === 'user' ? 'eu' : 'ia') + (m.erro ? ' erro' : '') },
-          h('div', { class: 'sup-bolha' }, m.content)));
-      }
-      if (st.iaPensa) corpo.append(h('div', { class: 'sup-msg ia' }, h('div', { class: 'sup-bolha sup-pensa' }, h('i'), h('i'), h('i'))));
-      rolarFim(corpo);
-    };
-    async function perguntar(q) {
-      if (st.iaPensa) return false;
-      st.ia.push({ role: 'user', content: q });
-      st.iaPensa = true;
-      desenhar();
-      try {
-        const historico = st.ia.filter((m) => !m.erro).map(({ role, content }) => ({ role, content }));
-        const r = await api('/api/admin/assistente', { method: 'POST', body: { messages: historico } });
-        st.ia.push({ role: 'assistant', content: r.reply });
-      } catch (ex) {
-        st.ia.push({ role: 'assistant', content: ex.message, erro: true });
-      } finally {
-        st.iaPensa = false;
-        if (st.aberto === 'ia') desenhar();
-      }
-      return true;
-    }
-    st.painel.replaceChildren(
-      cabecalho('Assistente IA', 'Responde com os dados que pode ver', null),
-      corpo,
-      caixaEnvio('Escreva a sua pergunta…', perguntar));
-    desenhar();
-  }
 
   // ============================================================ Chat da equipa
   // Conversas a dois: ao abrir aparece a lista das pessoas da equipa; cada
@@ -348,7 +270,7 @@
     };
     busca.addEventListener('input', filtrar);
     filtrar();
-    corpo.replaceChildren(st.lista.contacts.length > 5 ? busca : null, lista);
+    corpo.replaceChildren(...(st.lista.contacts.length > 5 ? [busca, lista] : [lista]));
   }
 
   // Envia um ficheiro (fotografia ou gravação) para a conversa.

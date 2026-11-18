@@ -539,8 +539,10 @@ details.studio-panel > summary .meta { font: 400 .92rem var(--body); color: var(
   .figures div, .figures div:first-child { border-top: 0; padding-top: 0; }
 }
 
-/* Botão das três barras e véu da gaveta: só existem em ecrãs estreitos. */
-.tb-menu-btn, .side-veu { display: none; }
+/* Botão das três barras e véu da gaveta: só existem em ecrãs estreitos, quando
+   a barra lateral deixa de se ver. (.topbar à frente: o botão é também .tb-btn,
+   cujo display vem mais abaixo na folha e ganharia a este.) */
+.topbar .tb-menu-btn, .side-veu { display: none; }
 .tb-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 body.sem-rolar { overflow: hidden; }
 
@@ -563,7 +565,7 @@ body.sem-rolar { overflow: hidden; }
   /* Alvos maiores do que no computador: aqui carrega-se com o dedo. */
   .nav { min-height: 46px; }
   .side-foot a, .side-foot button { min-height: 44px; }
-  .tb-menu-btn { display: inline-flex; position: relative; width: 40px; min-height: 40px; padding: 0; justify-content: center; }
+  .topbar .tb-menu-btn { display: inline-flex; position: relative; width: 40px; min-height: 40px; padding: 0; justify-content: center; }
   /* Há pedidos por confirmar: um ponto no botão, já que o selo do menu está escondido. */
   .tb-menu-btn .tb-menu-ponto { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); border: 2px solid var(--paper); }
   .tb-menu-btn .tb-menu-ponto[hidden] { display: none; }
@@ -1251,7 +1253,7 @@ body.admin .tb-sel { border-radius: 999px; }
 .sup { --sup: var(--silver); position: fixed; right: 22px; bottom: 22px; z-index: 150;
   display: flex; flex-direction: column; align-items: flex-end; gap: 14px; pointer-events: none; }
 .sup > * { pointer-events: auto; }
-.sup-fab, .sup-mini { display: grid; place-items: center; border: 1px solid var(--chrome-edge); border-radius: 50%; color: var(--chrome-ink); background: var(--chrome);
+.sup-fab { display: grid; place-items: center; border: 1px solid var(--chrome-edge); border-radius: 50%; color: var(--chrome-ink); background: var(--chrome);
   cursor: pointer; box-shadow: 0 0 18px var(--chrome-glow), 0 6px 18px rgba(0, 0, 0, .35); transition: background .15s, transform .15s; }
 /* Pílula "Mensagens": ícone com o número por ler, o nome e as fotografias de
    quem escreveu, sobrepostas. */
@@ -1259,29 +1261,24 @@ body.admin .tb-sel { border-radius: 999px; }
 .sup-fab-ico { position: relative; display: grid; place-items: center; }
 .sup-fab-ico .sup-badge { top: auto; bottom: -8px; right: -9px; }
 .sup-fab-txt { padding-right: 8px; white-space: nowrap; }
+/* Com o chat aberto: um botão redondo só com o ✕, por baixo do painel. */
+.sup-fab.fechar { width: 56px; padding: 0; justify-content: center; }
 .sup-fab-avs { display: flex; }
 .sup-fab-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-left: -10px;
   background: var(--amber); color: #1A1204; font: 800 .74rem/1 var(--display); box-shadow: 0 0 0 2px var(--chrome); }
 .sup-fab-av:first-child { margin-left: 0; }
 .sup-fab-av:has(.av-foto) { background: var(--mist); }
 .sup-avatar:has(.av-foto) { background: var(--mist); }
-.sup-mini { width: 50px; height: 50px; }
-.sup-fab:hover, .sup-mini:hover { background: var(--chrome-hover); transform: translateY(-1px); }
+.sup-fab:hover { background: var(--chrome-hover); transform: translateY(-1px); }
 .sup-fab.on { background: var(--chrome-hover); }
-.sup-fab:focus-visible, .sup-mini:focus-visible, .sup-opcao-txt:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.sup-fab:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .sup-badge { position: absolute; top: -3px; right: -3px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
   background: var(--danger); color: #fff; font: 600 .72rem/20px var(--body); text-align: center; box-shadow: 0 0 0 2px var(--paper); }
 .sup-badge[hidden] { display: none; }
 
-.sup-opcoes { display: grid; gap: 12px; justify-items: end; padding-right: 5px; animation: sup-entra .16s ease-out; }
-.sup-opcoes[hidden] { display: none; }
-.sup-opcao { display: flex; align-items: center; gap: 12px; }
-.sup-opcao-txt { padding: 9px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
-  font: 600 .92rem var(--body); cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .14); white-space: nowrap; }
-.sup-opcao-txt:hover { background: var(--mist); }
 @keyframes sup-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* Painel (assistente ou chat) */
+/* Painel do chat */
 .sup-painel { display: flex; flex-direction: column; width: min(380px, calc(100vw - 32px)); height: min(560px, calc(100vh - 120px));
   border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); overflow: hidden;
   box-shadow: 0 18px 50px rgba(0, 0, 0, .35); animation: sup-entra .16s ease-out; }
@@ -1295,26 +1292,18 @@ body.admin .tb-sel { border-radius: 999px; }
 
 .sup-corpo { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .sup-vazio { margin: auto 0; color: var(--muted); text-align: center; font-size: .9rem; }
-.sup-sugestoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
-.sup-chip { padding: 6px 12px; border: 1px solid var(--edge); border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: .82rem; cursor: pointer; }
-.sup-chip:hover { border-color: var(--sup); color: var(--sup); }
 .sup-dia { margin: 6px 0 2px; text-align: center; color: var(--muted); font-size: .74rem; text-transform: capitalize; }
 .sup-sec { margin: 10px 4px 2px; color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; }
 
 .sup-msg { display: grid; max-width: 85%; }
 .sup-msg.eu { align-self: flex-end; justify-items: end; }
-.sup-msg.ia, .sup-msg.outro { align-self: flex-start; }
+.sup-msg.outro { align-self: flex-start; }
 .sup-autor { margin: 0 0 2px 4px; font-size: .74rem; color: var(--muted); }
 .sup-bolha { padding: 8px 12px; border-radius: 14px; background: var(--surface-2); white-space: pre-wrap; word-break: break-word; font-size: .9rem; line-height: 1.45; }
 .sup-msg.eu .sup-bolha { background: var(--chrome); color: var(--chrome-ink); border-bottom-right-radius: 4px; }
-.sup-msg.ia .sup-bolha, .sup-msg.outro .sup-bolha { border-bottom-left-radius: 4px; }
+.sup-msg.outro .sup-bolha { border-bottom-left-radius: 4px; }
 .sup-msg.erro .sup-bolha { color: var(--danger); }
 .sup-bolha time { display: block; margin-top: 3px; font-size: .68rem; opacity: .7; text-align: right; }
-.sup-pensa { display: flex; gap: 4px; padding: 12px 14px; }
-.sup-pensa i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: sup-ponto 1s infinite ease-in-out; }
-.sup-pensa i:nth-child(2) { animation-delay: .15s; }
-.sup-pensa i:nth-child(3) { animation-delay: .3s; }
-@keyframes sup-ponto { 0%, 80%, 100% { opacity: .3; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
 
 .sup-lista { gap: 2px; padding: 8px; }
 .sup-contacto { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 0; border-radius: 10px;
@@ -1343,10 +1332,11 @@ body.admin .tb-sel { border-radius: 999px; }
   /* No telemóvel a pílula fica mais baixa e, com fotografias, sem o nome. */
   .sup-fab { height: 50px; padding: 0 10px 0 16px; gap: 10px; }
   .sup-fab:has(.sup-fab-avs) .sup-fab-txt { display: none; }
+  .sup-fab.fechar { width: 50px; }
   .sup-painel { height: calc(100vh - 110px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sup-opcoes, .sup-painel, .sup-pensa i { animation: none; }
+  .sup-painel { animation: none; }
 }
 
 /* ---------- Bloqueio por inatividade (admin-bloqueio.js) ---------- */

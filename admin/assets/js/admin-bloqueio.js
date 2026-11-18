@@ -90,7 +90,7 @@
     const root = document.getElementById('root');
     if (root) root.inert = true;
     document.body.classList.add('bloqueado');
-    if (window.AdminSuporte) window.AdminSuporte.parar();   // fecha o chat e o assistente
+    if (window.AdminSuporte) window.AdminSuporte.parar();   // fecha o chat
     setTimeout(() => pass.focus(), 0);
   }
 
