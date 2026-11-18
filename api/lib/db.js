@@ -321,6 +321,9 @@ acrescentaColuna('chat_messages', 'tipo', "TEXT NOT NULL DEFAULT 'texto'");
 acrescentaColuna('chat_messages', 'anexo', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('chat_messages', 'anexo_mime', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('chat_messages', 'duracao', 'INTEGER');
+// Documentos e ficheiros de áudio enviados: o nome original e o tamanho (bytes).
+acrescentaColuna('chat_messages', 'anexo_nome', "TEXT NOT NULL DEFAULT ''");
+acrescentaColuna('chat_messages', 'anexo_tamanho', 'INTEGER');
 // Bloqueio do painel por inatividade (ver lib/auth.js): última atividade real
 // da sessão (ms) e se está bloqueada à espera da palavra-passe.
 acrescentaColuna('sessions', 'active_at', 'INTEGER');
@@ -410,6 +413,9 @@ acrescentaColuna('blocks', 'projeto_id', 'INTEGER');
 // Os estúdios e marcações que já existiam ficam com a moeda das Definições.
 acrescentaColuna('studios', 'currency', "TEXT NOT NULL DEFAULT ''");
 acrescentaColuna('bookings', 'currency', "TEXT NOT NULL DEFAULT ''");
+// Quem cancelou: 'cliente' (pelo site, em /consultar) para o sininho avisar a
+// equipa; vazio nas canceladas pela própria equipa e nas antigas.
+acrescentaColuna('bookings', 'cancelado_por', "TEXT NOT NULL DEFAULT ''");
 {
   const moedaBase = (db.prepare("SELECT value FROM settings WHERE key='currency'").get() || {}).value || 'CVE';
   db.prepare("UPDATE studios SET currency=? WHERE currency=''").run(moedaBase);

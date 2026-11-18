@@ -264,6 +264,9 @@ function futureWeekday(offset = 3) {
   ok(r.status === 200 && r.json.booking.status === 'cancelado', 'cliente cancela a própria marcação');
   r = await call('POST', '/api/public/cancel', { body: { code, phone: '9912345' } });
   ok(r.status === 400, 'não se cancela duas vezes');
+  r = await call('GET', '/api/admin/notificacoes', { cookie });
+  const nCancel = r.json.items.find((n) => n.kind === 'cancelado');
+  ok(nCancel && nCancel.title === 'Marcação cancelada pelo cliente' && nCancel.href === '#/marcacoes', 'o cancelamento do cliente aparece no sininho (a vermelho)');
 
   console.log('\nEstúdios, salas, serviços');
   r = await call('GET', '/api/admin/studios', { cookie });
@@ -444,8 +447,24 @@ function futureWeekday(offset = 3) {
   ok(r.status === 201 && r.json.message.tipo === 'voz' && r.json.message.duracao === 12 && r.json.message.mime === 'audio/webm', 'enviar uma mensagem de voz (12 s)');
   r = await anexo(cookie, Buffer.from('<script>alert(1)</script> isto não é imagem'), 'image/png');
   ok(r.status === 400, 'um ficheiro que não é fotografia nem áudio é recusado');
+  // Documentos e ficheiros de áudio: com o nome original.
+  const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF');
+  r = await anexo(cookie, PDF, 'application/pdf', '?nome=' + encodeURIComponent('Orçamento março.pdf'));
+  ok(r.status === 201 && r.json.message.tipo === 'documento' && r.json.message.nome === 'Orçamento março.pdf' && r.json.message.tamanho === PDF.length, 'enviar um PDF, com o nome e o tamanho');
+  f = await fetch(base + r.json.message.url, { headers: { Cookie: ac } });
+  ok(f.status === 200 && f.headers.get('content-type') === 'application/pdf' && /^inline; filename\*=UTF-8''Or%C3%A7amento/.test(f.headers.get('content-disposition')), 'o PDF abre no browser com o nome original');
+  r = await anexo(cookie, Buffer.from('nome;telefone\nAna;991'), 'text/csv', '?nome=clientes.csv');
+  ok(r.status === 201 && r.json.message.tipo === 'documento' && r.json.message.mime === 'text/csv', 'enviar um CSV');
+  f = await fetch(base + r.json.message.url, { headers: { Cookie: ac } });
+  ok(/^attachment;/.test(f.headers.get('content-disposition')), 'o CSV descarrega-se em vez de abrir');
+  r = await anexo(cookie, Buffer.concat([Buffer.from('ID3'), Buffer.alloc(40, 1)]), 'audio/mpeg', '?nome=maqueta.mp3&duracao=185');
+  ok(r.status === 201 && r.json.message.tipo === 'audio' && r.json.message.nome === 'maqueta.mp3' && r.json.message.duracao === 185, 'enviar um ficheiro de áudio (não é uma mensagem de voz)');
+  r = await anexo(cookie, Buffer.from('<html><script>alert(1)</script></html>'), 'text/html', '?nome=pagina.html');
+  ok(r.status === 400, 'um .html é recusado');
+  r = await anexo(cookie, Buffer.from('MZ\x90\x00 executável'), 'application/octet-stream', '?nome=fatura.pdf');
+  ok(r.status === 400, 'um ficheiro que só tem nome de PDF é recusado');
   r = await call('GET', '/api/admin/chat', { cookie: ac });
-  ok(r.json.contacts.find((c) => c.id === donoId).last.tipo === 'voz', 'a lista mostra a última mensagem (a de voz)');
+  ok(r.json.contacts.find((c) => c.id === donoId).last.tipo === 'audio', 'a lista mostra a última mensagem (o ficheiro de áudio)');
   r = await call('POST', '/api/admin/assistente', { cookie: ac, body: { messages: [] } });
   ok(r.status === 400, 'assistente: pergunta vazia recusada');
   r = await call('POST', '/api/admin/assistente', { body: { messages: [{ role: 'user', content: 'Olá' }] } });
@@ -1051,6 +1070,8 @@ function futureWeekday(offset = 3) {
   r = await call('POST', '/api/integracoes/encomendas', { cookie: clientCookie, body: { projeto_id: artigo.id, quantidade: 2 } });
   ok(r.status === 201 && r.json.total === 3000 && r.json.pagar === '/pagar?code=' + r.json.code, 'comprar 2: encomenda de 3000 e segue para /pagar');
   const enc1 = r.json.code;
+  const nCompra = (await call('GET', '/api/admin/notificacoes', { cookie: dono })).json.items.find((n) => n.kind === 'compra');
+  ok(nCompra && nCompra.title === 'Compra por concluir' && /2× /.test(nCompra.text), 'a compra por pagar aparece no sininho (a amarelo)');
   tshirt = (await call('GET', '/api/integracoes/projetos')).json.projetos.find((p) => p.id === artigo.id);
   ok(tshirt.disponivel === 1, 'as 2 ficam reservadas enquanto não se paga (resta 1)');
   r = await call('POST', '/api/pagamento/marcacao', { cookie: clientCookie, body: { code: enc1 } });

@@ -267,8 +267,11 @@ router.get('/pending-count', (req, res) => {
 
 // ------------------------------------------------------------ Notificações (sininho)
 // Calculadas na hora a partir do que já existe: pedidos por confirmar, sessões
-// de hoje, pagamentos em atraso e tentativas falhadas de entrar nesta conta.
+// de hoje, pagamentos em atraso e recebidos, marcações canceladas pelo cliente,
+// inscrições e compras por concluir, e tentativas falhadas de entrar nesta conta.
 // "Por ler" = mais recente do que a última vez que a pessoa abriu o sininho.
+// O painel pinta-as pela cor do `kind`: verde o dinheiro que entrou, vermelho
+// os cancelamentos e a segurança, amarelo o que ainda está por concluir.
 router.get('/notificacoes', (req, res) => {
   const now = U.nowLocal();
   const scope = scopeStudio(req);
@@ -326,6 +329,20 @@ router.get('/notificacoes', (req, res) => {
     });
   }
 
+  // Marcações que o próprio cliente cancelou no site, nos últimos 14 dias.
+  const cancelados = db.prepare(
+    `SELECT b.id, b.client_name, b.date, b.start_min, b.updated_at, s.name studio
+       FROM bookings b JOIN rooms r ON r.id=b.room_id JOIN studios s ON s.id=r.studio_id
+      WHERE b.status='cancelado' AND b.cancelado_por='cliente' AND b.updated_at>=?${sf} ORDER BY b.updated_at DESC LIMIT 15`
+  ).all(new Date(Date.now() - 14 * 86400000).toISOString());
+  for (const c of cancelados) {
+    itens.push({
+      id: 'cancel-' + c.id, kind: 'cancelado', title: 'Marcação cancelada pelo cliente',
+      text: `${c.client_name} · ${c.date.slice(8)}/${c.date.slice(5, 7)} às ${U.fmtHM(c.start_min)} · ${c.studio}`,
+      at: c.updated_at, href: '#/marcacoes',
+    });
+  }
+
   // Inscrições por ver nos projetos ("Participa" do site), dos últimos 30 dias.
   // Os projetos são da gestão geral: um agente de estúdio não os vê.
   if (!scope) {
@@ -336,8 +353,21 @@ router.get('/notificacoes', (req, res) => {
     ).all(new Date(Date.now() - 30 * 86400000).toISOString());
     for (const i of inscricoes) {
       itens.push({
-        id: 'insc-' + i.id, kind: 'inscricao', title: i.tipo === 'talentos' ? 'Nova inscrição na campanha de talentos' : 'Nova inscrição num projeto',
+        id: 'insc-' + i.id, kind: 'inscricao', title: i.tipo === 'talentos' ? 'Nova candidatura na campanha de talentos' : 'Novo interesse num projeto',
         text: `${i.nome} · ${i.titulo}`, at: i.criado_em, href: '#/projetos?inscricoes=' + i.projeto_id,
+      });
+    }
+
+    // Compras da loja começadas e ainda por pagar (a reserva do stock corre).
+    const compras = db.prepare(
+      `SELECT id, code, titulo, quantidade, total, cliente_nome, criado_em FROM int_encomendas
+        WHERE estado='aguarda_pagamento' AND criado_em>=? ORDER BY criado_em DESC LIMIT 15`
+    ).all(new Date(Date.now() - 14 * 86400000).toISOString());
+    for (const e of compras) {
+      itens.push({
+        id: 'compra-' + e.id, kind: 'compra', title: 'Compra por concluir',
+        text: `${e.cliente_nome || 'Cliente'} · ${e.quantidade}× ${e.titulo} · ${Number(e.total).toLocaleString('pt-PT')} ${getSettings().currency}`,
+        at: e.criado_em, href: '#/projetos',
       });
     }
   }

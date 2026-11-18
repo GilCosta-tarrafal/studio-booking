@@ -918,8 +918,12 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   pessoa.click();
   await waitFor(() => d.querySelector('.sup-form textarea'), 'conversa aberta');
   const anexar = [...d.querySelectorAll('.sup-form .sup-anexar')].map((b) => b.getAttribute('aria-label'));
-  ok(anexar.join('|') === 'Enviar fotografia|Gravar mensagem de voz' && d.querySelector('.sup-form input[type=file][accept^="image/"]'), 'na conversa: enviar fotografia e gravar mensagem de voz');
-  d.querySelector('.sup-fab').click();
+  ok(anexar.join('|') === 'Anexar documento ou áudio|Enviar fotografia|Gravar mensagem de voz' && d.querySelector('.sup-form input[type=file][accept^="image/"]'), 'na conversa: anexar documento ou áudio, enviar fotografia e gravar mensagem de voz');
+  const aceita = d.querySelector('.sup-form input[type=file][accept^=".pdf"]');
+  ok(aceita && /\.docx/.test(aceita.accept) && /audio\/\*/.test(aceita.accept), 'o clipe aceita documentos e ficheiros de áudio');
+  ok(d.querySelector('.sup-fab').hidden, 'com o chat aberto, a pílula esconde-se (fecha-se pelo ✕ do cabeçalho)');
+  [...d.querySelectorAll('.sup-head .sup-icobtn')].find((b) => b.getAttribute('aria-label') === 'Fechar').click();
+  ok(!d.querySelector('.sup-fab').hidden && d.querySelector('.sup-painel').hidden, 'o ✕ do cabeçalho fecha o chat e a pílula volta');
   w.close();
 
   // ---- Cabeçalho preso ao topo ----

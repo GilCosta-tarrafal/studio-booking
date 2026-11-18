@@ -17,6 +17,10 @@
     back: ['M15 5l-7 7 7 7'],
     send: ['M4 12l16-8-6 16-2-7z', 'M12 13l8-9'],
     camera: ['M4 8h3l2-3h6l2 3h3v11H4z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+    clip: ['M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3l7.5-7.5'],
+    doc: ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M9 12h6', 'M9 16h6'],
+    musica: ['M9 18V5l11-2v13', 'M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3z', 'M20 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3z'],
+    baixar: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'],
     mic: ['M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3'],
     trash: ['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13'],
     play: ['M8 5v14l11-7z'],
@@ -99,22 +103,17 @@
     st.fab.classList.remove('on');
     st.fab.setAttribute('aria-expanded', 'false');
     pintarFab();
+    st.fab.focus();   // o foco volta ao botão que abriu o chat
   }
 
   // O botão é uma pílula "Mensagens": o ícone com o número por ler e, à
   // direita, as fotografias de quem mandou mensagem (as mais recentes à frente,
-  // até três). Com o chat aberto encolhe a um botão redondo só com o ✕.
+  // até três). Com o chat aberto esconde-se: fecha-se pelo ✕ do cabeçalho.
   function pintarFab() {
     const n = totalPorLer();
-    const aberto = !!st.aberto;
     st.badge.hidden = !n;
     st.badge.textContent = n > 99 ? '99+' : String(n);
-    st.fab.classList.toggle('fechar', aberto);
-    if (aberto) {
-      st.fab.replaceChildren(ico('close', 24));
-      st.fab.setAttribute('aria-label', 'Fechar as mensagens');
-      return;
-    }
+    st.fab.hidden = !!st.aberto;
     const quando = (c) => String((c.last || {}).created_at || '');
     const quem = !st.lista ? []
       : st.lista.contacts.filter((c) => c.unread).sort((a, b) => quando(b).localeCompare(quando(a))).slice(0, 3);
@@ -139,8 +138,21 @@
   // ============================================================ Chat da equipa
   // Conversas a dois: ao abrir aparece a lista das pessoas da equipa; cada
   // mensagem vai só para a pessoa escolhida. Além de texto, fotografias e
-  // mensagens de voz (gravadas aqui, com o microfone).
-  const MAX_ANEXO = 8 * 1024 * 1024;
+  // mensagens de voz (gravadas aqui, com o microfone), documentos e ficheiros
+  // de áudio (pelo clipe).
+  const MAX_ANEXO = 20 * 1024 * 1024;
+  const ACEITA_FICHEIRO = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf,.txt,.csv,.zip,audio/*,.mp3,.wav,.m4a,.ogg,.flac';
+  const tamanho = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+  // Quanto dura um ficheiro de áudio (lido pelo browser); 0 se não souber.
+  const duracaoDe = (f) => new Promise((ok) => {
+    const a = new Audio();
+    const fim = (s) => { URL.revokeObjectURL(a.src); ok(Number.isFinite(s) ? s : 0); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => fim(a.duration);
+    a.onerror = () => fim(0);
+    setTimeout(() => fim(0), 4000);
+    a.src = URL.createObjectURL(f);
+  });
   const MAX_VOZ_S = 5 * 60;
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
@@ -190,7 +202,9 @@
   }
   // O que aparece na lista e nos avisos em vez do conteúdo.
   const previa = (m) => (m.tipo === 'imagem' ? '📷 Fotografia'
-    : m.tipo === 'voz' ? '🎤 Mensagem de voz' + (m.duracao ? ` (${mmss(m.duracao)})` : '') : m.body);
+    : m.tipo === 'voz' ? '🎤 Mensagem de voz' + (m.duracao ? ` (${mmss(m.duracao)})` : '')
+      : m.tipo === 'documento' ? '📄 ' + m.nome
+        : m.tipo === 'audio' ? '🎵 ' + m.nome : m.body);
 
   function ligar() {
     if (!window.EventSource) return;
@@ -273,10 +287,14 @@
     corpo.replaceChildren(...(st.lista.contacts.length > 5 ? [busca, lista] : [lista]));
   }
 
-  // Envia um ficheiro (fotografia ou gravação) para a conversa.
-  async function enviarAnexo(channel, blob, duracao) {
-    if (blob.size > MAX_ANEXO) throw new Error('O ficheiro tem mais de 8 MB.');
-    const res = await fetch(`/api/admin/chat/${encodeURIComponent(channel)}/anexo` + (duracao ? `?duracao=${Math.round(duracao)}` : ''), {
+  // Envia um ficheiro (fotografia, gravação, documento ou áudio) para a
+  // conversa. `nome`: o nome original de um ficheiro escolhido no computador.
+  async function enviarAnexo(channel, blob, duracao, nome) {
+    if (blob.size > MAX_ANEXO) throw new Error('O ficheiro tem mais de 20 MB.');
+    const q = new URLSearchParams();
+    if (duracao) q.set('duracao', Math.round(duracao));
+    if (nome) q.set('nome', nome);
+    const res = await fetch(`/api/admin/chat/${encodeURIComponent(channel)}/anexo` + (q.toString() ? '?' + q : ''), {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': blob.type || 'application/octet-stream', 'X-Requested-With': 'studio' }, body: blob,
     });
@@ -302,6 +320,19 @@
           h('img', { class: 'sup-foto', src: m.url, alt: 'Fotografia', loading: 'lazy', onload: () => { if (st.colado) rolarFim(corpo); } }));
       }
       if (m.tipo === 'voz') return leitorVoz({ url: m.url, duracao: m.duracao });
+      if (m.tipo === 'audio') {
+        return h('div', { class: 'sup-audio' },
+          h('span', { class: 'sup-audio-nome', title: m.nome }, ico('musica', 16), h('span', {}, m.nome)),
+          leitorVoz({ url: m.url, duracao: m.duracao }));
+      }
+      if (m.tipo === 'documento') {
+        // O PDF abre num separador; os outros descarregam-se com o nome original.
+        const pdf = m.mime === 'application/pdf';
+        return h('a', { class: 'sup-doc', href: m.url, target: '_blank', rel: 'noopener', download: pdf ? null : m.nome, title: pdf ? 'Abrir' : 'Descarregar' },
+          h('span', { class: 'sup-doc-ico' }, ico('doc', 22)),
+          h('span', { class: 'sup-doc-txt' }, h('strong', {}, m.nome), h('small', {}, (m.nome.split('.').pop() || '').toUpperCase() + (m.tamanho ? ' · ' + tamanho(m.tamanho) : ''))),
+          h('span', { class: 'sup-doc-baixar', 'aria-hidden': 'true' }, ico('baixar', 18)));
+      }
       return m.body;
     };
     st.pintarMensagens = () => {
@@ -323,13 +354,15 @@
       if (st.conversa === channel && !st.mensagens.some((m) => m.id === msg.id)) { st.mensagens.push(msg); st.pintarMensagens(); }
     };
 
-    // ---- Caixa de envio: texto, fotografia e voz
+    // ---- Caixa de envio: texto, documento ou áudio, fotografia e voz
     const txt = h('textarea', { rows: 1, maxlength: 2000, placeholder: 'Escreva uma mensagem…', 'aria-label': 'Mensagem' });
+    const ficheiro = h('input', { type: 'file', accept: ACEITA_FICHEIRO, hidden: true });
     const foto = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', hidden: true });
+    const btnFicheiro = h('button', { class: 'sup-icobtn sup-anexar', type: 'button', title: 'Anexar documento ou áudio', 'aria-label': 'Anexar documento ou áudio', onclick: () => ficheiro.click() }, ico('clip', 20));
     const btnFoto = h('button', { class: 'sup-icobtn sup-anexar', type: 'button', title: 'Enviar fotografia', 'aria-label': 'Enviar fotografia', onclick: () => foto.click() }, ico('camera', 20));
     const btnVoz = h('button', { class: 'sup-icobtn sup-anexar', type: 'button', title: 'Gravar mensagem de voz', 'aria-label': 'Gravar mensagem de voz' }, ico('mic', 20));
     const btnEnviar = h('button', { class: 'sup-enviar', type: 'submit', 'aria-label': 'Enviar' }, ico('send', 20));
-    const form = h('form', { class: 'sup-form' }, btnFoto, btnVoz, txt, btnEnviar, foto);
+    const form = h('form', { class: 'sup-form' }, btnFicheiro, btnFoto, btnVoz, txt, btnEnviar, ficheiro, foto);
     const ajustar = () => { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight, 120) + 'px'; };
     txt.addEventListener('input', ajustar);
     txt.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
@@ -348,9 +381,22 @@
       const f = foto.files[0];
       foto.value = '';
       if (!f) return;
-      if (f.size > MAX_ANEXO) { toast('A fotografia tem mais de 8 MB.', true); return; }
+      if (f.size > MAX_ANEXO) { toast('A fotografia tem mais de 20 MB.', true); return; }
       btnFoto.disabled = true;
       try { juntar(await enviarAnexo(channel, f)); } catch (ex) { toast(ex.message, true); } finally { btnFoto.disabled = false; }
+    });
+    // Documento ou ficheiro de áudio: vai com o nome original (e, no áudio, a duração).
+    ficheiro.addEventListener('change', async () => {
+      const f = ficheiro.files[0];
+      ficheiro.value = '';
+      if (!f) return;
+      if (f.size > MAX_ANEXO) { toast(`${f.name} tem mais de 20 MB.`, true); return; }
+      btnFicheiro.disabled = true;
+      toast(`A enviar ${f.name}…`);
+      try {
+        const duracao = /^audio\//.test(f.type) ? await duracaoDe(f) : 0;
+        juntar(await enviarAnexo(channel, f, duracao, f.name));
+      } catch (ex) { toast(ex.message, true); } finally { btnFicheiro.disabled = false; }
     });
 
     // Gravação de voz: o microfone só funciona em https:// ou em localhost.

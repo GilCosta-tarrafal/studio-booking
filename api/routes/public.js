@@ -284,7 +284,7 @@ function canCancel(row) {
 router.post('/cancel', lookupLimiter, (req, res) => {
   const row = findForClient(req);
   if (!canCancel(row)) throw new HttpError(400, req.t('api.naoPodeCancelar'));
-  db.prepare("UPDATE bookings SET status='cancelado', updated_at=? WHERE id=?").run(new Date().toISOString(), row.id);
+  db.prepare("UPDATE bookings SET status='cancelado', cancelado_por='cliente', updated_at=? WHERE id=?").run(new Date().toISOString(), row.id);
   const updated = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(row.id);
   res.json({ booking: publicBooking(updated), can_cancel: false });
 });

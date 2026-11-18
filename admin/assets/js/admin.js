@@ -457,6 +457,16 @@
     seguranca: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', 'M12 9v4', 'M12 16h.01'],
     recebido: ['M3 7h18v10H3z', 'M3 11h18', 'M8 15l2 2 4-4'],
     inscricao: ['M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', 'M3 20a6 6 0 0 1 12 0', 'M18 8v6', 'M15 11h6'],
+    cancelado: ['M5 5h14v15H5z', 'M5 10h14', 'M9 3v4', 'M15 3v4', 'M10 13l4 4', 'M14 13l-4 4'],
+    compra: ['M5 8h14l-1 12H6z', 'M9 8V6a3 3 0 0 1 6 0v2'],
+  };
+  // A cor diz logo o que é: verde o dinheiro que entrou; vermelho cancelamentos
+  // e segurança; amarelo o que está por concluir (pedidos, candidaturas e
+  // interesses, compras e pagamentos em falta). As outras ficam neutras.
+  const NOTIF_TOM = {
+    recebido: 'verde',
+    cancelado: 'vermelho', seguranca: 'vermelho',
+    pedido: 'amarelo', inscricao: 'amarelo', compra: 'amarelo', pagamento: 'amarelo',
   };
   const SINO = ['M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20a2 2 0 0 0 4 0'];
 
@@ -484,7 +494,7 @@
       btn.setAttribute('aria-label', notif.unread ? `Notificações (${notif.unread} por ler)` : 'Notificações');
       lidas.hidden = !notif.unread;
       lista.replaceChildren(...(notif.items.length
-        ? notif.items.map((n) => h('a', { class: 'tb-notif' + (n.unread ? ' unread' : ''), href: n.href, role: 'menuitem', onclick: () => p.fechar() },
+        ? notif.items.map((n) => h('a', { class: 'tb-notif tom-' + (NOTIF_TOM[n.kind] || 'neutro') + (n.unread ? ' unread' : ''), href: n.href, role: 'menuitem', onclick: () => p.fechar() },
           h('span', { class: 'tb-notif-ico ' + n.kind }, svgIco(NOTIF_ICO[n.kind] || SINO, 16)),
           h('span', { class: 'tb-notif-txt' }, h('strong', {}, n.title), h('span', {}, n.text), h('small', {}, quando(n.at)))))
         : [h('p', { class: 'tb-notif-empty' }, 'Sem notificações. Está tudo em dia.')]));

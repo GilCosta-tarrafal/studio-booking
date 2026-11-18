@@ -902,15 +902,25 @@ body.sem-rolar { overflow: hidden; }
 .tb-notif-all:hover { color: var(--ink); background: var(--mist); }
 .tb-notif-all[hidden] { display: none; }
 .tb-notif-list { max-height: min(420px, 70vh); overflow-y: auto; overflow-x: hidden; padding: 6px; display: grid; gap: 2px; }
-.tb-notif { position: relative; display: flex; gap: 12px; padding: 10px 12px 10px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+/* Cada notificação tem a cor do que é (--tom): verde o dinheiro que entrou,
+   vermelho cancelamentos e segurança, amarelo o que está por concluir. A cor
+   vai na barra à esquerda, no ícone e no título; por ler, também no fundo. */
+.tb-notif { --tom: var(--muted); position: relative; display: flex; gap: 12px; padding: 10px 12px 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.tb-notif.tom-verde { --tom: #2FB36A; }
+.tb-notif.tom-vermelho { --tom: #E4695D; }
+.tb-notif.tom-amarelo { --tom: #E8B33A; }
+:root[data-tema="claro"] .tb-notif.tom-verde { --tom: #1E8A4C; }
+:root[data-tema="claro"] .tb-notif.tom-vermelho { --tom: #C2392C; }
+:root[data-tema="claro"] .tb-notif.tom-amarelo { --tom: #A86A06; }
+.tb-notif:not(.tom-neutro)::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--tom); }
 .tb-notif:hover { background: var(--mist); }
-.tb-notif.unread { background: var(--amber-soft); }
-.tb-notif.unread::after { content: ""; position: absolute; top: 14px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
-.tb-notif-ico { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--mist); color: var(--muted); }
-.tb-notif-ico.pedido, .tb-notif-ico.inscricao { color: var(--amber); }
-.tb-notif-ico.seguranca { color: var(--danger); }
-.tb-notif-ico.pagamento, .tb-notif-ico.hoje { color: var(--free); }
-.tb-notif-ico.recebido { color: #2FB36A; background: rgba(47, 179, 106, .14); }
+.tb-notif.unread { background: color-mix(in srgb, var(--tom) 10%, transparent); }
+.tb-notif.tom-neutro.unread { background: var(--mist); }
+.tb-notif.unread::after { content: ""; position: absolute; top: 14px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--tom); }
+.tb-notif.tom-neutro.unread::after { background: var(--amber); }
+.tb-notif-ico { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--tom); background: color-mix(in srgb, var(--tom) 16%, transparent); }
+.tb-notif.tom-neutro .tb-notif-ico { color: var(--free); background: var(--mist); }
+.tb-notif:not(.tom-neutro) .tb-notif-txt strong { color: var(--tom); }
 .tb-notif-txt { display: grid; gap: 2px; min-width: 0; padding-right: 12px; }
 .tb-notif-txt strong { font-size: .9rem; font-weight: 600; }
 /* Uma linha só: o que não couber acaba em "…". */
@@ -1261,8 +1271,7 @@ body.admin .tb-sel { border-radius: 999px; }
 .sup-fab-ico { position: relative; display: grid; place-items: center; }
 .sup-fab-ico .sup-badge { top: auto; bottom: -8px; right: -9px; }
 .sup-fab-txt { padding-right: 8px; white-space: nowrap; }
-/* Com o chat aberto: um botão redondo só com o ✕, por baixo do painel. */
-.sup-fab.fechar { width: 56px; padding: 0; justify-content: center; }
+.sup-fab[hidden] { display: none; }
 .sup-fab-avs { display: flex; }
 .sup-fab-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-left: -10px;
   background: var(--amber); color: #1A1204; font: 800 .74rem/1 var(--display); box-shadow: 0 0 0 2px var(--chrome); }
@@ -1331,9 +1340,7 @@ body.admin .tb-sel { border-radius: 999px; }
   .sup { right: 14px; bottom: 14px; }
   /* No telemóvel a pílula fica mais baixa e, com fotografias, sem o nome. */
   .sup-fab { height: 50px; padding: 0 10px 0 16px; gap: 10px; }
-  .sup-fab:has(.sup-fab-avs) .sup-fab-txt { display: none; }
-  .sup-fab.fechar { width: 50px; }
-  .sup-painel { height: calc(100vh - 110px); }
+  .sup-fab:has(.sup-fab-avs) .sup-fab-txt { display: none; }  .sup-painel { height: calc(100vh - 110px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .sup-painel { animation: none; }
@@ -1403,7 +1410,8 @@ body.bloqueado #toasts { display: none; }
 /* Chat: pesquisa de pessoas, fotografias, mensagens de voz e gravação. */
 .sup-busca { width: 100%; margin: 0 0 6px; padding: 8px 12px; border: 1px solid var(--edge); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; font-size: .88rem; }
 .sup-pessoas { display: grid; gap: 2px; }
-.sup-anexar { flex: none; width: 36px; height: 40px; color: var(--muted); }
+.sup-anexar { flex: none; width: 32px; height: 40px; color: var(--muted); }
+.sup-form .sup-anexar + .sup-anexar { margin-left: -4px; }   /* três ícones juntos, para o texto ter espaço */
 .sup-anexar:hover:not(:disabled) { color: var(--ink); background: var(--mist); }
 .sup-anexar:disabled { opacity: .4; }
 .sup-msg.anexo .sup-bolha { padding: 4px; }
@@ -1416,6 +1424,20 @@ body.bloqueado #toasts { display: none; }
 .sup-voz-play:disabled { opacity: .6; cursor: progress; }
 .sup-voz-barra { flex: 1; min-width: 0; height: 4px; accent-color: var(--amber); cursor: pointer; }
 .sup-voz-tempo { flex: none; font-size: .78rem; font-variant-numeric: tabular-nums; opacity: .75; min-width: 2.6em; text-align: right; }
+/* Documento: cartão com o ícone, o nome, o tipo e o tamanho; abre ou descarrega. */
+.sup-doc { display: flex; align-items: center; gap: 10px; width: 250px; max-width: 100%; padding: 8px 10px; border-radius: 10px; color: inherit; text-decoration: none; background: rgba(127, 127, 127, .14); }
+.sup-doc:hover { background: rgba(127, 127, 127, .24); }
+.sup-doc-ico { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; background: var(--amber); color: #1A1204; }
+.sup-doc-txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sup-doc-txt strong { font-size: .86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-doc-txt small { font-size: .72rem; opacity: .75; white-space: normal; }
+.sup-doc-baixar { flex: none; opacity: .7; }
+/* Ficheiro de áudio: o nome por cima do leitor. */
+.sup-audio { display: grid; gap: 2px; width: 250px; max-width: 100%; }
+.sup-audio-nome { display: flex; align-items: center; gap: 6px; padding: 6px 8px 0; font-size: .8rem; font-weight: 600; min-width: 0; }
+.sup-audio-nome svg { flex: none; opacity: .8; }
+.sup-audio-nome span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-audio .sup-voz { width: auto; }
 .sup-gravar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
 .sup-gravar[hidden] { display: none; }
 .sup-gravar-txt { flex: 1; font-size: .9rem; color: var(--muted); }

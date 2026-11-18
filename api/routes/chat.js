@@ -9,10 +9,12 @@
 // Conversas: 'dm:<a>-<b>' (os dois ids, o menor primeiro). Só essas duas
 // pessoas lêem ou escrevem.
 //
-// Além de texto: fotografias e mensagens de voz. O ficheiro vai em bruto
-// (POST /:channel/anexo), confere-se pelos primeiros bytes e guarda-se numa
-// pasta privada ao lado da base de dados; serve-se só a quem está na conversa
-// (GET /anexos/:id), nunca pela pasta pública do site.
+// Além de texto: fotografias, mensagens de voz, documentos (PDF, Word, Excel,
+// PowerPoint, OpenDocument, RTF, TXT, CSV, ZIP) e ficheiros de áudio. O
+// ficheiro vai em bruto (POST /:channel/anexo?nome=…), confere-se pelos
+// primeiros bytes e guarda-se numa pasta privada ao lado da base de dados;
+// serve-se só a quem está na conversa (GET /anexos/:id), nunca pela pasta
+// pública do site.
 
 const express = require('express');
 const crypto = require('crypto');
@@ -24,7 +26,7 @@ const { HttpError } = U;
 
 const router = express.Router();
 const MAX_CORPO = 2000;
-const MAX_ANEXO = 8 * 1024 * 1024;   // 8 MB
+const MAX_ANEXO = 20 * 1024 * 1024;  // 20 MB
 const MAX_VOZ_S = 5 * 60;            // 5 minutos
 
 // Pasta privada dos anexos: junto à base de dados (no disco persistente).
@@ -70,6 +72,7 @@ function membros(req, channel) {
 }
 
 const MSG_SELECT = `SELECT m.id, m.channel, m.user_id, m.body, m.tipo, m.anexo_mime, m.duracao, m.created_at,
+  m.anexo_nome AS nome, m.anexo_tamanho AS tamanho,
   COALESCE(u.name, 'Utilizador removido') AS user_name
   FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id`;
 // Para o browser: o endereço do anexo, em vez do nome do ficheiro.
@@ -97,9 +100,10 @@ function marcarLido(userId, channel, id) {
 
 // Grava uma mensagem e entrega-a às duas pessoas da conversa.
 function publicar(req, channel, quem, campos) {
-  const id = db.prepare('INSERT INTO chat_messages(channel,user_id,body,tipo,anexo,anexo_mime,duracao,created_at) VALUES(?,?,?,?,?,?,?,?)')
+  const id = db.prepare(`INSERT INTO chat_messages(channel,user_id,body,tipo,anexo,anexo_mime,duracao,anexo_nome,anexo_tamanho,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`)
     .run(channel, req.user.id, campos.body || '', campos.tipo || 'texto', campos.anexo || '', campos.mime || '', campos.duracao || null,
-      new Date().toISOString()).lastInsertRowid;
+      campos.nome || '', campos.tamanho || null, new Date().toISOString()).lastInsertRowid;
   marcarLido(req.user.id, channel, id);   // quem escreve já leu o que escreveu
   const msg = publica(db.prepare(`${MSG_SELECT} WHERE m.id=?`).get(id));
   enviarA(quem, 'mensagem', msg);
@@ -121,8 +125,36 @@ function tipoAnexo(b) {
   if (b.toString('latin1', 4, 8) === 'ftyp') return { tipo: 'voz', mime: 'audio/mp4', ext: 'm4a' };
   if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WAVE') return { tipo: 'voz', mime: 'audio/wav', ext: 'wav' };
   if (b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)) return { tipo: 'voz', mime: 'audio/mpeg', ext: 'mp3' };
+  if (b.toString('latin1', 0, 4) === 'fLaC') return { tipo: 'voz', mime: 'audio/flac', ext: 'flac' };
   return null;
 }
+
+// Documentos: o conteúdo diz a família (PDF, ZIP, Office antigo, RTF) e a
+// extensão do nome diz qual é dentro dela (um .docx e um .xlsx são ambos ZIP).
+// TXT e CSV não têm assinatura: aceitam-se se não tiverem bytes nulos.
+const DOCS_ZIP = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  zip: 'application/zip',
+};
+const DOCS_OLE = { doc: 'application/msword', xls: 'application/vnd.ms-excel', ppt: 'application/vnd.ms-powerpoint' };
+function tipoDocumento(b, nome) {
+  const ext = (/\.([a-z0-9]{1,5})$/i.exec(nome) || [])[1];
+  const e = ext ? ext.toLowerCase() : '';
+  if (b.toString('latin1', 0, 5) === '%PDF-') return { mime: 'application/pdf', ext: 'pdf' };
+  if (b[0] === 0x50 && b[1] === 0x4B && b[2] === 0x03 && b[3] === 0x04) return { mime: DOCS_ZIP[e] || DOCS_ZIP.zip, ext: DOCS_ZIP[e] ? e : 'zip' };
+  if (b.subarray(0, 8).equals(Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1])) && DOCS_OLE[e]) return { mime: DOCS_OLE[e], ext: e };
+  if (b.toString('latin1', 0, 5) === '{\\rtf') return { mime: 'application/rtf', ext: 'rtf' };
+  if ((e === 'txt' || e === 'csv') && !b.subarray(0, 65536).includes(0)) return { mime: e === 'csv' ? 'text/csv' : 'text/plain', ext: e };
+  return null;
+}
+
+// O nome original, sem pastas nem caracteres de controlo (vai num cabeçalho).
+const limparNome = (s) => path.basename(String(s || '')).replace(/[\u0000-\u001f\u007f"\\/]/g, '').trim().slice(0, 120);
 
 // ------------------------------------------------------------ Rotas
 
@@ -170,6 +202,11 @@ router.get('/anexos/:id', (req, res) => {
   const ficheiro = path.join(PASTA, path.basename(m.anexo));
   if (!fs.existsSync(ficheiro)) throw new HttpError(404, 'Anexo não encontrado.');
   res.set({ 'Content-Type': m.anexo_mime, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+  // Documentos: o PDF abre no browser; os outros descarregam-se com o nome original.
+  if (m.tipo === 'documento') {
+    const nome = encodeURIComponent(m.anexo_nome || path.basename(m.anexo));
+    res.set('Content-Disposition', `${m.anexo_mime === 'application/pdf' ? 'inline' : 'attachment'}; filename*=UTF-8''${nome}`);
+  }
   res.sendFile(ficheiro);
 });
 
@@ -191,21 +228,29 @@ router.post('/:channel/messages', (req, res) => {
   res.status(201).json({ message: publicar(req, channel, quem, { body }) });
 });
 
-// Fotografia ou mensagem de voz: o ficheiro em bruto (até 8 MB). ?duracao=
-// (segundos) para a voz.
+// Anexo: o ficheiro em bruto (até 20 MB), seja qual for o Content-Type — o
+// que conta são os primeiros bytes. ?duracao= (segundos) para o áudio; ?nome=
+// o nome original de um ficheiro escolhido no computador. Áudio com nome é um
+// ficheiro de áudio ('audio'); sem nome, uma gravação feita no chat ('voz').
 router.post('/:channel/anexo',
-  express.raw({ type: (r) => /^(image|audio)\//.test(r.headers['content-type'] || ''), limit: MAX_ANEXO }),
+  express.raw({ type: () => true, limit: MAX_ANEXO }),
   (req, res) => {
     const channel = req.params.channel;
     const quem = membros(req, channel);
     const dados = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    if (!dados.length) throw new HttpError(400, 'Escolha uma fotografia ou grave uma mensagem de voz.');
-    const t = tipoAnexo(dados);
-    if (!t) throw new HttpError(400, 'Esse ficheiro não é uma fotografia (JPG, PNG, WebP, GIF) nem uma gravação de áudio.');
-    const duracao = t.tipo === 'voz' ? Math.min(MAX_VOZ_S, Math.max(0, Math.round(Number(req.query.duracao) || 0))) : null;
-    const nome = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}.${t.ext}`;
-    fs.writeFileSync(path.join(PASTA, nome), dados);
-    res.status(201).json({ message: publicar(req, channel, quem, { tipo: t.tipo, anexo: nome, mime: t.mime, duracao }) });
+    if (!dados.length) throw new HttpError(400, 'Escolha um ficheiro ou grave uma mensagem de voz.');
+    const original = limparNome(req.query.nome);
+    let t = tipoAnexo(dados);
+    if (t && t.tipo === 'voz' && original) t = { ...t, tipo: 'audio' };
+    if (!t) { const d = tipoDocumento(dados, original); if (d) t = { ...d, tipo: 'documento' }; }
+    if (!t) throw new HttpError(400, 'Esse ficheiro não é aceite. Envie uma fotografia, um áudio ou um documento (PDF, Word, Excel, PowerPoint, TXT, CSV ou ZIP).');
+    const duracao = t.tipo === 'voz' || t.tipo === 'audio' ? Math.min(t.tipo === 'voz' ? MAX_VOZ_S : 24 * 3600, Math.max(0, Math.round(Number(req.query.duracao) || 0))) : null;
+    const guardado = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString('hex')}.${t.ext}`;
+    fs.writeFileSync(path.join(PASTA, guardado), dados);
+    res.status(201).json({ message: publicar(req, channel, quem, {
+      tipo: t.tipo, anexo: guardado, mime: t.mime, duracao,
+      nome: t.tipo === 'documento' || t.tipo === 'audio' ? original || `ficheiro.${t.ext}` : '', tamanho: dados.length,
+    }) });
   });
 
 router.post('/:channel/read', (req, res) => {
