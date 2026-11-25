@@ -63,24 +63,31 @@ async function reembolsar(pagId, opcoes, user) {
   };
 }
 
+// Na língua em que o cliente marcou ou comprou no site (vazia = português).
 async function avisar(p, booking, encomenda, motivo, cancelada) {
   const para = booking ? booking.client_email : encomenda && encomenda.cliente_email;
   if (!para) return;
   const s = getSettings();
+  const D = require('../../comum/assets/js/dicionario.js');
+  const pedida = (booking || encomenda).lingua;
+  const lingua = D.codigos.includes(pedida) ? pedida : 'pt';
+  const t = (chave, valores) => D.t(lingua, chave, valores);
   const nome = booking ? booking.client_name : encomenda.cliente_nome;
-  const oque = booking ? `da marcação ${booking.code}` : `da compra ${encomenda.code} (${encomenda.quantidade} × ${encomenda.titulo})`;
+  const oque = booking ? t('email.reemb.oqueMarcacao', { code: booking.code })
+    : t('email.reemb.oqueCompra', { code: encomenda.code, qt: encomenda.quantidade, titulo: encomenda.titulo });
+  const valor = `${Number(p.valor).toLocaleString(D.lingua(lingua).locale)} ${String(p.moeda || s.currency || '').toUpperCase()}`;
   await notify.sendEmail({
     to: para,
-    subject: `Reembolso ${booking ? 'da marcação ' + booking.code : 'da compra ' + encomenda.code}`,
+    subject: booking ? t('email.reemb.assuntoMarcacao', { code: booking.code }) : t('email.reemb.assuntoCompra', { code: encomenda.code }),
     text: [
-      `Olá ${nome},`,
+      t('email.ola', { nome }),
       '',
-      `O ${s.business_name || 'estúdio'} reembolsou o pagamento ${oque}: ${Number(p.valor).toLocaleString('pt-PT')} ${String(p.moeda || s.currency || '').toUpperCase()}.`,
-      p.fornecedor === 'stripe' ? 'O valor volta ao cartão com que pagou; pode demorar alguns dias a aparecer, conforme o banco.' : null,
-      cancelada ? 'A marcação foi cancelada.' : null,
-      motivo ? `Motivo: ${motivo}` : null,
+      t('email.reemb.l1', { negocio: s.business_name || t('email.estudio'), oque, valor }),
+      p.fornecedor === 'stripe' ? t('email.reemb.cartao') : null,
+      cancelada ? t('email.reemb.cancelada') : null,
+      motivo ? t('email.reemb.motivo', { motivo }) : null,
       '',
-      'Para qualquer dúvida, responda a este email ou fale com o estúdio.',
+      t('email.reemb.duvidas'),
     ].filter((l) => l !== null).join('\n'),
   });
 }

@@ -782,7 +782,9 @@
     abrirMenu(false);   // no telemóvel, escolher uma secção fecha a gaveta
     const main = document.getElementById('view');
     if (!main) return;
-    document.title = `${view.title} | ${app.settings.business_name}`;
+    // O título do separador não passa pelo DOM do painel: traduz-se aqui.
+    const tituloVista = window.I18N && window.I18N.texto ? window.I18N.texto(view.title) : view.title;
+    document.title = `${tituloVista} | ${app.settings.business_name}`;
     try {
       const frag = h('div');
       await view.render(frag, params);

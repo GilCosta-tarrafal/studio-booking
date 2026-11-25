@@ -231,10 +231,10 @@ router.post('/bookings', requireClient, bookingLimiter, (req, res) => {
     const code = newCode();
     const info = db.prepare(
       `INSERT INTO bookings(code,room_id,service_id,title,style,date,start_min,end_min,client_id,client_name,client_phone,
-                            client_email,notes,status,remote,price,paid,source,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'site',?,?)`
+                            client_email,notes,status,remote,price,paid,source,lingua,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,'site',?,?,?)`
     ).run(code, room.id, serviceId, U.clean(b.title, 120), U.clean(b.style, 60), date, start, end, req.client.id, name, phone, email,
-      U.clean(b.notes, 1000), status, remote ? 1 : 0, preco, now, now);
+      U.clean(b.notes, 1000), status, remote ? 1 : 0, preco, req.lingua, now, now);
     return db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(info.lastInsertRowid);
   });
 
@@ -272,7 +272,7 @@ router.post('/lookup', lookupLimiter, (req, res) => {
 
 // Recibo em PDF, pedido com o código e o telefone (como a consulta).
 router.post('/recibo', lookupLimiter, (req, res) => {
-  require('../lib/pdf-recibo').enviar(res, findForClient(req));
+  require('../lib/pdf-recibo').enviar(res, findForClient(req), req.lingua);
 });
 
 function canCancel(row) {

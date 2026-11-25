@@ -84,7 +84,8 @@ app.use((err, req, res, next) => {
   if (err instanceof HttpError) message = err.message;
   else if (status < 500) message = t('api.pedidoInvalido');
   else { console.error(err); status = 500; message = t('api.erroInterno'); }
-  res.status(status).json({ error: message });
+  // As rotas escrevem os erros em português; aqui saem na língua de quem pediu.
+  res.status(status).json({ error: require('./lib/erros-i18n').traduzir(message, req.lingua) });
 });
 
 // 3007: o site fica na 3005 e o painel na 3006. Em produção, o alojamento

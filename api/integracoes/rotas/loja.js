@@ -41,6 +41,8 @@ CREATE INDEX IF NOT EXISTS idx_int_encomendas_projeto ON int_encomendas(projeto_
 alargarCheck('int_encomendas', "('aguarda_pagamento','pago','expirado')", "('aguarda_pagamento','pago','expirado','reembolsado')",
   'CREATE INDEX IF NOT EXISTS idx_int_encomendas_projeto ON int_encomendas(projeto_id, estado);', "'reembolsado'");
 acrescentaColuna('int_encomendas', 'reembolsado_em', 'TEXT');
+// Língua em que o cliente comprou no site: os emails da compra seguem-na.
+acrescentaColuna('int_encomendas', 'lingua', "TEXT NOT NULL DEFAULT ''");
 
 const RESERVA_MIN = 30;
 const MAX_POR_COMPRA = 99;
@@ -77,8 +79,8 @@ function novoCodigo() {
   throw new Error('Não foi possível gerar um código único');
 }
 
-// O cliente compra `quantidade` unidades de um artigo à venda.
-function criar(cliente, projetoId, quantidade) {
+// O cliente compra `quantidade` unidades de um artigo à venda (no site, na `lingua` escolhida).
+function criar(cliente, projetoId, quantidade, lingua = '') {
   const q = U.toInt(quantidade);
   return db.transaction(() => {
     expirar();
@@ -90,9 +92,9 @@ function criar(cliente, projetoId, quantidade) {
     if (q > livres) throw erro(`Só há ${livres} ${livres === 1 ? 'unidade disponível' : 'unidades disponíveis'}.`, 409);
     const agora = new Date().toISOString();
     const code = novoCodigo();
-    db.prepare(`INSERT INTO int_encomendas(code,client_id,projeto_id,titulo,preco_unit,quantidade,total,cliente_nome,cliente_email,cliente_tel,criado_em,atualizado_em)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(code, cliente.id, p.id, p.titulo, p.preco, q, p.preco * q, cliente.name || '', cliente.email || '', cliente.phone || '', agora, agora);
+    db.prepare(`INSERT INTO int_encomendas(code,client_id,projeto_id,titulo,preco_unit,quantidade,total,cliente_nome,cliente_email,cliente_tel,lingua,criado_em,atualizado_em)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(code, cliente.id, p.id, p.titulo, p.preco, q, p.preco * q, cliente.name || '', cliente.email || '', cliente.phone || '', lingua, agora, agora);
     return porCodigo(code);
   })();
 }
@@ -124,8 +126,10 @@ function imposto() {
 }
 
 // Para o ecrã de pagamento, no mesmo formato do resumo de uma marcação.
-function resumo(e) {
-  const { taxa, nome } = imposto();
+// Com req, o nome por omissão do imposto ("IVA") sai na língua de quem paga.
+function resumo(e, req) {
+  const { taxa, nome: nomeImposto } = imposto();
+  const nome = req && nomeImposto === 'IVA' ? req.t('pagar.iva') : nomeImposto;
   const total = e.estado === 'pago' ? 0 : e.total;
   const base = taxa == null ? total : r2(total / (1 + taxa / 100));
   const moeda = getSettings().currency || '';
@@ -153,23 +157,27 @@ function aposPagamento(code) {
 }
 
 // O cliente recebe a confirmação da compra no email da conta.
+// Na língua em que comprou no site (int_encomendas.lingua; vazia = português).
 async function avisar(e) {
   if (!e.cliente_email) return;
   const s = getSettings();
   const moeda = s.currency || '';
+  const D = require('../../comum/assets/js/dicionario.js');
+  const lingua = D.codigos.includes(e.lingua) ? e.lingua : 'pt';
+  const t = (chave, valores) => D.t(lingua, chave, valores);
   await require('../../lib/notify').sendEmail({
     to: e.cliente_email,
-    subject: `Compra confirmada — referência ${e.code}`,
+    subject: t('email.compra.assunto', { code: e.code }),
     text: [
-      `Olá ${e.cliente_nome},`,
+      t('email.ola', { nome: e.cliente_nome }),
       '',
-      `Recebemos o pagamento da sua compra no ${s.business_name || 'estúdio'}.`,
+      t('email.compra.l1', { negocio: s.business_name || t('email.estudio') }),
       '',
-      `Referência: ${e.code}`,
-      `${e.quantidade} × ${e.titulo} — ${e.total.toLocaleString('pt-PT')} ${moeda}`,
+      t('email.compra.ref', { code: e.code }),
+      `${e.quantidade} × ${e.titulo} — ${e.total.toLocaleString(D.lingua(lingua).locale)} ${moeda}`,
       '',
-      'O estúdio vai entrar em contacto consigo para combinar a entrega.',
-      'Guarde esta referência: é por ela que o estúdio encontra a sua compra.',
+      t('email.compra.entrega'),
+      t('email.compra.guarde'),
     ].join('\n'),
   });
 }

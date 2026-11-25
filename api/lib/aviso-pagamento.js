@@ -2,33 +2,47 @@
 // Aviso ao cliente quando o estúdio aceita o pedido: a marcação fica à espera
 // do pagamento e só depois fica confirmada. Vai por email e por SMS (ver
 // lib/notify.js: sem fornecedor configurado, fica escrito no registo).
+//
+// Os textos estão no dicionario.js (chaves "email.*") e saem na língua em que
+// o cliente marcou no site (bookings.lingua; vazia = português), tal como os
+// nomes do estúdio e da sala, se o estúdio os traduziu no painel.
 const { getSettings } = require('./db');
 const notify = require('./notify');
+const D = require('../comum/assets/js/dicionario.js');
+const TR = require('./traducoes');
 
 // O aviso pode partir do painel: o link é sempre o do site (ver lib/enderecos.js).
 const siteUrl = (req) => require('./enderecos').site(req);
 
-async function avisar(b, req) {
+// O que os três avisos têm em comum: a língua, o t() preso a ela e os nomes.
+function contexto(b) {
   const s = getSettings();
-  const link = `${siteUrl(req)}/pagar?code=${encodeURIComponent(b.code)}`;
+  const lingua = D.codigos.includes(b.lingua) ? b.lingua : 'pt';
+  const t = (chave, valores) => D.t(lingua, chave, valores);
+  const estudio = TR.local(b.studio_name, b.studio_tr, lingua, 'name');
+  const sala = TR.local(b.room_name, b.room_tr, lingua, 'name');
   const dia = b.date.split('-').reverse().join('/');
+  return { s, t, negocio: s.business_name || t('email.estudio'), dia, onde: `${estudio}, ${sala} · ${dia}, ${b.start}-${b.end}` };
+}
+
+async function avisar(b, req) {
+  const { s, t, negocio, onde } = contexto(b);
+  const link = `${siteUrl(req)}/pagar?code=${encodeURIComponent(b.code)}`;
   const emFalta = Math.max(0, b.price - b.paid);
   const texto = [
-    `Olá ${b.client_name},`,
+    t('email.ola', { nome: b.client_name }),
     '',
-    `O ${s.business_name || 'estúdio'} aceitou o seu pedido de marcação ${b.code}`,
-    `(${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}).`,
+    t('email.aceite.l1', { negocio, code: b.code }),
+    `(${onde}).`,
     '',
-    `A sua marcação precisa somente do pagamento para ficar confirmada: ${emFalta} ${b.currency || s.currency || ''}.`,
-    `Pague aqui: ${link}`,
+    t('email.aceite.l3', { valor: `${emFalta} ${b.currency || s.currency || ''}`.trim() }),
+    t('email.aceite.pague', { link }),
     '',
-    'Se não for paga até à hora da sessão, a marcação expira e o horário fica livre.',
+    t('email.aceite.expira'),
   ].join('\n');
   const envios = [];
-  if (b.client_email) envios.push(notify.sendEmail({ to: b.client_email, subject: `Marcação ${b.code}: falta só o pagamento`, text: texto }));
-  if (b.client_phone) {
-    envios.push(notify.sendSms({ to: b.client_phone, text: `${s.business_name || 'Estúdio'}: o seu pedido ${b.code} foi aceite. Falta só pagar para confirmar: ${link}` }));
-  }
+  if (b.client_email) envios.push(notify.sendEmail({ to: b.client_email, subject: t('email.aceite.assunto', { code: b.code }), text: texto }));
+  if (b.client_phone) envios.push(notify.sendSms({ to: b.client_phone, text: t('email.aceite.sms', { negocio, code: b.code, link }) }));
   return Promise.all(envios);
 }
 
@@ -38,26 +52,23 @@ async function avisar(b, req) {
 // espera de pagamento, o aviso de cima já leva a referência.
 async function referencia(b, req) {
   if (!b.client_email) return [];
-  const s = getSettings();
-  const dia = b.date.split('-').reverse().join('/');
+  const { t, negocio, onde } = contexto(b);
   const link = `${siteUrl(req)}/consultar?code=${encodeURIComponent(b.code)}`;
   const pedido = b.status === 'pedido';
   const texto = [
-    `Olá ${b.client_name},`,
+    t('email.ola', { nome: b.client_name }),
     '',
-    pedido
-      ? `Recebemos o seu pedido de marcação no ${s.business_name || 'estúdio'}.`
-      : `A sua marcação no ${s.business_name || 'estúdio'} está confirmada.`,
+    t(pedido ? 'email.ref.recebido' : 'email.ref.confirmada', { negocio }),
     '',
-    `Referência da marcação: ${b.code}`,
-    `${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}`,
+    t('email.ref.codigo', { code: b.code }),
+    onde,
     '',
-    pedido ? 'O estúdio vai confirmar o pedido e avisá-lo por email.' : null,
-    `Guarde esta referência. Consulte a marcação aqui: ${link}`,
+    pedido ? t('email.ref.vaiConfirmar') : null,
+    t('email.ref.guarde', { link }),
   ].filter((l) => l !== null).join('\n');
   return [await notify.sendEmail({
     to: b.client_email,
-    subject: pedido ? `Pedido de marcação recebido — referência ${b.code}` : `Marcação confirmada — referência ${b.code}`,
+    subject: t(pedido ? 'email.ref.assuntoPedido' : 'email.ref.assuntoConfirmada', { code: b.code }),
     text: texto,
   })];
 }
@@ -65,20 +76,19 @@ async function referencia(b, req) {
 // Depois de o pagamento entrar: confirma ao cliente que a marcação ficou
 // confirmada (e quanto pagou), com o link para consultar a marcação.
 async function confirmado(b, valor, req) {
-  const s = getSettings();
-  const dia = b.date.split('-').reverse().join('/');
+  const { s, t, negocio, dia, onde } = contexto(b);
   const link = `${siteUrl(req)}/consultar?code=${encodeURIComponent(b.code)}`;
   const texto = [
-    `Olá ${b.client_name},`,
+    t('email.ola', { nome: b.client_name }),
     '',
-    `Recebemos o seu pagamento de ${valor} ${b.currency || s.currency || ''} da marcação ${b.code}.`,
-    `A marcação está confirmada: ${b.studio_name}, ${b.room_name} · ${dia}, ${b.start}-${b.end}.`,
+    t('email.pago.l1', { valor: `${valor} ${b.currency || s.currency || ''}`.trim(), code: b.code }),
+    t('email.pago.l2', { onde }),
     '',
-    `Consulte a marcação e o recibo aqui: ${link}`,
+    t('email.pago.consulte', { link }),
   ].join('\n');
   const envios = [];
-  if (b.client_email) envios.push(notify.sendEmail({ to: b.client_email, subject: `Pagamento recebido — marcação ${b.code} confirmada`, text: texto }));
-  if (b.client_phone) envios.push(notify.sendSms({ to: b.client_phone, text: `${s.business_name || 'Estúdio'}: pagamento recebido. A marcação ${b.code} (${dia}, ${b.start}) está confirmada.` }));
+  if (b.client_email) envios.push(notify.sendEmail({ to: b.client_email, subject: t('email.pago.assunto', { code: b.code }), text: texto }));
+  if (b.client_phone) envios.push(notify.sendSms({ to: b.client_phone, text: t('email.pago.sms', { negocio, code: b.code, dia, hora: b.start }) }));
   return Promise.all(envios);
 }
 

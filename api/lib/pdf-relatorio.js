@@ -84,9 +84,10 @@ function rodapeDoc(doc, ctx) {
   }
 }
 
-// d: resultado de computeReport; ctx: { business, estudio, periodo, geradoEm, dominio, cur }
+// d: resultado de computeReport; ctx: { business, estudio, periodo, geradoEm, dominio, cur, lingua }
 function gerar(res, d, ctx) {
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 36, bottom: 60, left: 40, right: 40 }, bufferPages: true, info: { Title: 'Folha de Marcações' } });
+  require('./pdf-i18n').traduzirDoc(doc, ctx.lingua);
   doc.pipe(res);
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
   const fundo = () => doc.page.height - doc.page.margins.bottom;

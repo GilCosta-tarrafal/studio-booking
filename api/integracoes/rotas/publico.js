@@ -50,7 +50,7 @@ router.get('/cambio', (req, res) => {
 // as unidades, e devolve o código para a página de pagamento (/pagar?code=…).
 router.post('/encomendas', requireClient, compraLimiter, (req, res) => {
   const b = req.body || {};
-  const e = loja.criar(req.client, b.projeto_id, b.quantidade);
+  const e = loja.criar(req.client, b.projeto_id, b.quantidade, req.lingua);
   res.status(201).json({ code: e.code, total: e.total, pagar: '/pagar?code=' + encodeURIComponent(e.code) });
 });
 

@@ -337,7 +337,6 @@
     'Novo pedido de marcação.': { en: 'New booking request.', fr: 'Nouvelle demande de réservation.' },
     'A confirmação não coincide com a nova palavra-passe.': { en: "The confirmation doesn't match the new password.", fr: 'La confirmation ne correspond pas au nouveau mot de passe.' },
     'A nova palavra-passe deve ter pelo menos 8 caracteres.': { en: 'The new password must be at least 8 characters.', fr: 'Le nouveau mot de passe doit comporter au moins 8 caractères.' },
-    'Procurar': { en: 'Search', fr: 'Rechercher' },
     'A procurar…': { en: 'Searching…', fr: 'Recherche…' },
 
     // ---- O Meu Perfil ----
@@ -516,6 +515,471 @@
     'sem faturação': { en: 'no billing', fr: 'aucune facturation' },
     'sessão': { en: 'session', fr: 'séance' },
     'Ainda sem faturação neste período. Os valores aparecem aqui à medida que houver marcações.': { en: 'No billing in this period yet. Figures appear here as bookings come in.', fr: 'Pas encore de facturation sur cette période. Les chiffres apparaîtront ici au fil des réservations.' },
+
+    // ---- Bloqueio por inatividade ----
+    'Desbloquear': { en: 'Unlock', fr: 'Déverrouiller' },
+    'Painel bloqueado': { en: 'Panel locked', fr: 'Panneau verrouillé' },
+    'Não é você? Terminar sessão': { en: 'Not you? Sign out', fr: 'Ce n’est pas vous ? Se déconnecter' },
+
+    // ---- Barra de topo, ligação ao servidor, menu ----
+    'Ao vivo': { en: 'Live', fr: 'En direct' },
+    'A sincronizar': { en: 'Syncing', fr: 'Synchronisation' },
+    'Sem ligação': { en: 'Offline', fr: 'Hors ligne' },
+    'Clique para sincronizar agora.': { en: 'Click to sync now.', fr: 'Cliquez pour synchroniser maintenant.' },
+    'Sem ligação ao servidor. A tentar de novo…': { en: 'No connection to the server. Retrying…', fr: 'Pas de connexion au serveur. Nouvelle tentative…' },
+    'Ligação ao servidor restabelecida.': { en: 'Connection to the server restored.', fr: 'Connexion au serveur rétablie.' },
+    'Fechar o menu': { en: 'Close the menu', fr: 'Fermer le menu' },
+    'Abrir o menu': { en: 'Open the menu', fr: 'Ouvrir le menu' },
+    'Terminar sessão e voltar ao ecrã de entrada?': { en: 'Sign out and go back to the sign-in screen?', fr: 'Se déconnecter et revenir à l’écran de connexion ?' },
+    'Terminar sessão e voltar à entrada': { en: 'Sign out and go back to sign-in', fr: 'Se déconnecter et revenir à la connexion' },
+    'Painel de gestão': { en: 'Management panel', fr: 'Panneau de gestion' },
+    'proprietário': { en: 'owner', fr: 'propriétaire' },
+    'agente de estúdio': { en: 'studio agent', fr: 'agent de studio' },
+    'agente': { en: 'agent', fr: 'agent' },
+    'equipa': { en: 'team', fr: 'équipe' },
+
+    // ---- Notificações vindas do servidor ----
+    'Pagamento recebido': { en: 'Payment received', fr: 'Paiement reçu' },
+    'Marcação cancelada pelo cliente': { en: 'Booking cancelled by the client', fr: 'Réservation annulée par le client' },
+    'Nova candidatura na campanha de talentos': { en: 'New application to the talent campaign', fr: 'Nouvelle candidature à la campagne de talents' },
+    'Novo interesse num projeto': { en: 'New interest in a project', fr: 'Nouvel intérêt pour un projet' },
+    'Compra por concluir': { en: 'Purchase not completed', fr: 'Achat à finaliser' },
+
+    // ---- Atividade do perfil (registos do servidor) ----
+    'Mudou a fotografia do perfil': { en: 'Changed the profile photo', fr: 'A changé la photo de profil' },
+    'Removeu a fotografia do perfil': { en: 'Removed the profile photo', fr: 'A supprimé la photo de profil' },
+    'Palavra-passe errada ao desbloquear o painel': { en: 'Wrong password when unlocking the panel', fr: 'Mot de passe incorrect au déverrouillage du panneau' },
+
+    // ---- Perfil: fotografia ----
+    'Fotografia': { en: 'Photo', fr: 'Photo' },
+    'Mudar fotografia': { en: 'Change photo', fr: 'Changer la photo' },
+    'Carregar fotografia': { en: 'Upload photo', fr: 'Ajouter une photo' },
+    'Remover': { en: 'Remove', fr: 'Retirer' },
+    'A enviar…': { en: 'Uploading…', fr: 'Envoi…' },
+    'A remover…': { en: 'Removing…', fr: 'Suppression…' },
+    'JPG, PNG ou WebP. Fica quadrada; também pode arrastá-la para aqui.': { en: 'JPG, PNG or WebP. It will be square; you can also drag it here.', fr: 'JPG, PNG ou WebP. Elle sera carrée ; vous pouvez aussi la glisser ici.' },
+    'Escolha uma imagem JPG, PNG ou WebP.': { en: 'Choose a JPG, PNG or WebP image.', fr: 'Choisissez une image JPG, PNG ou WebP.' },
+    'A imagem tem mais de 20 MB. Escolha uma mais pequena.': { en: 'The image is larger than 20 MB. Choose a smaller one.', fr: 'L’image dépasse 20 Mo. Choisissez-en une plus petite.' },
+    'Não foi possível ler esta imagem.': { en: 'Could not read this image.', fr: 'Impossible de lire cette image.' },
+    'Não foi possível preparar a imagem.': { en: 'Could not prepare the image.', fr: 'Impossible de préparer l’image.' },
+    'Não foi possível guardar a fotografia.': { en: 'Could not save the photo.', fr: 'Impossible d’enregistrer la photo.' },
+    'Fotografia atualizada.': { en: 'Photo updated.', fr: 'Photo mise à jour.' },
+    'Fotografia removida.': { en: 'Photo removed.', fr: 'Photo supprimée.' },
+    'Remover a sua fotografia? Passa a aparecer com as iniciais.': { en: 'Remove your photo? Your initials will be shown instead.', fr: 'Supprimer votre photo ? Vos initiales seront affichées à la place.' },
+    'Fotografia, nome e contactos usados no painel e nas notificações.': { en: 'Photo, name and contacts used in the panel and in notifications.', fr: 'Photo, nom et coordonnées utilisés dans le panneau et les notifications.' },
+    'Nome, email, telefone e uma palavra-passe escolhida por si': { en: 'Name, email, phone and a password of your choice', fr: 'Nom, e-mail, téléphone et un mot de passe choisi par vous' },
+    'Não foi possível copiar.': { en: 'Could not copy.', fr: 'Impossible de copier.' },
+
+    // ---- CMS do site ----
+    'CMS do site': { en: 'Site CMS', fr: 'CMS du site' },
+    'Textos': { en: 'Texts', fr: 'Textes' },
+    'Página inicial': { en: 'Home page', fr: 'Page d’accueil' },
+    'Conteúdo': { en: 'Content', fr: 'Contenu' },
+    'Partes do site': { en: 'Site sections', fr: 'Parties du site' },
+    'Música, serviços e mais': { en: 'Music, services and more', fr: 'Musique, services et plus' },
+    'Conteúdo do site': { en: 'Site content', fr: 'Contenu du site' },
+    'Estas partes do site gerem-se nas suas próprias secções do painel.': { en: 'These parts of the site are managed in their own panel sections.', fr: 'Ces parties du site se gèrent dans leurs propres sections du panneau.' },
+    'Novidades e singles em destaque na página inicial.': { en: 'News and featured singles on the home page.', fr: 'Nouveautés et singles mis en avant sur la page d’accueil.' },
+    'A secção "Participa", com as campanhas abertas.': { en: 'The "Take part" section, with open campaigns.', fr: 'La section « Participer », avec les campagnes ouvertes.' },
+    'A lista de serviços e o que se escolhe ao marcar.': { en: 'The list of services and what is chosen when booking.', fr: 'La liste des services et ce que l’on choisit en réservant.' },
+    'Estúdios, salas, preços e horários (também no rodapé).': { en: 'Studios, rooms, prices and opening hours (also in the footer).', fr: 'Studios, salles, prix et horaires (aussi en pied de page).' },
+    'Nome, frase de apresentação, contactos e redes sociais.': { en: 'Name, tagline, contacts and social networks.', fr: 'Nom, phrase de présentation, contacts et réseaux sociaux.' },
+    'Voltar ao texto de origem em todas as línguas': { en: 'Go back to the original text in all languages', fr: 'Revenir au texte d’origine dans toutes les langues' },
+    'Repor': { en: 'Reset', fr: 'Rétablir' },
+    'Textos guardados. O site já os mostra.': { en: 'Texts saved. The site already shows them.', fr: 'Textes enregistrés. Le site les affiche déjà.' },
+    'Como fica no site': { en: 'How it looks on the site', fr: 'Aperçu sur le site' },
+    'Pré-visualização do topo da página': { en: 'Preview of the top of the page', fr: 'Aperçu du haut de la page' },
+    'Pré-visualização da faixa': { en: 'Preview of the banner', fr: 'Aperçu du bandeau' },
+    'No site agora': { en: 'On the site now', fr: 'Sur le site maintenant' },
+    'Fotografia de origem · no site agora': { en: 'Original photo · on the site now', fr: 'Photo d’origine · sur le site maintenant' },
+    'Nova · carregue em Guardar para a pôr no site': { en: 'New · click Save to put it on the site', fr: 'Nouvelle · cliquez sur Enregistrer pour la publier' },
+    'Volta à de origem · carregue em Guardar': { en: 'Back to the original · click Save', fr: 'Retour à l’originale · cliquez sur Enregistrer' },
+    'Um link ou uma imagem do seu computador (JPG, PNG ou WebP, até 5 MB). Vazio: fica a fotografia de origem do site.': { en: 'A link or an image from your computer (JPG, PNG or WebP, up to 5 MB). Empty: the site’s original photo stays.', fr: 'Un lien ou une image de votre ordinateur (JPG, PNG ou WebP, jusqu’à 5 Mo). Vide : la photo d’origine du site reste.' },
+    'Fotografias e texto guardados.': { en: 'Photos and text saved.', fr: 'Photos et texte enregistrés.' },
+    'Texto por cima das fotografias': { en: 'Text over the photos', fr: 'Texte sur les photos' },
+    'Topo da página': { en: 'Top of the page', fr: 'Haut de la page' },
+    'Faixa a meio da página': { en: 'Banner in the middle of the page', fr: 'Bandeau au milieu de la page' },
+    'Fotografia da faixa': { en: 'Banner photo', fr: 'Photo du bandeau' },
+    'Fotografias': { en: 'Photos', fr: 'Photos' },
+    'As imagens grandes da página inicial e o texto que aparece por cima delas.': { en: 'The large images on the home page and the text shown over them.', fr: 'Les grandes images de la page d’accueil et le texte affiché par-dessus.' },
+    'Título da secção': { en: 'Section title', fr: 'Titre de la section' },
+    'Texto': { en: 'Text', fr: 'Texte' },
+    'Uma linha em branco separa parágrafos.': { en: 'A blank line separates paragraphs.', fr: 'Une ligne vide sépare les paragraphes.' },
+    'Texto do botão': { en: 'Button text', fr: 'Texte du bouton' },
+    'Vazio, a secção não tem botão.': { en: 'Empty, the section has no button.', fr: 'Vide, la section n’a pas de bouton.' },
+    'Imagem (opcional)': { en: 'Image (optional)', fr: 'Image (facultative)' },
+    'Aparece ao lado do texto. JPG, PNG ou WebP, até 5 MB, do computador ou por link.': { en: 'Shown next to the text. JPG, PNG or WebP, up to 5 MB, from the computer or by link.', fr: 'Affichée à côté du texte. JPG, PNG ou WebP, jusqu’à 5 Mo, depuis l’ordinateur ou par lien.' },
+    'Nova secção': { en: 'New section', fr: 'Nouvelle section' },
+    'Editar secção': { en: 'Edit section', fr: 'Modifier la section' },
+    'Link do botão': { en: 'Button link', fr: 'Lien du bouton' },
+    'Uma página do site (/marcar), uma secção (#servicos) ou um endereço de fora (abre noutro separador).': { en: 'A site page (/marcar), a section (#servicos) or an outside address (opens in another tab).', fr: 'Une page du site (/marcar), une section (#servicos) ou une adresse externe (s’ouvre dans un autre onglet).' },
+    'Uma secção da página inicial com título, texto, imagem e botão. Escreva em português; o inglês e o francês são opcionais.': { en: 'A home page section with title, text, image and button. Write in Portuguese; English and French are optional.', fr: 'Une section de la page d’accueil avec titre, texte, image et bouton. Écrivez en portugais ; l’anglais et le français sont facultatifs.' },
+    'Onde aparece': { en: 'Where it appears', fr: 'Où elle apparaît' },
+    'Visível no site': { en: 'Visible on the site', fr: 'Visible sur le site' },
+    'Adicionar secção': { en: 'Add section', fr: 'Ajouter une section' },
+    '+ Adicionar secção': { en: '+ Add section', fr: '+ Ajouter une section' },
+    'Secção adicionada.': { en: 'Section added.', fr: 'Section ajoutée.' },
+    'Secção guardada.': { en: 'Section saved.', fr: 'Section enregistrée.' },
+    'Secção apagada.': { en: 'Section deleted.', fr: 'Section supprimée.' },
+    'Secções guardadas.': { en: 'Sections saved.', fr: 'Sections enregistrées.' },
+    'sem título': { en: 'untitled', fr: 'sans titre' },
+    'Secções novas': { en: 'New sections', fr: 'Nouvelles sections' },
+    'Secções visíveis': { en: 'Visible sections', fr: 'Sections visibles' },
+    // Grupos e campos de texto (vêm do servidor, lib/cms.js)
+    'Topo da página inicial': { en: 'Top of the home page', fr: 'Haut de la page d’accueil' },
+    'O título grande, a frase por baixo e o convite para marcar.': { en: 'The large title, the line below it and the invitation to book.', fr: 'Le grand titre, la phrase en dessous et l’invitation à réserver.' },
+    'Título principal': { en: 'Main title', fr: 'Titre principal' },
+    'Texto por baixo do título': { en: 'Text below the title', fr: 'Texte sous le titre' },
+    'Aparece logo a seguir à frase de apresentação (essa muda-se em Definições do negócio).': { en: 'Shown right after the tagline (that one is changed in Business settings).', fr: 'Affiché juste après la phrase de présentation (celle-ci se modifie dans Paramètres de l’entreprise).' },
+    'Convite ao lado do botão': { en: 'Invitation next to the button', fr: 'Invitation à côté du bouton' },
+    'Botão "Marcar sessão"': { en: '"Book a session" button', fr: 'Bouton « Réserver une séance »' },
+    'O mesmo texto aparece no rodapé.': { en: 'The same text appears in the footer.', fr: 'Le même texte apparaît en pied de page.' },
+    'Títulos das secções': { en: 'Section titles', fr: 'Titres des sections' },
+    'Os títulos e subtítulos das secções da página inicial.': { en: 'The titles and subtitles of the home page sections.', fr: 'Les titres et sous-titres des sections de la page d’accueil.' },
+    'Músicas: título': { en: 'Songs: title', fr: 'Chansons : titre' },
+    'Músicas: subtítulo': { en: 'Songs: subtitle', fr: 'Chansons : sous-titre' },
+    'Projetos: título': { en: 'Projects: title', fr: 'Projets : titre' },
+    'Projetos: subtítulo': { en: 'Projects: subtitle', fr: 'Projets : sous-titre' },
+    'Serviços: título': { en: 'Services: title', fr: 'Services : titre' },
+    'Serviços: subtítulo': { en: 'Services: subtitle', fr: 'Services : sous-titre' },
+    'Os três passos no fim da página inicial.': { en: 'The three steps at the end of the home page.', fr: 'Les trois étapes en bas de la page d’accueil.' },
+    'Passo 1: título': { en: 'Step 1: title', fr: 'Étape 1 : titre' },
+    'Passo 1: texto': { en: 'Step 1: text', fr: 'Étape 1 : texte' },
+    'Passo 2: título': { en: 'Step 2: title', fr: 'Étape 2 : titre' },
+    'Passo 2: texto': { en: 'Step 2: text', fr: 'Étape 2 : texte' },
+    'Passo 3: título': { en: 'Step 3: title', fr: 'Étape 3 : titre' },
+    'Passo 3: texto': { en: 'Step 3: text', fr: 'Étape 3 : texte' },
+    'Menu do topo': { en: 'Top menu', fr: 'Menu du haut' },
+    'Os links do cabeçalho do site.': { en: 'The links in the site header.', fr: 'Les liens de l’en-tête du site.' },
+    'Músicas': { en: 'Songs', fr: 'Chansons' },
+    'Contactos': { en: 'Contacts', fr: 'Contacts' },
+    'Consultar marcação': { en: 'Check booking', fr: 'Consulter la réservation' },
+    'Marcar e consultar': { en: 'Book and check', fr: 'Réserver et consulter' },
+    'O título e a introdução das páginas de marcação e de consulta.': { en: 'The title and introduction of the booking and lookup pages.', fr: 'Le titre et l’introduction des pages de réservation et de consultation.' },
+    'Marcar: título': { en: 'Book: title', fr: 'Réserver : titre' },
+    'Marcar: introdução': { en: 'Book: introduction', fr: 'Réserver : introduction' },
+    'Consultar: título': { en: 'Check: title', fr: 'Consulter : titre' },
+    'Consultar: introdução': { en: 'Check: introduction', fr: 'Consulter : introduction' },
+    'Rodapé': { en: 'Footer', fr: 'Pied de page' },
+    'Os títulos das colunas e as frases do fundo da página.': { en: 'The column titles and the lines at the bottom of the page.', fr: 'Les titres des colonnes et les phrases du bas de page.' },
+    'Coluna dos links': { en: 'Links column', fr: 'Colonne des liens' },
+    'Coluna dos contactos': { en: 'Contacts column', fr: 'Colonne des contacts' },
+    'Coluna do horário': { en: 'Opening hours column', fr: 'Colonne des horaires' },
+    'Sem contactos definidos': { en: 'No contacts set', fr: 'Aucun contact défini' },
+    'Direitos reservados': { en: 'All rights reserved', fr: 'Droits réservés' },
+    'Motores de busca': { en: 'Search engines', fr: 'Moteurs de recherche' },
+    'O que o Google e as redes sociais mostram ao partilhar o site.': { en: 'What Google and social networks show when the site is shared.', fr: 'Ce que Google et les réseaux sociaux affichent lors du partage du site.' },
+    'Título do separador': { en: 'Tab title', fr: 'Titre de l’onglet' },
+    'Vem logo a seguir ao nome do negócio. Comece por ": " ou " | ".': { en: 'Comes right after the business name. Start with ": " or " | ".', fr: 'Vient juste après le nom de l’entreprise. Commencez par « : » ou « | ».' },
+    'Vem a seguir à frase de apresentação.': { en: 'Comes after the tagline.', fr: 'Vient après la phrase de présentation.' },
+    'Novidades': { en: 'News', fr: 'Nouveautés' },
+    'O slide de lançamentos logo a seguir ao topo.': { en: 'The releases slider right after the top.', fr: 'Le diaporama des sorties juste après le haut.' },
+    'Saíram deste estúdio': { en: 'Made in this studio', fr: 'Sortis de ce studio' },
+    'Os singles em destaque.': { en: 'The featured singles.', fr: 'Les singles mis en avant.' },
+    'Participa': { en: 'Take part', fr: 'Participer' },
+    'Os projetos abertos.': { en: 'The open projects.', fr: 'Les projets ouverts.' },
+    'Fotografia a meio': { en: 'Photo in the middle', fr: 'Photo au milieu' },
+    'A faixa com a fotografia entre as secções.': { en: 'The photo banner between sections.', fr: 'Le bandeau photo entre les sections.' },
+    'A lista de serviços.': { en: 'The list of services.', fr: 'La liste des services.' },
+    'Os três passos no fim da página.': { en: 'The three steps at the end of the page.', fr: 'Les trois étapes en bas de la page.' },
+    'Logo a seguir ao topo': { en: 'Right after the top', fr: 'Juste après le haut' },
+
+    // ---- Dashboard ----
+    '▲ novo': { en: '▲ new', fr: '▲ nouveau' },
+
+    // ---- Integrações, pagamentos e câmbio ----
+    'Pendente': { en: 'Pending', fr: 'En attente' },
+    'Reembolsado': { en: 'Refunded', fr: 'Remboursé' },
+    'Falhou': { en: 'Failed', fr: 'Échoué' },
+    'Atualizar agora': { en: 'Update now', fr: 'Mettre à jour' },
+    'De (moeda)': { en: 'From (currency)', fr: 'De (devise)' },
+    'Para (moeda)': { en: 'To (currency)', fr: 'Vers (devise)' },
+    'Trocar as moedas': { en: 'Swap currencies', fr: 'Inverser les devises' },
+    'Converter': { en: 'Convert', fr: 'Convertir' },
+    'Sucesso a partir de (reproduções)': { en: 'Hit from (plays)', fr: 'Succès à partir de (écoutes)' },
+    'Passando daqui, o lançamento entra em "Saíram deste estúdio".': { en: 'Beyond this, the release goes into "Made in this studio".', fr: 'Au-delà, la sortie entre dans « Sortis de ce studio ».' },
+    'Slides de novidades (máx. 5)': { en: 'News slides (max. 5)', fr: 'Diapositives de nouveautés (max. 5)' },
+    'Ficam sempre os mais recentes pela data de lançamento: entra um novo, sai o mais antigo.': { en: 'The most recent by release date always stay: a new one comes in, the oldest goes out.', fr: 'Les plus récents par date de sortie restent : un nouveau entre, le plus ancien sort.' },
+    'Lançamentos recebidos': { en: 'Releases received', fr: 'Sorties reçues' },
+    'Volta a aparecer no site.': { en: 'Shown on the site again.', fr: 'De nouveau affiché sur le site.' },
+    'Escondido do site.': { en: 'Hidden from the site.', fr: 'Masqué du site.' },
+    'novidade (no slide)': { en: 'news (in the slider)', fr: 'nouveauté (dans le diaporama)' },
+    'Capa': { en: 'Cover', fr: 'Pochette' },
+    'Reembolsar': { en: 'Refund', fr: 'Rembourser' },
+    'Reembolsar pagamento': { en: 'Refund payment', fr: 'Rembourser le paiement' },
+    'Reembolso feito': { en: 'Refund done', fr: 'Remboursement effectué' },
+    'Pagamento de demonstração: não houve dinheiro, por isso só fica marcado como reembolsado.': { en: 'Demo payment: no money was charged, so it is only marked as refunded.', fr: 'Paiement de démonstration : aucun argent n’a été débité, il est donc seulement marqué comme remboursé.' },
+    'Motivo (opcional)': { en: 'Reason (optional)', fr: 'Motif (facultatif)' },
+    'Fica registado e vai no email ao cliente.': { en: 'It is recorded and included in the email to the client.', fr: 'Il est enregistré et inclus dans l’e-mail au client.' },
+    'Ex.: o cliente desistiu; sessão cancelada pelo estúdio…': { en: 'E.g. the client gave up; session cancelled by the studio…', fr: 'Ex. : le client a renoncé ; séance annulée par le studio…' },
+    'Cancelar a marcação (o horário fica livre)': { en: 'Cancel the booking (the slot becomes free)', fr: 'Annuler la réservation (le créneau se libère)' },
+    'A marcação já não se pode cancelar (já terminou ou foi cancelada)': { en: 'The booking can no longer be cancelled (it has ended or was cancelled)', fr: 'La réservation ne peut plus être annulée (terminée ou déjà annulée)' },
+    'Referência': { en: 'Reference', fr: 'Référence' },
+
+    // ---- Música ----
+    'Imagem de vídeo': { en: 'Video image', fr: 'Image vidéo' },
+    'Ler do link': { en: 'Read from link', fr: 'Lire depuis le lien' },
+    'A ler o link…': { en: 'Reading the link…', fr: 'Lecture du lien…' },
+    'título': { en: 'title', fr: 'titre' },
+    'artista': { en: 'artist', fr: 'artiste' },
+    'capa': { en: 'cover', fr: 'pochette' },
+    'data de lançamento': { en: 'release date', fr: 'date de sortie' },
+    'data (hoje: o link não a tem)': { en: 'date (today: the link does not have it)', fr: 'date (aujourd’hui : le lien ne l’indique pas)' },
+    'Cole o link da música, ou escreva o título.': { en: 'Paste the song link, or type the title.', fr: 'Collez le lien de la chanson, ou saisissez le titre.' },
+    'Cole o link: o título, o artista, a data de lançamento e a capa vêm de lá. Basta isso para a novidade; os campos abaixo podem ser corrigidos à mão.': { en: 'Paste the link: the title, artist, release date and cover come from it. That is enough for the news item; the fields below can be corrected by hand.', fr: 'Collez le lien : le titre, l’artiste, la date de sortie et la pochette en viennent. Cela suffit pour la nouveauté ; les champs ci-dessous peuvent être corrigés à la main.' },
+    'Link da música (Spotify, YouTube, Apple Music, SoundCloud…)': { en: 'Song link (Spotify, YouTube, Apple Music, SoundCloud…)', fr: 'Lien de la chanson (Spotify, YouTube, Apple Music, SoundCloud…)' },
+    'Enquanto recente, aparece nas novidades. Vazio: não entra nas novidades.': { en: 'While recent, it appears in the news. Empty: it is not included in the news.', fr: 'Tant qu’elle est récente, elle apparaît dans les nouveautés. Vide : elle n’y entre pas.' },
+    'Passando o limite definido em Integrações, entra em "Saíram deste estúdio".': { en: 'Past the limit set in Integrations, it goes into "Made in this studio".', fr: 'Au-delà de la limite définie dans Intégrations, elle entre dans « Sortis de ce studio ».' },
+    'Imagem da capa': { en: 'Cover image', fr: 'Image de pochette' },
+    'Formato da imagem': { en: 'Image format', fr: 'Format de l’image' },
+    'Texto (opcional)': { en: 'Text (optional)', fr: 'Texte (facultatif)' },
+    'Uma linha curta mostrada no slide de novidades.': { en: 'A short line shown in the news slider.', fr: 'Une courte ligne affichée dans le diaporama des nouveautés.' },
+    'Músicas que saíram deste estúdio, escritas à mão. Juntam-se às que chegam da plataforma (ver Integrações) e aparecem no site nas novidades e em "Saíram deste estúdio".': { en: 'Songs made in this studio, entered by hand. They join those coming from the platform (see Integrations) and appear on the site in the news and in "Made in this studio".', fr: 'Chansons sorties de ce studio, saisies à la main. Elles s’ajoutent à celles venant de la plateforme (voir Intégrations) et apparaissent sur le site dans les nouveautés et dans « Sortis de ce studio ».' },
+    'Ainda não há músicas à mão. Use "Adicionar música" para criar a primeira.': { en: 'No hand-entered songs yet. Use "Add song" to create the first one.', fr: 'Aucune chanson saisie à la main. Utilisez « Ajouter une chanson » pour créer la première.' },
+    'Ainda não há músicas à mão.': { en: 'No hand-entered songs yet.', fr: 'Aucune chanson saisie à la main.' },
+
+    // ---- Projetos e loja ----
+    'Publicidade': { en: 'Advertising', fr: 'Publicité' },
+    'Vendas (artigo à venda)': { en: 'Sales (item for sale)', fr: 'Ventes (article en vente)' },
+    'Imagens': { en: 'Images', fr: 'Images' },
+    'Quantidade à venda *': { en: 'Quantity for sale *', fr: 'Quantité en vente *' },
+    'Quando chegar a 0, o artigo sai do site.': { en: 'When it reaches 0, the item leaves the site.', fr: 'Quand elle atteint 0, l’article quitte le site.' },
+    'Data limite para manifestar interesse.': { en: 'Deadline to express interest.', fr: 'Date limite pour manifester son intérêt.' },
+    'Menor aparece primeiro no site.': { en: 'Lower appears first on the site.', fr: 'Le plus petit apparaît en premier sur le site.' },
+    'Aparece na secção "Participa" do site enquanto estiver visível. Com "aceita inscrições" ligado, o público pode manifestar interesse.': { en: 'Appears in the site’s "Take part" section while visible. With "accepts sign-ups" on, the public can express interest.', fr: 'Apparaît dans la section « Participer » du site tant qu’il est visible. Avec « accepte les inscriptions » activé, le public peut manifester son intérêt.' },
+    'Campanhas e convocatórias colaborativas. Aparecem na secção "Participa" do site; quem tiver interesse deixa o contacto e a inscrição chega aqui.': { en: 'Collaborative campaigns and calls. They appear in the site’s "Take part" section; whoever is interested leaves their contact and the sign-up arrives here.', fr: 'Campagnes et appels collaboratifs. Ils apparaissent dans la section « Participer » du site ; les intéressés laissent leur contact et l’inscription arrive ici.' },
+    'Um artigo da gravadora à venda no site. O cliente escolhe a quantidade e paga como numa marcação; quando acabar o stock, sai do site.': { en: 'A label item for sale on the site. The client chooses the quantity and pays as for a booking; when stock runs out, it leaves the site.', fr: 'Un article du label en vente sur le site. Le client choisit la quantité et paie comme pour une réservation ; quand le stock est épuisé, il quitte le site.' },
+    'Uma frase curta, mostrada no cartão do site.': { en: 'A short sentence, shown on the site card.', fr: 'Une courte phrase, affichée sur la carte du site.' },
+    'O texto completo do convite. Ex.: campanha para jovens com talento sem condições para gravar.': { en: 'The full text of the invitation. E.g. campaign for talented young people who cannot afford to record.', fr: 'Le texte complet de l’invitation. Ex. : campagne pour des jeunes talents sans moyens d’enregistrer.' },
+    'A sala volta a ficar livre nesses dias.': { en: 'The room becomes free again on those days.', fr: 'La salle redevient libre ces jours-là.' },
+    'As inscrições recebidas também são apagadas.': { en: 'The sign-ups received are also deleted.', fr: 'Les inscriptions reçues sont aussi supprimées.' },
+    'Estado da inscrição': { en: 'Sign-up status', fr: 'Statut de l’inscription' },
+    'Nova': { en: 'New', fr: 'Nouvelle' },
+    'Sem telefone.': { en: 'No phone.', fr: 'Pas de téléphone.' },
+    'Aceitar': { en: 'Accept', fr: 'Accepter' },
+    'Ainda ninguém manifestou interesse neste projeto.': { en: 'Nobody has expressed interest in this project yet.', fr: 'Personne n’a encore manifesté d’intérêt pour ce projet.' },
+    'Paga': { en: 'Paid', fr: 'Payée' },
+    'Expirou': { en: 'Expired', fr: 'Expirée' },
+    'Reembolsada': { en: 'Refunded', fr: 'Remboursée' },
+    'Ainda não há encomendas deste artigo.': { en: 'No orders for this item yet.', fr: 'Aucune commande pour cet article.' },
+    'Encomendas': { en: 'Orders', fr: 'Commandes' },
+    'Vendas': { en: 'Sales', fr: 'Ventes' },
+    'Esgotado': { en: 'Sold out', fr: 'Épuisé' },
+    'Ver encomendas': { en: 'See orders', fr: 'Voir les commandes' },
+    'Ainda não há projetos. Use "Novo projeto" para criar o primeiro (uma campanha de talentos, um álbum coletivo…).': { en: 'No projects yet. Use "New project" to create the first one (a talent campaign, a collective album…).', fr: 'Aucun projet pour l’instant. Utilisez « Nouveau projet » pour créer le premier (une campagne de talents, un album collectif…).' },
+    'Ainda não há projetos.': { en: 'No projects yet.', fr: 'Aucun projet pour l’instant.' },
+    'o estúdio': { en: 'the studio', fr: 'le studio' },
+
+    // ---- Mensagens (chat da equipa) ----
+    'Mensagens': { en: 'Messages', fr: 'Messages' },
+    'Voltar': { en: 'Back', fr: 'Retour' },
+    'Ouvir': { en: 'Play', fr: 'Écouter' },
+    'Pausa': { en: 'Pause', fr: 'Pause' },
+    'Posição na mensagem de voz': { en: 'Position in the voice message', fr: 'Position dans le message vocal' },
+    'Não foi possível tocar a mensagem de voz. Verifique o som do computador e tente outra vez.': { en: 'Could not play the voice message. Check the computer’s sound and try again.', fr: 'Impossible de lire le message vocal. Vérifiez le son de l’ordinateur et réessayez.' },
+    '📷 Fotografia': { en: '📷 Photo', fr: '📷 Photo' },
+    '🎤 Mensagem de voz': { en: '🎤 Voice message', fr: '🎤 Message vocal' },
+    'Procurar pessoa ou estúdio…': { en: 'Search person or studio…', fr: 'Rechercher une personne ou un studio…' },
+    'Procurar pessoa': { en: 'Search person', fr: 'Rechercher une personne' },
+    'Chat — Agentes': { en: 'Chat — Agents', fr: 'Chat — Agents' },
+    'Escolha com quem quer falar': { en: 'Choose who you want to talk to', fr: 'Choisissez avec qui parler' },
+    'Ninguém com esse nome.': { en: 'Nobody with that name.', fr: 'Personne avec ce nom.' },
+    'Ainda não há mais ninguém na equipa.': { en: 'There is nobody else in the team yet.', fr: 'Il n’y a encore personne d’autre dans l’équipe.' },
+    'ligado agora': { en: 'online now', fr: 'en ligne' },
+    'ligado': { en: 'online', fr: 'en ligne' },
+    'desligado': { en: 'offline', fr: 'hors ligne' },
+    'O ficheiro tem mais de 20 MB.': { en: 'The file is larger than 20 MB.', fr: 'Le fichier dépasse 20 Mo.' },
+    'A fotografia tem mais de 20 MB.': { en: 'The photo is larger than 20 MB.', fr: 'La photo dépasse 20 Mo.' },
+    'Não foi possível enviar.': { en: 'Could not send.', fr: 'Impossible d’envoyer.' },
+    'Escreva uma mensagem…': { en: 'Write a message…', fr: 'Écrivez un message…' },
+    'Mensagem': { en: 'Message', fr: 'Message' },
+    'Anexar documento ou áudio': { en: 'Attach document or audio', fr: 'Joindre un document ou un audio' },
+    'Enviar fotografia': { en: 'Send photo', fr: 'Envoyer une photo' },
+    'Gravar mensagem de voz': { en: 'Record voice message', fr: 'Enregistrer un message vocal' },
+    'Enviar': { en: 'Send', fr: 'Envoyer' },
+    'Abrir a fotografia': { en: 'Open the photo', fr: 'Ouvrir la photo' },
+    'Descarregar': { en: 'Download', fr: 'Télécharger' },
+    'Este browser não grava áudio.': { en: 'This browser cannot record audio.', fr: 'Ce navigateur n’enregistre pas l’audio.' },
+    'Para gravar voz, abra o painel em https:// ou em localhost (o browser só dá o microfone em ligações seguras).': { en: 'To record voice, open the panel on https:// or localhost (the browser only allows the microphone on secure connections).', fr: 'Pour enregistrer la voix, ouvrez le panneau en https:// ou sur localhost (le navigateur n’autorise le micro que sur les connexions sécurisées).' },
+    'Não deu autorização para usar o microfone.': { en: 'You did not allow use of the microphone.', fr: 'Vous n’avez pas autorisé l’utilisation du micro.' },
+    'Enviar a gravação': { en: 'Send the recording', fr: 'Envoyer l’enregistrement' },
+    'Apagar a gravação': { en: 'Delete the recording', fr: 'Supprimer l’enregistrement' },
+    'Cancelar a gravação': { en: 'Cancel the recording', fr: 'Annuler l’enregistrement' },
+    'Parar e ouvir': { en: 'Stop and listen', fr: 'Arrêter et écouter' },
+    'Parar e ouvir a gravação antes de enviar': { en: 'Stop and listen to the recording before sending', fr: 'Arrêter et écouter l’enregistrement avant d’envoyer' },
+    'Parar e enviar a gravação': { en: 'Stop and send the recording', fr: 'Arrêter et envoyer l’enregistrement' },
+    'Parar': { en: 'Stop', fr: 'Arrêter' },
+
+    // ---- Calendário, marcações, impressão ----
+    'Bloqueado': { en: 'Blocked', fr: 'Bloqué' },
+    'Totais': { en: 'Totals', fr: 'Totaux' },
+    'Imprimir': { en: 'Print', fr: 'Imprimer' },
+    'Pedido aceite: o cliente foi avisado de que só falta pagar.': { en: 'Request accepted: the client was told that only payment is missing.', fr: 'Demande acceptée : le client a été prévenu qu’il ne reste qu’à payer.' },
+    'Recusar este pedido? O horário fica livre.': { en: 'Decline this request? The slot becomes free.', fr: 'Refuser cette demande ? Le créneau se libère.' },
+    'Indique o telefone do cliente.': { en: 'Enter the client’s phone.', fr: 'Indiquez le téléphone du client.' },
+    'Eliminar esta marcação de vez? Para a manter no histórico, mude o estado para "Cancelado".': { en: 'Delete this booking for good? To keep it in the history, change the status to "Cancelled".', fr: 'Supprimer définitivement cette réservation ? Pour la garder dans l’historique, passez le statut à « Annulée ».' },
+    'Para clientes que ligam ou passam no estúdio. O sistema impede horários sobrepostos.': { en: 'For clients who call or drop by the studio. The system prevents overlapping times.', fr: 'Pour les clients qui appellent ou passent au studio. Le système empêche les chevauchements.' },
+    'O cliente não vem ao estúdio; manda os ficheiros.': { en: 'The client does not come to the studio; they send the files.', fr: 'Le client ne vient pas au studio ; il envoie les fichiers.' },
+
+    // ---- Estúdios ----
+    'por traduzir: o site mostra o português': { en: 'not translated: the site shows the Portuguese', fr: 'non traduit : le site affiche le portugais' },
+    'Traduções': { en: 'Translations', fr: 'Traductions' },
+    'Aberto': { en: 'Open', fr: 'Ouvert' },
+    'Morada': { en: 'Address', fr: 'Adresse' },
+    'Moeda do estúdio': { en: 'Studio currency', fr: 'Devise du studio' },
+    'Os preços das salas, as marcações e os pagamentos deste estúdio ficam nesta moeda.': { en: 'Room prices, bookings and payments for this studio are in this currency.', fr: 'Les prix des salles, les réservations et les paiements de ce studio sont dans cette devise.' },
+    'Converter os preços das salas para a moeda nova, com a taxa de câmbio do dia': { en: 'Convert room prices to the new currency, at today’s exchange rate', fr: 'Convertir les prix des salles dans la nouvelle devise, au taux de change du jour' },
+    'Converter os preços para a moeda nova, com a taxa de câmbio do dia': { en: 'Convert prices to the new currency, at today’s exchange rate', fr: 'Convertir les prix dans la nouvelle devise, au taux de change du jour' },
+    'Visível no site e aberto a marcações': { en: 'Visible on the site and open for bookings', fr: 'Visible sur le site et ouvert aux réservations' },
+    'Os links curtos não trazem as coordenadas. Abra o link e copie o endereço completo da barra do browser.': { en: 'Short links do not include the coordinates. Open the link and copy the full address from the browser bar.', fr: 'Les liens courts ne contiennent pas les coordonnées. Ouvrez le lien et copiez l’adresse complète de la barre du navigateur.' },
+    'Escreva a morada ou a cidade a procurar.': { en: 'Type the address or city to search for.', fr: 'Saisissez l’adresse ou la ville à rechercher.' },
+    'Este browser não sabe dizer onde está.': { en: 'This browser cannot tell where you are.', fr: 'Ce navigateur ne peut pas indiquer où vous êtes.' },
+    'O browser só dá a localização em ligações seguras (https:// ou localhost). Cole o link do Google Maps, ou abra o painel em localhost.': { en: 'The browser only gives the location on secure connections (https:// or localhost). Paste the Google Maps link, or open the panel on localhost.', fr: 'Le navigateur ne donne la position que sur les connexions sécurisées (https:// ou localhost). Collez le lien Google Maps, ou ouvrez le panneau sur localhost.' },
+    'A perguntar ao aparelho…': { en: 'Asking the device…', fr: 'Interrogation de l’appareil…' },
+    'Não deu autorização para ler a localização. Pode escrevê-la à mão ou colar o link do Google Maps.': { en: 'You did not allow reading the location. You can type it by hand or paste the Google Maps link.', fr: 'Vous n’avez pas autorisé la lecture de la position. Vous pouvez la saisir à la main ou coller le lien Google Maps.' },
+    'Não foi possível ler a localização deste aparelho. Tente ao ar livre, ou escreva-a à mão.': { en: 'Could not read this device’s location. Try outdoors, or type it by hand.', fr: 'Impossible de lire la position de cet appareil. Essayez en plein air, ou saisissez-la à la main.' },
+    'O meu estúdio e salas': { en: 'My studio and rooms', fr: 'Mon studio et mes salles' },
+    'Oculto no site': { en: 'Hidden on the site', fr: 'Masqué sur le site' },
+    'Visível': { en: 'Visible', fr: 'Visible' },
+
+    // ---- Moedas ----
+    'Kwanza angolano': { en: 'Angolan kwanza', fr: 'Kwanza angolais' },
+    'Peso argentino': { en: 'Argentine peso', fr: 'Peso argentin' },
+    'Dólar australiano': { en: 'Australian dollar', fr: 'Dollar australien' },
+    'Real brasileiro': { en: 'Brazilian real', fr: 'Réal brésilien' },
+    'Dólar canadiano': { en: 'Canadian dollar', fr: 'Dollar canadien' },
+    'Franco suíço': { en: 'Swiss franc', fr: 'Franc suisse' },
+    'Yuan chinês': { en: 'Chinese yuan', fr: 'Yuan chinois' },
+    'Escudo cabo-verdiano': { en: 'Cape Verdean escudo', fr: 'Escudo cap-verdien' },
+    'Coroa dinamarquesa': { en: 'Danish krone', fr: 'Couronne danoise' },
+    'Euro': { en: 'Euro', fr: 'Euro' },
+    'Libra esterlina': { en: 'Pound sterling', fr: 'Livre sterling' },
+    'Cedi ganês': { en: 'Ghanaian cedi', fr: 'Cedi ghanéen' },
+    'Rupia indiana': { en: 'Indian rupee', fr: 'Roupie indienne' },
+    'Iene japonês': { en: 'Japanese yen', fr: 'Yen japonais' },
+    'Dirham marroquino': { en: 'Moroccan dirham', fr: 'Dirham marocain' },
+    'Pataca de Macau': { en: 'Macanese pataca', fr: 'Pataca de Macao' },
+    'Peso mexicano': { en: 'Mexican peso', fr: 'Peso mexicain' },
+    'Metical moçambicano': { en: 'Mozambican metical', fr: 'Metical mozambicain' },
+    'Naira nigeriana': { en: 'Nigerian naira', fr: 'Naira nigérian' },
+    'Coroa norueguesa': { en: 'Norwegian krone', fr: 'Couronne norvégienne' },
+    'Coroa sueca': { en: 'Swedish krona', fr: 'Couronne suédoise' },
+    'Dobra de São Tomé': { en: 'São Tomé dobra', fr: 'Dobra de São Tomé' },
+    'Dólar americano': { en: 'US dollar', fr: 'Dollar américain' },
+    'Franco CFA (África Central)': { en: 'CFA franc (Central Africa)', fr: 'Franc CFA (Afrique centrale)' },
+    'Franco CFA (África Ocidental)': { en: 'CFA franc (West Africa)', fr: 'Franc CFA (Afrique de l’Ouest)' },
+    'Rand sul-africano': { en: 'South African rand', fr: 'Rand sud-africain' },
+
+    // ---- Países ----
+    'Angola': { en: 'Angola', fr: 'Angola' },
+    'Argentina': { en: 'Argentina', fr: 'Argentine' },
+    'Austrália': { en: 'Australia', fr: 'Australie' },
+    'Bélgica': { en: 'Belgium', fr: 'Belgique' },
+    'Brasil': { en: 'Brazil', fr: 'Brésil' },
+    'Cabo Verde': { en: 'Cape Verde', fr: 'Cap-Vert' },
+    'Dinamarca': { en: 'Denmark', fr: 'Danemark' },
+    'Espanha': { en: 'Spain', fr: 'Espagne' },
+    'França': { en: 'France', fr: 'France' },
+    'Gana': { en: 'Ghana', fr: 'Ghana' },
+    'Guiné-Bissau': { en: 'Guinea-Bissau', fr: 'Guinée-Bissau' },
+    'Guiné Equatorial': { en: 'Equatorial Guinea', fr: 'Guinée équatoriale' },
+    'Índia': { en: 'India', fr: 'Inde' },
+    'Itália': { en: 'Italy', fr: 'Italie' },
+    'Japão': { en: 'Japan', fr: 'Japon' },
+    'Luxemburgo': { en: 'Luxembourg', fr: 'Luxembourg' },
+    'Macau': { en: 'Macao', fr: 'Macao' },
+    'Marrocos': { en: 'Morocco', fr: 'Maroc' },
+    'México': { en: 'Mexico', fr: 'Mexique' },
+    'Moçambique': { en: 'Mozambique', fr: 'Mozambique' },
+    'Nigéria': { en: 'Nigeria', fr: 'Nigeria' },
+    'Noruega': { en: 'Norway', fr: 'Norvège' },
+    'Países Baixos': { en: 'Netherlands', fr: 'Pays-Bas' },
+    'Portugal': { en: 'Portugal', fr: 'Portugal' },
+    'Reino Unido': { en: 'United Kingdom', fr: 'Royaume-Uni' },
+    'Senegal': { en: 'Senegal', fr: 'Sénégal' },
+    'São Tomé e Príncipe': { en: 'São Tomé and Príncipe', fr: 'Sao Tomé-et-Principe' },
+    'Suécia': { en: 'Sweden', fr: 'Suède' },
+    'Suíça': { en: 'Switzerland', fr: 'Suisse' },
+    'África do Sul': { en: 'South Africa', fr: 'Afrique du Sud' },
+    'Alemanha': { en: 'Germany', fr: 'Allemagne' },
+
+    // ---- Definições do negócio ----
+    'O código aparece a seguir aos preços, por exemplo 2500 CVE.': { en: 'The code appears after prices, for example 2500 CVE.', fr: 'Le code apparaît après les prix, par exemple 2500 CVE.' },
+    'Sinal a pagar online (%)': { en: 'Deposit to pay online (%)', fr: 'Acompte à payer en ligne (%)' },
+    'Ao pagar, o cliente escolhe: só esta parte do preço (fica confirmada e paga o resto no estúdio) ou tudo de uma vez.': { en: 'When paying, the client chooses: only this part of the price (the booking is confirmed and the rest is paid at the studio) or everything at once.', fr: 'Au paiement, le client choisit : seulement cette part du prix (la réservation est confirmée et le reste se paie au studio) ou tout en une fois.' },
+
+    // ---- Utilizadores ----
+    'Criar': { en: 'Create', fr: 'Créer' },
+    'Alterar': { en: 'Change', fr: 'Modifier' },
+    'Utilizadores': { en: 'Users', fr: 'Utilisateurs' },
+    'Utilizador': { en: 'User', fr: 'Utilisateur' },
+    'Contacto': { en: 'Contact', fr: 'Contact' },
+    'Ações': { en: 'Actions', fr: 'Actions' },
+    'Adicionar novo Utilizador': { en: 'Add new user', fr: 'Ajouter un utilisateur' },
+    'Editar Utilizador': { en: 'Edit user', fr: 'Modifier l’utilisateur' },
+    'O email é o nome de entrada e não se muda.': { en: 'The email is the sign-in name and cannot be changed.', fr: 'L’e-mail est l’identifiant de connexion et ne se modifie pas.' },
+    'Pesquisar utilizadores': { en: 'Search users', fr: 'Rechercher des utilisateurs' },
+    'Conta ativada.': { en: 'Account activated.', fr: 'Compte activé.' },
+    'Conta bloqueada.': { en: 'Account blocked.', fr: 'Compte bloqué.' },
+    'Sem função': { en: 'No role', fr: 'Sans fonction' },
+    '(você)': { en: '(you)', fr: '(vous)' },
+    'Gestão de Utilizadores': { en: 'User management', fr: 'Gestion des utilisateurs' },
+    'Gerir utilizadores, funções e estados do sistema': { en: 'Manage users, roles and statuses in the system', fr: 'Gérer les utilisateurs, fonctions et statuts du système' },
+    'Criar Utilizador': { en: 'Create user', fr: 'Créer un utilisateur' },
+    'Lista atualizada.': { en: 'List updated.', fr: 'Liste mise à jour.' },
+    'Função:': { en: 'Role:', fr: 'Fonction :' },
+    'Estado:': { en: 'Status:', fr: 'Statut :' },
+
+    // ---- Gestão de acesso (RBAC) ----
+    'Controlo de Acesso (RBAC)': { en: 'Access Control (RBAC)', fr: 'Contrôle d’accès (RBAC)' },
+    'Novo Role': { en: 'New role', fr: 'Nouveau rôle' },
+    'Nova Permissão': { en: 'New permission', fr: 'Nouvelle permission' },
+    'Nova permissão': { en: 'New permission', fr: 'Nouvelle permission' },
+    'Atribuir Role': { en: 'Assign role', fr: 'Attribuer un rôle' },
+    'Editar Role': { en: 'Edit role', fr: 'Modifier le rôle' },
+    'Criar Role': { en: 'Create role', fr: 'Créer le rôle' },
+    'Sistema': { en: 'System', fr: 'Système' },
+    'Expira': { en: 'Expires', fr: 'Expire' },
+    'Remover esta atribuição?': { en: 'Remove this assignment?', fr: 'Retirer cette attribution ?' },
+    'ex.: Reservas – Criar': { en: 'e.g. Bookings – Create', fr: 'ex. : Réservations – Créer' },
+    'ex.: bookings': { en: 'e.g. bookings', fr: 'ex. : bookings' },
+    'ex.: create': { en: 'e.g. create', fr: 'ex. : create' },
+    'ex.: Administrador': { en: 'e.g. Administrator', fr: 'ex. : Administrateur' },
+    'ex.: admin': { en: 'e.g. admin', fr: 'ex. : admin' },
+    'ex.: Acesso total ao sistema': { en: 'e.g. Full system access', fr: 'ex. : Accès complet au système' },
+    'ex.: system': { en: 'e.g. system', fr: 'ex. : system' },
+    'Permissão criada.': { en: 'Permission created.', fr: 'Permission créée.' },
+    'Label': { en: 'Label', fr: 'Libellé' },
+    'Recurso': { en: 'Resource', fr: 'Ressource' },
+    'Ação': { en: 'Action', fr: 'Action' },
+    'Perfil guardado.': { en: 'Role saved.', fr: 'Rôle enregistré.' },
+    'Perfil criado.': { en: 'Role created.', fr: 'Rôle créé.' },
+    'Perfil atribuído.': { en: 'Role assigned.', fr: 'Rôle attribué.' },
+    'O código não se muda depois de criado.': { en: 'The code cannot be changed after it is created.', fr: 'Le code ne se modifie plus après la création.' },
+    'Prioridade': { en: 'Priority', fr: 'Priorité' },
+    'Categoria': { en: 'Category', fr: 'Catégorie' },
+    'Selecionar todas': { en: 'Select all', fr: 'Tout sélectionner' },
+    'Limpar': { en: 'Clear', fr: 'Effacer' },
+    'Roles a atribuir': { en: 'Roles to assign', fr: 'Rôles à attribuer' },
+    'Data de expiração (opcional)': { en: 'Expiry date (optional)', fr: 'Date d’expiration (facultative)' },
+    'Deixe em branco para atribuição permanente.': { en: 'Leave blank for a permanent assignment.', fr: 'Laissez vide pour une attribution permanente.' },
+    'Atribuir': { en: 'Assign', fr: 'Attribuer' },
+    'Removido.': { en: 'Removed.', fr: 'Retiré.' },
+
+    // ---- Imagens (projetos, música) ----
+    'Não foi possível enviar a imagem.': { en: 'Could not upload the image.', fr: 'Impossible d’envoyer l’image.' },
+    'Link de uma imagem': { en: 'Image link', fr: 'Lien d’une image' },
+    'Juntar link': { en: 'Add link', fr: 'Ajouter le lien' },
+    'Escolher do computador': { en: 'Choose from computer', fr: 'Choisir sur l’ordinateur' },
+    'Imagens, pela ordem do slide': { en: 'Images, in slider order', fr: 'Images, dans l’ordre du diaporama' },
+    '1 · capa': { en: '1 · cover', fr: '1 · couverture' },
+    'Mostrar antes': { en: 'Show earlier', fr: 'Afficher avant' },
+    'Mostrar depois': { en: 'Show later', fr: 'Afficher après' },
+    'Tirar': { en: 'Remove', fr: 'Retirer' },
+    'Tirar a imagem': { en: 'Remove the image', fr: 'Retirer l’image' },
+    'Imagem enviada. Carregue em Guardar para a usar.': { en: 'Image uploaded. Click Save to use it.', fr: 'Image envoyée. Cliquez sur Enregistrer pour l’utiliser.' },
+    'O link tem de começar por http:// ou https://.': { en: 'The link must start with http:// or https://.', fr: 'Le lien doit commencer par http:// ou https://.' },
+    'Pré-visualização da imagem': { en: 'Image preview', fr: 'Aperçu de l’image' },
   };
 
   // Alguns textos começam por um prefixo fixo e acabam em conteúdo variável
@@ -526,18 +990,197 @@
     [/^Fatura (FT \d+\/\d+) emitida\.$/, { en: 'Invoice $1 issued.', fr: 'Facture $1 émise.' }],
     [/^Taxa normal de IVA em /, { en: 'Standard VAT rate in ', fr: 'Taux normal de TVA à ' }],
     [/^Apagar "/, { en: 'Delete "', fr: 'Supprimer "' }],
-    [/^Tem (d+) notificações por ler.$/, { en: 'You have $1 unread notifications.', fr: 'Vous avez $1 notifications non lues.' }],
-    [/^Notificações ((d+) por ler)$/, { en: 'Notifications ($1 unread)', fr: 'Notifications ($1 non lues)' }],
-    [/^(d+) sessões marcadas para hoje$/, { en: '$1 sessions booked for today', fr: '$1 séances prévues aujourd’hui' }],
-    [/^(d+) sessões concluídas por pagar$/, { en: '$1 completed sessions unpaid', fr: '$1 séances terminées non payées' }],
+    [/^Tem (\d+) notificações por ler\.$/, { en: 'You have $1 unread notifications.', fr: 'Vous avez $1 notifications non lues.' }],
+    [/^Notificações \((\d+) por ler\)$/, { en: 'Notifications ($1 unread)', fr: 'Notifications ($1 non lues)' }],
+    [/^(\d+) sessões marcadas para hoje$/, { en: '$1 sessions booked for today', fr: '$1 séances prévues aujourd’hui' }],
+    [/^(\d+) sessões concluídas por pagar$/, { en: '$1 completed sessions unpaid', fr: '$1 séances terminées non payées' }],
+    [/^Falta receber (.+?) \(convertido para a moeda principal\)\.$/, { en: 'Still to collect: $1 (converted to the main currency).', fr: 'Reste à encaisser : $1 (converti dans la devise principale).' }],
     [/^Falta receber /, { en: 'Still to collect: ', fr: 'Reste à encaisser : ' }],
     [/^A partir de /, { en: 'From ', fr: 'Depuis ' }],
     [/^Horas de estúdio: /, { en: 'Studio hours: ', fr: 'Heures de studio : ' }],
     [/^faturado em /, { en: 'billed in ', fr: 'facturé en ' }],
     [/^Nenhuma sessão faturada em /, { en: 'No sessions billed in ', fr: 'Aucune séance facturée en ' }],
     [/^Faturação por serviço em /, { en: 'Billing by service in ', fr: 'Facturation par service en ' }],
+
+    // ---- Bloqueio, ligação, notificações ----
+    [/^Esteve (\d+) minutos? sem mexer\. Para continuar, escreva a sua palavra-passe\.$/, { en: 'You were idle for $1 minute(s). To continue, enter your password.', fr: 'Vous êtes resté inactif $1 minute(s). Pour continuer, saisissez votre mot de passe.' }],
+    [/^Última sincronização às (.+?)\. Clique para sincronizar agora\.$/, { en: 'Last synced at $1. Click to sync now.', fr: 'Dernière synchronisation à $1. Cliquez pour synchroniser maintenant.' }],
+    [/^Ligação ao servidor: (.+?)(?:, última sincronização às (.+))?$/, {
+      en: (_, e, h) => 'Connection to the server: ' + tr(e) + (h ? ', last synced at ' + h : ''),
+      fr: (_, e, h) => 'Connexion au serveur : ' + tr(e) + (h ? ', dernière synchronisation à ' + h : ''),
+    }],
+    [/^Tem (\d+) notificações novas\.$/, { en: 'You have $1 new notifications.', fr: 'Vous avez $1 nouvelles notifications.' }],
+    [/^(\d\d\/\d\d) às (\d{1,2}:\d\d)$/, { en: '$1 at $2', fr: '$1 à $2' }],
+
+    // ---- Atividade do perfil: "Criou uma marcação", "Falhou ao criar um estúdio"... ----
+    [/^(Criou|Alterou|Eliminou|Sincronizou|Mudou|Procurou) (.+)$/, { en: (_, v, a) => atividade('en', v, a), fr: (_, v, a) => atividade('fr', v, a) }],
+    [/^Falhou ao (criar|alterar|eliminar|sincronizar|mudar|procurar) (.+)$/, { en: (_, v, a) => atividade('en', v, a, true), fr: (_, v, a) => atividade('fr', v, a, true) }],
+
+    // ---- Perfil, imagens ----
+    [/^Acesso ao estúdio (.*)$/, { en: 'Access to studio $1', fr: 'Accès au studio $1' }],
+    [/^Última alteração: (.+)\.$/, { en: 'Last changed: $1.', fr: 'Dernière modification : $1.' }],
+    [/^(.+): escolha uma imagem JPG, PNG ou WebP\.$/, { en: '$1: choose a JPG, PNG or WebP image.', fr: '$1 : choisissez une image JPG, PNG ou WebP.' }],
+    [/^(.+): tem mais de 5 MB\. Escolha uma mais pequena\.$/, { en: '$1: larger than 5 MB. Choose a smaller one.', fr: '$1 : dépasse 5 Mo. Choisissez-en une plus petite.' }],
+    [/^Imagem (\d+)$/, { en: 'Image $1', fr: 'Image $1' }],
+    [/^Fotografia (\d+)$/, { en: 'Photo $1', fr: 'Photo $1' }],
+    [/^Mostrar a imagem (\d+) mais cedo no slide$/, { en: 'Show image $1 earlier in the slider', fr: 'Afficher l’image $1 plus tôt dans le diaporama' }],
+    [/^Mostrar a imagem (\d+) mais tarde no slide$/, { en: 'Show image $1 later in the slider', fr: 'Afficher l’image $1 plus tard dans le diaporama' }],
+    [/^Tirar a imagem (\d+)$/, { en: 'Remove image $1', fr: 'Retirer l’image $1' }],
+    [/^No máximo (\d+) imagens\.$/, { en: 'At most $1 images.', fr: 'Au maximum $1 images.' }],
+    [/^A enviar (\d+) de (\d+)…$/, { en: 'Uploading $1 of $2…', fr: 'Envoi de $1 sur $2…' }],
+    [/^(\d+) imagens enviadas\. Carregue em Guardar para as usar\.$/, { en: '$1 images uploaded. Click Save to use them.', fr: '$1 images envoyées. Cliquez sur Enregistrer pour les utiliser.' }],
+    [/^Até (\d+) imagens \(JPG, PNG ou WebP, até 5 MB cada\), do computador ou por link\. Com mais de uma, o cartão do site passa-as em slide, de 15 em 15 segundos\. Sem nenhuma, fica o logo\.$/, { en: 'Up to $1 images (JPG, PNG or WebP, up to 5 MB each), from the computer or by link. With more than one, the site card shows them as a slider, every 15 seconds. With none, the logo is used.', fr: 'Jusqu’à $1 images (JPG, PNG ou WebP, 5 Mo max. chacune), depuis l’ordinateur ou par lien. S’il y en a plusieurs, la carte du site les fait défiler toutes les 15 secondes. Sans image, le logo s’affiche.' }],
+    [/^A capa não pôde ser carregada: (.*)$/, { en: 'The cover could not be loaded: $1', fr: 'La pochette n’a pas pu être chargée : $1' }],
+    [/^A imagem não pôde ser carregada: (.*)$/, { en: 'The image could not be loaded: $1', fr: 'L’image n’a pas pu être chargée : $1' }],
+    // "Lido do Spotify: título, capa." / "… (os campos já estavam preenchidos)." [+ " A capa não veio: …"]
+    [/^Lido do (.+?)(?:: (.+?)\.| \(os campos já estavam preenchidos\)\.)(?: A capa não veio: (.*))?$/, {
+      en: (_, p, f, a) => 'Read from ' + p + (f ? ': ' + f.split(', ').map(tr).join(', ') + '.' : ' (the fields were already filled in).') + (a ? ' The cover did not come: ' + a : ''),
+      fr: (_, p, f, a) => 'Lu depuis ' + p + (f ? ' : ' + f.split(', ').map(tr).join(', ') + '.' : ' (les champs étaient déjà remplis).') + (a ? ' La pochette n’est pas venue : ' + a : ''),
+    }],
+    [/^(.+) enviada\. Carregue em Guardar para a usar\.$/, { en: '$1 uploaded. Click Save to use it.', fr: '$1 envoyée. Cliquez sur Enregistrer pour l’utiliser.' }],
+    [/^(\d+) minutos$/, { en: '$1 minutes', fr: '$1 minutes' }],
+
+    // ---- CMS ----
+    [/^Como fica no site · (\w+) \(a imagem do link aparece depois de guardar\)$/, { en: 'How it looks on the site · $1 (the linked image appears after saving)', fr: 'Aperçu sur le site · $1 (l’image du lien apparaît après l’enregistrement)' }],
+    [/^(.*) Deixe uma caixa vazia para manter o texto de origem \(a cinzento\)\.$/, {
+      en: (_, d) => tr(d) + ' Leave a box empty to keep the original text (in grey).',
+      fr: (_, d) => tr(d) + ' Laissez une case vide pour garder le texte d’origine (en gris).',
+    }],
+    [/^Apagar a secção "(.*)"\?$/, { en: 'Delete the section "$1"?', fr: 'Supprimer la section « $1 » ?' }],
+    [/^No máximo (\d+) secções novas$/, { en: 'At most $1 new sections', fr: 'Au maximum $1 nouvelles sections' }],
+    [/^Depois de "(.+)"$/, { en: (_, s) => 'After "' + tr(s) + '"', fr: (_, s) => 'Après « ' + tr(s) + ' »' }],
+
+    // ---- Dashboard ----
+    [/^(.+): faturado (.+), recebido (.+)$/, { en: '$1: billed $2, received $3', fr: '$1 : facturé $2, encaissé $3' }],
+    [/^([\d.,]+)% do faturado$/, { en: '$1% of billed', fr: '$1 % du facturé' }],
+    [/^Total \((\d+) meses\)$/, { en: 'Total ($1 months)', fr: 'Total ($1 mois)' }],
+
+    // ---- Pagamentos e reembolsos ----
+    [/^Reembolso feito(: o valor volta ao cartão do cliente)?\.( A marcação foi cancelada\.)?( As unidades voltaram ao stock\.)?$/, {
+      en: (_, c, m, s) => 'Refund done' + (c ? ': the amount goes back to the client’s card' : '') + '.' + (m ? ' The booking was cancelled.' : '') + (s ? ' The units went back into stock.' : ''),
+      fr: (_, c, m, s) => 'Remboursement effectué' + (c ? ' : le montant revient sur la carte du client' : '') + '.' + (m ? ' La réservation a été annulée.' : '') + (s ? ' Les unités sont revenues en stock.' : ''),
+    }],
+    [/^O Stripe devolve (.+) ao cartão do cliente \(pode demorar alguns dias a aparecer\)\. Não se pode desfazer\.$/, { en: 'Stripe returns $1 to the client’s card (it may take a few days to show). This cannot be undone.', fr: 'Stripe rembourse $1 sur la carte du client (cela peut prendre quelques jours). C’est irréversible.' }],
+    [/^Devolver as (\d+) unidades ao stock \(voltam a estar à venda\)$/, { en: 'Put the $1 units back into stock (they go back on sale)', fr: 'Remettre les $1 unités en stock (elles sont de nouveau en vente)' }],
+    [/^Compra ([A-Z0-9]{4,})$/, { en: 'Purchase $1', fr: 'Achat $1' }],
+    [/^Marcação ([A-Z0-9]{4,})$/, { en: 'Booking $1', fr: 'Réservation $1' }],
+    [/^Compra$/, { en: 'Purchase', fr: 'Achat' }],
+    [/^(\d+) lançamentos atualizados\.(?: (\d+) com erros\.)?$/, {
+      en: (_, n, e) => n + ' releases updated.' + (e ? ' ' + e + ' with errors.' : ''),
+      fr: (_, n, e) => n + ' sorties mises à jour.' + (e ? ' ' + e + ' avec erreurs.' : ''),
+    }],
+    [/^Reembolsar (.+)$/, { en: 'Refund $1', fr: 'Rembourser $1' }],
+
+    // ---- Música e projetos ----
+    [/^Eliminar "(.+)" de vez\?$/, { en: 'Delete "$1" for good?', fr: 'Supprimer « $1 » définitivement ?' }],
+    [/^Preço \((\w*)\) \*$/, { en: 'Price ($1) *', fr: 'Prix ($1) *' }],
+    [/^Já se venderam (\d+)\. Quando chegar a 0, o artigo sai do site\.$/, { en: '$1 already sold. When it reaches 0, the item leaves the site.', fr: '$1 déjà vendus. Quand le stock atteint 0, l’article quitte le site.' }],
+    [/^Eliminar o projeto "(.+)"\? ?(.*)$/, {
+      en: (_, p, a) => 'Delete the project "' + p + '"?' + (a ? ' ' + tr(a) : ''),
+      fr: (_, p, a) => 'Supprimer le projet « ' + p + ' » ?' + (a ? ' ' + tr(a) : ''),
+    }],
+    [/^Eliminar a inscrição de (.+)\?$/, { en: 'Delete the sign-up from $1?', fr: 'Supprimer l’inscription de $1 ?' }],
+    [/^Inscrição de (.+) aceite\. Contacte-a por WhatsApp ou email\.$/, { en: 'Sign-up from $1 accepted. Contact them by WhatsApp or email.', fr: 'Inscription de $1 acceptée. Contactez cette personne par WhatsApp ou e-mail.' }],
+    [/^Contacte (.+) pelo meio mais viável — a mensagem já vai escrita:$/, { en: 'Contact $1 by the most convenient means — the message is already written:', fr: 'Contactez $1 par le moyen le plus pratique — le message est déjà rédigé :' }],
+    [/^(.+) · (\d+) vendidos · (\d+) em stock\. Contacte quem comprou para combinar a entrega\.$/, { en: '$1 · $2 sold · $3 in stock. Contact the buyers to arrange delivery.', fr: '$1 · $2 vendus · $3 en stock. Contactez les acheteurs pour organiser la livraison.' }],
+    [/^das (\d{1,2}:\d\d) às (\d{1,2}:\d\d)$/, { en: 'from $1 to $2', fr: 'de $1 à $2' }],
+    [/^(\d+) em stock$/, { en: '$1 in stock', fr: '$1 en stock' }],
+    [/^(\d+) vendidos$/, { en: '$1 sold', fr: '$1 vendus' }],
+    [/^(\d+) reservados \(por pagar\)$/, { en: '$1 reserved (unpaid)', fr: '$1 réservés (non payés)' }],
+    [/^Prazo: (.*)$/, { en: 'Deadline: $1', fr: 'Date limite : $1' }],
+    [/^(\d+) inscrição$/, { en: '$1 sign-up', fr: '$1 inscription' }],
+    [/^(\d+) inscrições$/, { en: '$1 sign-ups', fr: '$1 inscriptions' }],
+    [/^\((\d+) por ver\)$/, { en: '($1 unseen)', fr: '($1 non vues)' }],
+
+    // ---- Mensagens ----
+    [/^Mensagens: (\d+) por ler, de (.+)$/, { en: 'Messages: $1 unread, from $2', fr: 'Messages : $1 non lus, de $2' }],
+    [/^Ainda não há mensagens com (.+)\. Diga olá!$/, { en: 'No messages with $1 yet. Say hello!', fr: 'Pas encore de messages avec $1. Dites bonjour !' }],
+    [/^(.+) tem mais de 20 MB\.$/, { en: '$1 is larger than 20 MB.', fr: '$1 dépasse 20 Mo.' }],
+    [/^A enviar (.+)…$/, { en: 'Sending $1…', fr: 'Envoi de $1…' }],
+    [/^Você: (.*)$/, { en: (_, r) => 'You: ' + tr(r), fr: (_, r) => 'Vous : ' + tr(r) }],
+    [/^🎤 Mensagem de voz \((.+)\)$/, { en: '🎤 Voice message ($1)', fr: '🎤 Message vocal ($1)' }],
+    [/^A gravar…/, { en: 'Recording…', fr: 'Enregistrement…' }],
+
+    // ---- Calendário, estúdios, utilizadores ----
+    [/^Remover o bloqueio das (.+) às (.+)\?$/, { en: 'Remove the block from $1 to $2?', fr: 'Retirer le blocage de $1 à $2 ?' }],
+    [/^(.+), (\d{1,2}:\d\d) às (\d{1,2}:\d\d)$/, { en: '$1, $2 to $3', fr: '$1, de $2 à $3' }],
+    [/^(.+) \(fechado\)$/, { en: '$1 (closed)', fr: '$1 (fermé)' }],
+    [/^(.+) \(atual\)$/, { en: '$1 (current)', fr: '$1 (actuelle)' }],
+    [/^Impresso em (.+)$/, { en: 'Printed on $1', fr: 'Imprimé le $1' }],
+    [/^(\d+) de (\d+) línguas$/, { en: '$1 of $2 languages', fr: '$1 sur $2 langues' }],
+    [/^Taxa normal de (\S+) em (.+): ([\d.,]+)%\. Corrija se o estúdio tiver outra\.$/, { en: 'Standard $1 rate in $2: $3%. Correct it if the studio has another.', fr: 'Taux normal de $1 à $2 : $3 %. Corrigez si le studio en a un autre.' }],
+    [/^Não temos a taxa de (.+)\. Escreva-a à mão\.$/, { en: 'We do not have the rate for $1. Type it by hand.', fr: 'Nous n’avons pas le taux pour $1. Saisissez-le à la main.' }],
+    [/^Eliminar o estúdio "(.+)" e as suas salas\?$/, { en: 'Delete the studio "$1" and its rooms?', fr: 'Supprimer le studio « $1 » et ses salles ?' }],
+    [/^Coordenadas lidas do link: (.+)$/, { en: 'Coordinates read from the link: $1', fr: 'Coordonnées lues dans le lien : $1' }],
+    [/^Localização deste aparelho: (.+?)(?: \(com cerca de (\d+) m de margem\))?$/, {
+      en: (_, c, m) => 'This device’s location: ' + c + (m ? ' (within about ' + m + ' m)' : ''),
+      fr: (_, c, m) => 'Position de cet appareil : ' + c + (m ? ' (à environ ' + m + ' m près)' : ''),
+    }],
+    [/^Eliminar a sala "(.+)"\?$/, { en: 'Delete the room "$1"?', fr: 'Supprimer la salle « $1 » ?' }],
+    [/^Preço por hora \((\w*)\)$/, { en: 'Price per hour ($1)', fr: 'Prix par heure ($1)' }],
+    [/^Eliminar o serviço "(.+)"\? As marcações antigas ficam sem serviço associado\.$/, { en: 'Delete the service "$1"? Old bookings will have no service linked.', fr: 'Supprimer le service « $1 » ? Les anciennes réservations n’auront plus de service associé.' }],
+    [/^Preços convertidos de (\w+) para (\w+) \((.+)\)\.$/, { en: 'Prices converted from $1 to $2 ($3).', fr: 'Prix convertis de $1 en $2 ($3).' }],
+    [/^Para (.+)\. As sessões abertas desta conta terminam\.$/, { en: 'For $1. Open sessions on this account will be ended.', fr: 'Pour $1. Les sessions ouvertes de ce compte seront fermées.' }],
+    [/^(Ativar|Bloquear) a conta de (.+?)\?( Deixa de conseguir entrar no painel\.)?$/, {
+      en: (_, a, n, b) => (a === 'Ativar' ? 'Activate' : 'Block') + ' the account of ' + n + '?' + (b ? ' They will no longer be able to sign in to the panel.' : ''),
+      fr: (_, a, n, b) => (a === 'Ativar' ? 'Activer' : 'Bloquer') + ' le compte de ' + n + ' ?' + (b ? ' Cette personne ne pourra plus se connecter au panneau.' : ''),
+    }],
+    [/^Eliminar o utilizador (.+)\? Esta ação não se pode desfazer\.$/, { en: 'Delete the user $1? This cannot be undone.', fr: 'Supprimer l’utilisateur $1 ? Cette action est irréversible.' }],
+    [/^Aberto (.+)$/, { en: (_, d) => 'Open ' + tr(d), fr: (_, d) => 'Ouvert ' + tr(d) }],
+    [/^Abre (.+)$/, { en: (_, d) => 'Opens ' + tr(d), fr: (_, d) => 'Ouvre ' + tr(d) }],
+    [/^Fecha (.+)$/, { en: (_, d) => 'Closes ' + tr(d), fr: (_, d) => 'Ferme ' + tr(d) }],
+    [/^Roles \((\d+)\)$/, { en: 'Roles ($1)', fr: 'Rôles ($1)' }],
+    [/^Permissões \((\d+)\)$/, { en: 'Permissions ($1)', fr: 'Permissions ($1)' }],
+    [/^Atribuições \((\d+)\)$/, { en: 'Assignments ($1)', fr: 'Attributions ($1)' }],
+    [/^Prioridade: (.*)$/, { en: 'Priority: $1', fr: 'Priorité : $1' }],
+    [/^Categoria: (.*)$/, { en: 'Category: $1', fr: 'Catégorie : $1' }],
+    [/^Permissões: (.*)$/, { en: 'Permissions: $1', fr: 'Permissions : $1' }],
+    [/^Permissões \($/, { en: 'Permissions (', fr: 'Permissions (' }],
+    [/^selecionadas\)$/, { en: 'selected)', fr: 'sélectionnées)' }],
+    [/^Eliminar o perfil "(.+)"\?$/, { en: 'Delete the role "$1"?', fr: 'Supprimer le rôle « $1 » ?' }],
+    [/^Eliminar a permissão "(.+)"\?$/, { en: 'Delete the permission "$1"?', fr: 'Supprimer la permission « $1 » ?' }],
+
+    // ---- Marcação (janela) e faturas ----
+    [/^Valor total \((.*)\)$/, { en: 'Total amount ($1)', fr: 'Montant total ($1)' }],
+    [/^Valor já recebido \((.*)\)$/, { en: 'Amount already received ($1)', fr: 'Montant déjà reçu ($1)' }],
+    [/^Código (\w+)\. (Pedido feito no site|Criada no painel) a (.+)\.$/, {
+      en: (_, c, o, d) => 'Code ' + c + '. ' + (o === 'Criada no painel' ? 'Created in the panel' : 'Requested on the site') + ' on ' + d + '.',
+      fr: (_, c, o, d) => 'Code ' + c + '. ' + (o === 'Criada no painel' ? 'Créée dans le panneau' : 'Demandée sur le site') + ' le ' + d + '.',
+    }],
+    [/^Anular a fatura (.+)\? Escreva o motivo:$/, { en: 'Cancel invoice $1? Write the reason:', fr: 'Annuler la facture $1 ? Indiquez le motif :' }],
+    [/^Marcação (\w+)\. A fatura fica com o número seguinte da série do ano e com a taxa de IVA do estúdio\. É um documento interno, sem validade fiscal\.$/, { en: 'Booking $1. The invoice takes the next number in the year’s series and the studio’s VAT rate. It is an internal document, with no tax validity.', fr: 'Réservation $1. La facture prend le numéro suivant de la série de l’année et le taux de TVA du studio. C’est un document interne, sans valeur fiscale.' }],
   ];
 
+  // Registos de atividade montados no servidor (lib/atividade.js): verbo + alvo.
+  const ATIV_VERBO = {
+    Criou: ['Created', 'A créé'], Alterou: ['Changed', 'A modifié'], Eliminou: ['Deleted', 'A supprimé'],
+    Sincronizou: ['Synced', 'A synchronisé'], Mudou: ['Changed', 'A changé'], Procurou: ['Looked up', 'A recherché'],
+    criar: ['create', 'créer'], alterar: ['change', 'modifier'], eliminar: ['delete', 'supprimer'],
+    sincronizar: ['sync', 'synchroniser'], mudar: ['change', 'changer'], procurar: ['look up', 'rechercher'],
+  };
+  const ATIV_ALVO = {
+    'uma marcação': ['a booking', 'une réservation'], 'um bloqueio de horário': ['a time block', 'un blocage de créneau'],
+    'um estúdio': ['a studio', 'un studio'], 'uma sala': ['a room', 'une salle'], 'um serviço': ['a service', 'un service'],
+    'as definições': ['the settings', 'les paramètres'], 'um utilizador': ['a user', 'un utilisateur'],
+    'a localização de um estúdio': ['a studio’s location', 'la position d’un studio'], 'uma permissão': ['a permission', 'une permission'],
+    'um papel': ['a role', 'un rôle'], 'uma atribuição de papel': ['a role assignment', 'une attribution de rôle'],
+    'uma música': ['a song', 'une chanson'], 'um projeto': ['a project', 'un projet'], 'um lançamento': ['a release', 'une sortie'],
+    'uma inscrição': ['a sign-up', 'une inscription'], 'as definições das integrações': ['the integration settings', 'les paramètres des intégrations'],
+    'o conteúdo do site': ['the site content', 'le contenu du site'], 'uma integração': ['an integration', 'une intégration'],
+    'o estado de uma marcação': ['a booking’s status', 'le statut d’une réservation'], 'dados do painel': ['panel data', 'des données du panneau'],
+  };
+  function atividade(l, verbo, alvo, falhou) {
+    const i = l === 'en' ? 0 : 1;
+    const v = ATIV_VERBO[verbo] ? ATIV_VERBO[verbo][i] : verbo;
+    const a = ATIV_ALVO[alvo] ? ATIV_ALVO[alvo][i] : alvo;
+    if (falhou) return (i ? 'Échec : ' : 'Failed to ') + v + ' ' + a;
+    return v + ' ' + a;
+  }
+
+  // Ordem: a frase inteira na TAB; um dos padrões (que podem trazer uma
+  // função, para traduzir também a parte variável); por fim, textos feitos de
+  // partes separadas por " · " (ex.: "Agente · Estúdio Central · ligado
+  // agora") traduzem-se parte a parte.
   function traduzTexto(txt) {
     if (txt == null) return null;
     const k = txt.trim();
@@ -548,14 +1191,22 @@
     for (const [re, m] of PREFIXOS) {
       if (re.test(txt) && m[lingua] != null) return txt.replace(re, m[lingua]);
     }
+    if (txt.includes(' · ')) {
+      const partes = txt.split(' · ');
+      const novas = partes.map(tr);
+      if (novas.some((p, i) => p !== partes[i])) return novas.join(' · ');
+    }
     return null;
   }
+  // A tradução, ou o próprio texto se não houver.
+  function tr(s) { const t = traduzTexto(s); return t == null ? s : t; }
 
   const ATTRS = ['placeholder', 'title', 'aria-label'];
   function traduzElemento(el) {
     for (const a of ATTRS) {
       const v = el.getAttribute && el.getAttribute(a);
-      if (v) { const t = traduzTexto(v); if (t != null) el.setAttribute(a, t); }
+      // Só se mudar: o observador vê cada alteração de atributo (e não pode entrar em ciclo).
+      if (v) { const t = traduzTexto(v); if (t != null && t !== v) el.setAttribute(a, t); }
     }
   }
 
@@ -577,9 +1228,29 @@
     if (obs) { obs.disconnect(); obs = null; }
     if (!ligar) return;
     obs = new MutationObserver((muts) => {
-      for (const m of muts) for (const n of m.addedNodes) traduzir(n);
+      for (const m of muts) {
+        if (m.type === 'attributes') traduzElemento(m.target);
+        else for (const n of m.addedNodes) traduzir(n);
+      }
     });
-    obs.observe(document.body, { childList: true, subtree: true });
+    // Também os atributos mudados depois (ex.: o aria-label do selo "Ao vivo").
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ATTRS });
+  }
+
+  // As janelas do browser (confirmar, avisar, perguntar) não passam pelo DOM:
+  // traduz-se a pergunta antes de a mostrar.
+  for (const f of ['alert', 'confirm', 'prompt']) {
+    const original = window[f];
+    if (typeof original !== 'function') continue;
+    window[f] = function (msg, ...resto) {
+      return original.call(window, lingua === 'pt' || msg == null ? msg : tr(String(msg)), ...resto);
+    };
+  }
+
+  // O servidor responde na língua do cookie "lingua" (erros, notificações):
+  // fica sempre igual à do painel, mesmo para quem a escolheu antes de haver cookie.
+  if (!new RegExp('(^|; )lingua=' + lingua + '(;|$)').test(document.cookie)) {
+    document.cookie = 'lingua=' + lingua + ';path=/;max-age=31536000;samesite=lax';
   }
 
   window.I18N = {
@@ -588,6 +1259,8 @@
     get locale() { return D.lingua(lingua).locale; },
     lista: (chave) => D.t(lingua, chave).split(','),
     traduzir,
+    // Um texto solto (ex.: o título do separador do browser).
+    texto: (s) => (lingua === 'pt' ? s : tr(s)),
     // Começa a traduzir (chamado no arranque do painel).
     arranque() { observar(lingua !== 'pt'); if (lingua !== 'pt') traduzir(document.body); },
     // Muda a língua: guarda, liga/desliga o observador e avisa quem desenha.

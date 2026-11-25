@@ -904,6 +904,15 @@ const setVal = (w, el, v, type = 'input') => { el.value = v; ev(w, el, type); };
   await waitFor(() => d.querySelector('.tb-lang strong') && d.querySelector('.tb-lang strong').textContent === 'EN', 'painel em inglês');
   await waitFor(() => [...d.querySelectorAll('.side .nav')].some((a) => /^Bookings/.test(a.textContent)), 'menu traduzido');
   ok(true, 'escolher English traduz o painel sem recarregar');
+  // Tradução completa: barra de topo, mensagens, janelas do browser, erros da API e títulos.
+  await waitFor(() => /Live|Syncing/.test(d.querySelector('.tb-sync-txt').textContent), 'selo de ligação traduzido');
+  ok(/Connection to the server/.test(d.querySelector('.tb-sync').getAttribute('aria-label')), 'o aria-label mudado depois de desenhado também é traduzido');
+  ok(/Messages/.test(d.querySelector('.sup-fab').textContent), 'a pílula das mensagens aparece em inglês');
+  ok(/original\.call/.test(String(w.confirm)) && w.I18N.texto('Remover esta atribuição?') === 'Remove this assignment?', 'as janelas de confirmação do browser passam pelo tradutor');
+  ok(w.I18N.texto('O Meu Perfil') !== 'O Meu Perfil', 'o título do separador também se traduz');
+  ok(w.I18N.texto('Criou uma marcação') === 'Created a booking' && w.I18N.texto('Falhou ao eliminar um estúdio') === 'Failed to delete a studio', 'os registos de atividade traduzem-se (verbo + alvo)');
+  ok(w.I18N.texto('Agente · Estúdio Central · ligado agora') === 'Agent · Estúdio Central · online now', 'textos com partes separadas por " · " traduzem-se parte a parte');
+  ok(w.I18N.texto('Tem 3 notificações por ler.') === 'You have 3 unread notifications.', 'contagens com números traduzem-se');
   d.querySelector('.tb-lang').click();
   [...d.querySelectorAll('.tb-lang-menu .tb-menu-item')][1].click();
   await waitFor(() => [...d.querySelectorAll('.side .nav')].some((a) => /^Marcações/.test(a.textContent)), 'menu de volta ao português');

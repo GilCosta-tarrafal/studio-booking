@@ -148,7 +148,7 @@ router.get('/bookings/:id/recibo.pdf', (req, res) => {
   const row = db.prepare(BOOKING_SELECT + ' WHERE b.id=?').get(idParam(req));
   const scope = scopeStudio(req);
   if (!row || (scope && row.studio_id !== scope)) throw new HttpError(404, 'Marcação não encontrada.');
-  require('../lib/pdf-recibo').enviar(res, row);
+  require('../lib/pdf-recibo').enviar(res, row, req.lingua);
 });
 
 // ------------------------------------------------------------ Faturas (internas)
@@ -180,7 +180,7 @@ router.get('/faturas/:id.pdf', (req, res) => {
   const f = faturaNoAmbito(req);
   const codigo = f.booking_id ? (db.prepare('SELECT code FROM bookings WHERE id=?').get(f.booking_id) || {}).code : '';
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="fatura-${f.serie.replace(/\s+/g, '')}-${f.numero}.pdf"` });
-  require('../lib/pdf-fatura').gerar(res, f, getSettings(), codigo);
+  require('../lib/pdf-fatura').gerar(res, f, getSettings(), codigo, req.lingua);
 });
 
 router.post('/faturas/:id/anular', (req, res) => {
@@ -532,7 +532,7 @@ router.get('/reports.pdf', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="relatorio-${from || 'inicio'}_a_${to || 'hoje'}.pdf"`);
   res.setHeader('Content-Type', 'application/pdf');
   require('../lib/pdf-relatorio').gerar(res, r, {
-    business: settings, estudio, periodo, geradoEm, dominio, cur: settings.currency,
+    business: settings, estudio, periodo, geradoEm, dominio, cur: settings.currency, lingua: req.lingua,
   });
 });
 
@@ -840,7 +840,7 @@ router.get('/clients.pdf', (req, res) => {
   const dominio = settings.email && settings.email.includes('@') ? settings.email.split('@')[1] : '';
   res.setHeader('Content-Disposition', `attachment; filename="clientes-${U.nowLocal().date}.pdf"`);
   res.setHeader('Content-Type', 'application/pdf');
-  require('../lib/pdf-clientes').gerar(res, clientes, { business: settings, estudio, geradoEm, dominio, cur: settings.currency, pesquisa });
+  require('../lib/pdf-clientes').gerar(res, clientes, { business: settings, estudio, geradoEm, dominio, cur: settings.currency, pesquisa, lingua: req.lingua });
 });
 
 // ------------------------------------------------------------ Definições

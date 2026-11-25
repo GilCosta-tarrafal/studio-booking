@@ -21,6 +21,7 @@ const { requireClient } = require('../../lib/conta-auth');
 const { rateLimit } = require('../../lib/ratelimit');
 const stripe = require('../fornecedores/stripe');
 const loja = require('./loja');
+const TR = require('../../lib/traducoes');
 
 const router = express.Router();
 const limitador = rateLimit({ windowMs: 10 * 60 * 1000, max: 30 });
@@ -56,17 +57,23 @@ const cartoes = (clientId) => db.prepare('SELECT id, marca, ultimos, mes, ano, t
 
 // Resumo para o ecrã de pagamento: a linha do serviço, o que já foi pago, e o
 // valor em falta repartido em base + IVA (o preço já inclui o IVA do estúdio).
-function resumo(b) {
+// Os nomes saem na língua de quem paga (as traduções escritas no painel).
+function resumo(b, req) {
   const st = db.prepare('SELECT vat_rate, tax_name FROM studios WHERE id=?').get(b.studio_id) || {};
   const taxa = st.vat_rate == null ? null : Number(st.vat_rate);
   const total = emFalta(b);
   const base = taxa == null ? total : r2(total / (1 + taxa / 100));
   const min = b.end_min - b.start_min;
+  const l = req.lingua;
+  const sala = TR.local(b.room_name, b.room_tr, l, 'name');
+  const servico = b.service_name ? TR.local(b.service_name, b.service_tr, l, 'name') : req.t('pagar.sessaoEstudio');
+  // "IVA" é o nome por omissão: traduz-se (VAT, TVA). Outro nome escrito à mão fica como está.
+  const imposto = !st.tax_name || st.tax_name === 'IVA' ? req.t('pagar.iva') : st.tax_name;
   return {
-    code: b.code, status: b.status, studio: b.studio_name, room: b.room_name, date: b.date,
+    code: b.code, status: b.status, studio: TR.local(b.studio_name, b.studio_tr, l, 'name'), room: sala, date: b.date,
     start: U.fmtHM(b.start_min), end: U.fmtHM(b.end_min), minutos: min,
-    itens: [{ descricao: b.service_name || 'Sessão em estúdio', detalhe: `${b.room_name} · ${min / 60} h${b.style ? ' · ' + b.style : ''}`, valor: b.price }],
-    ja_pago: b.paid || 0, base, imposto: r2(total - base), taxa, imposto_nome: st.tax_name || 'IVA', total,
+    itens: [{ descricao: servico, detalhe: `${sala} · ${min / 60} h${b.style ? ' · ' + b.style : ''}`, valor: b.price }],
+    ja_pago: b.paid || 0, base, imposto: r2(total - base), taxa, imposto_nome: imposto, total,
     sinal: sinalEmFalta(b), sinal_pct: getSettings().deposit_percent,
     moeda: b.currency || getSettings().currency || '', pode_pagar: PAGAVEIS.includes(b.status) && total > 0,
   };
@@ -124,7 +131,7 @@ router.get('/config', (_req, res) => {
 
 router.post('/marcacao', (req, res) => {
   const a = alvo(req, (req.body || {}).code);
-  res.json({ resumo: a.tipo === 'encomenda' ? loja.resumo(a.e) : resumo(a.b), cartoes: cartoes(req.client.id), modo: modo() });
+  res.json({ resumo: a.tipo === 'encomenda' ? loja.resumo(a.e, req) : resumo(a.b, req), cartoes: cartoes(req.client.id), modo: modo() });
 });
 
 router.post('/cartoes/setup', limitador, async (req, res) => {
@@ -232,7 +239,7 @@ router.get('/recibo/:id/pdf', (req, res) => {
   const r = reciboDe(U.toInt(req.params.id), req.client.id);
   if (!r) throw erro('Recibo não encontrado.', 404);
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="recibo-pagamento-${r.numero}.pdf"` });
-  require('../../lib/pdf-talao').gerar(res, r);
+  require('../../lib/pdf-talao').gerar(res, r, req.lingua);
 });
 
 module.exports = { router, aposPagamento, recibo, modo, aPagarAgora };

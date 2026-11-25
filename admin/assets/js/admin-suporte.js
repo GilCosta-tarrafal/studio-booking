@@ -85,6 +85,18 @@
     if (e.key === 'Escape' && st.aberto) fechar();
   }
 
+  // Mudou a língua do painel: o widget fica fora do que o painel redesenha,
+  // por isso volta a desenhar-se aqui (o tradutor apanha o que é novo).
+  document.addEventListener('lingua', () => {
+    if (!st.fab) return;
+    pintarFab();
+    if (st.aberto && !st.conversa) pintarChat();
+    else if (st.conversa) {
+      if (st.pintarCabecalhoConversa) st.pintarCabecalhoConversa();
+      if (st.pintarMensagens) st.pintarMensagens();
+    }
+  });
+
   function abrir() {
     st.aberto = 'chat';
     st.painel.hidden = false;
@@ -114,6 +126,7 @@
     st.badge.hidden = !n;
     st.badge.textContent = n > 99 ? '99+' : String(n);
     st.fab.hidden = !!st.aberto;
+    st.fab.title = 'Mensagens';
     const quando = (c) => String((c.last || {}).created_at || '');
     const quem = !st.lista ? []
       : st.lista.contacts.filter((c) => c.unread).sort((a, b) => quando(b).localeCompare(quando(a))).slice(0, 3);

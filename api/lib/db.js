@@ -416,6 +416,9 @@ acrescentaColuna('bookings', 'currency', "TEXT NOT NULL DEFAULT ''");
 // Quem cancelou: 'cliente' (pelo site, em /consultar) para o sininho avisar a
 // equipa; vazio nas canceladas pela própria equipa e nas antigas.
 acrescentaColuna('bookings', 'cancelado_por', "TEXT NOT NULL DEFAULT ''");
+// Língua em que o cliente marcou no site (pt, en, fr): os emails, SMS e o
+// recibo seguem-na. Vazia nas criadas no painel e nas antigas = português.
+acrescentaColuna('bookings', 'lingua', "TEXT NOT NULL DEFAULT ''");
 {
   const moedaBase = (db.prepare("SELECT value FROM settings WHERE key='currency'").get() || {}).value || 'CVE';
   db.prepare("UPDATE studios SET currency=? WHERE currency=''").run(moedaBase);

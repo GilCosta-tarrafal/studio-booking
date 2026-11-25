@@ -22,10 +22,12 @@ const soData = (iso) => new Date(iso).toLocaleDateString('pt-PT', { day: '2-digi
 
 // O talão tem a altura do que leva: uma primeira passagem (sem papel) mede-o
 // e a segunda desenha-o com a altura certa.
-function gerar(res, r) {
-  const medida = new PDFDocument({ size: [LARG + 24, 2000], margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+// `lingua`: a de quem o pede no site (ver lib/pdf-i18n.js).
+function gerar(res, r, lingua = 'pt') {
+  const { traduzirDoc } = require('./pdf-i18n');
+  const medida = traduzirDoc(new PDFDocument({ size: [LARG + 24, 2000], margins: { top: 0, bottom: 0, left: 0, right: 0 } }), lingua);
   const alto = Math.ceil(desenhar(medida, r, 2000)) + 34;
-  const doc = new PDFDocument({ size: [LARG + 24, alto], margins: { top: 0, bottom: 0, left: 0, right: 0 }, info: { Title: 'Recibo ' + r.numero } });
+  const doc = traduzirDoc(new PDFDocument({ size: [LARG + 24, alto], margins: { top: 0, bottom: 0, left: 0, right: 0 }, info: { Title: 'Recibo ' + r.numero } }), lingua);
   doc.pipe(res);
   desenhar(doc, r, alto);
   doc.end();

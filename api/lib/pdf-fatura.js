@@ -21,9 +21,11 @@ const dinheiro = (n, cur) => `${cur || ''} ${nf.format(n || 0).replace(/\s/g, ' 
 const pct = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 2 }).format(n) + '%';
 const data = (iso) => new Date(iso).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TZ });
 
-// f: fatura (lib/faturas.obter); biz: definições do negócio; codigo: o código da marcação.
-function gerar(res, f, biz, codigo) {
+// f: fatura (lib/faturas.obter); biz: definições do negócio; codigo: o código
+// da marcação; lingua: a do painel de quem a descarrega (ver lib/pdf-i18n.js).
+function gerar(res, f, biz, codigo, lingua = 'pt') {
   const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 50, left: 40, right: 40 }, info: { Title: 'Fatura ' + f.numero_texto } });
+  require('./pdf-i18n').traduzirDoc(doc, lingua);
   doc.pipe(res);
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
   const cur = f.moeda, e = f.emitente || {}, imp = f.imposto_nome || 'IVA';

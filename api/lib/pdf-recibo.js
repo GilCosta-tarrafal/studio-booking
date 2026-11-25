@@ -38,9 +38,11 @@ const hm = (min) => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String
 const duracao = (min) => { const h = Math.floor(min / 60), m = min % 60; return (h ? h + ' h' : '') + (m ? (h ? ' ' : '') + m + ' min' : '') || '0 min'; };
 
 // b: marcação (BOOKING_SELECT + start/end); st: estúdio; biz: definições do
-// negócio; nomes: { client_type, payment_method, project_type } já por extenso.
+// negócio; nomes: { client_type, payment_method, project_type } já por extenso,
+// e a língua em que o PDF sai (nomes.lingua; ver lib/pdf-i18n.js).
 function gerar(res, b, st, biz, nomes = {}) {
   const doc = new PDFDocument({ size: 'A4', margins: { top: 40, bottom: 50, left: 40, right: 40 }, info: { Title: 'Recibo ' + b.code } });
+  require('./pdf-i18n').traduzirDoc(doc, nomes.lingua);
   doc.pipe(res);
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
   const cur = b.currency || biz.currency || '';   // a moeda da marcação (a do estúdio)
@@ -180,9 +182,18 @@ function gerar(res, b, st, biz, nomes = {}) {
 }
 
 // Junta o que o recibo precisa (estúdio, definições, nomes dos catálogos) e
-// envia o PDF como anexo. `row` vem de BOOKING_SELECT.
-function enviar(res, row) {
+// envia o PDF como anexo. `row` vem de BOOKING_SELECT; `lingua`, a de quem o
+// pede (o cliente no site, a equipa no painel): os nomes do estúdio, da sala e
+// do serviço saem nas traduções escritas no painel.
+function enviar(res, row, lingua = 'pt') {
   const { db, getSettings } = require('./db');
+  const TR = require('./traducoes');
+  row = {
+    ...row,
+    studio_name: TR.local(row.studio_name, row.studio_tr, lingua, 'name'),
+    room_name: TR.local(row.room_name, row.room_tr, lingua, 'name'),
+    service_name: row.service_name ? TR.local(row.service_name, row.service_tr, lingua, 'name') : row.service_name,
+  };
   const st = db.prepare('SELECT * FROM studios WHERE id=?').get(row.studio_id) || {};
   const nome = (catalogo, codigo) => (codigo
     ? (db.prepare('SELECT nome FROM catalogo_itens WHERE catalogo=? AND codigo=?').get(catalogo, codigo) || {}).nome || codigo
@@ -193,6 +204,7 @@ function enviar(res, row) {
     project_type: nome('tipos_projeto', row.project_type),
     // A fatura em vigor desta marcação, se houver (fica no rodapé do recibo).
     fatura: (() => { const f = db.prepare("SELECT serie, numero FROM faturas WHERE booking_id=? AND estado='emitida'").get(row.id); return f ? `${f.serie}/${f.numero}` : ''; })(),
+    lingua,
   };
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="recibo-${row.code}.pdf"` });
   gerar(res, row, st, getSettings(), nomes);

@@ -111,6 +111,23 @@ function futureWeekday(offset = 3) {
   notify.sendEmail = enviarOriginal;
   const mail = emails.find((m) => m.to === 'ana@teste.cv');
   ok(mail && mail.subject.includes(code) && mail.text.includes('Referência da marcação: ' + code), 'o cliente recebe a referência da marcação no email da conta');
+  // Quem marca no site em inglês recebe o email em inglês (a língua fica na marcação).
+  emails.length = 0;
+  notify.sendEmail = async (m) => { emails.push(m); return { sent: false, channel: 'email', provider: 'teste' }; };
+  r = await call('POST', '/api/public/bookings', { cookie: clientCookie + '; lingua=en', body: payload({ start: '18:00', duration_minutes: 60 }) });
+  await new Promise((res) => setTimeout(res, 50));
+  notify.sendEmail = enviarOriginal;
+  const codeEn = r.json && r.json.booking && r.json.booking.code;
+  const mailEn = emails.find((m) => m.to === 'ana@teste.cv');
+  ok(r.status === 201 && db.prepare('SELECT lingua FROM bookings WHERE code=?').get(codeEn).lingua === 'en', 'a marcação guarda a língua em que foi feita no site');
+  ok(mailEn && /^Booking request received/.test(mailEn.subject) && mailEn.text.includes('Booking reference: ' + codeEn) && /^Hello /.test(mailEn.text), 'e o email ao cliente sai nessa língua: ' + (mailEn && mailEn.subject));
+  db.prepare('DELETE FROM bookings WHERE code=?').run(codeEn);
+  // Os PDFs: os rótulos passam pelo tradutor (lib/pdf-i18n.js).
+  const PI = require('../api/lib/pdf-i18n');
+  ok(PI.traduzir('Recibo de Marcação', 'en') === 'Booking Receipt' && PI.traduzir('Página 2 de 3', 'fr') === 'Page 2 sur 3' && PI.traduzir('Ana Lopes', 'en') === 'Ana Lopes' && PI.traduzir('Recibo de Marcação', 'pt') === 'Recibo de Marcação', 'os PDFs traduzem os rótulos e deixam os dados');
+  const DIC = require('../comum/assets/js/dicionario.js');
+  const chavesEmail = Object.keys(DIC.TEXTOS.pt).filter((k) => k.startsWith('email.'));
+  ok(['email.ola', 'email.aceite.assunto', 'email.pago.sms', 'email.reemb.l1'].every((k) => DIC.t('en', k) !== DIC.t('pt', k) && DIC.t('fr', k) !== DIC.t('pt', k)) && chavesEmail.every((k) => DIC.t('en', k) !== k), 'os textos dos emails e SMS existem em inglês e francês');
 
   r = await call('POST', '/api/public/bookings', { body: payload() });
   ok(r.status === 409, 'mesmo horário → 409');
@@ -426,6 +443,11 @@ function futureWeekday(offset = 3) {
   ok(r.status === 404, 'quem não está na conversa a dois não a lê (404)');
   r = await call('POST', '/api/admin/chat/geral/messages', { cookie: staff.cookie, body: { body: 'Bom dia a todos' } });
   ok(r.status === 404, 'já não há conversa "geral": cada mensagem é de uma pessoa para outra');
+  // Os erros saem na língua do cookie "lingua" (o mesmo do site e do painel).
+  r = await call('POST', `/api/admin/chat/${comDono.channel}/messages`, { cookie: ac + '; lingua=en', body: { body: '   ' } });
+  ok(r.status === 400 && r.json.error === 'Write a message.', 'erro da API em inglês com lingua=en: ' + r.json.error);
+  r = await call('POST', `/api/admin/chat/${comDono.channel}/messages`, { cookie: ac + '; lingua=fr', body: { body: '   ' } });
+  ok(r.json.error === 'Écrivez un message.', 'e em francês com lingua=fr: ' + r.json.error);
   r = await call('POST', `/api/admin/chat/${comDono.channel}/messages`, { cookie: ac, body: { body: '   ' } });
   ok(r.status === 400, 'mensagem vazia recusada');
   // Fotografias e mensagens de voz: o ficheiro em bruto; só os dois o abrem.

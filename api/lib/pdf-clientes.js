@@ -18,9 +18,10 @@ const COLUNAS = (cur) => [
 ];
 const FS_EMAIL = 7.4;
 
-// clientes: a lista de /clients (já filtrada); ctx: { business, estudio, geradoEm, dominio, cur, pesquisa }
+// clientes: a lista de /clients (já filtrada); ctx: { business, estudio, geradoEm, dominio, cur, pesquisa, lingua }
 function gerar(res, clientes, ctx) {
   const doc = new PDFDocument({ size: 'A4', margins: { top: 36, bottom: 60, left: 40, right: 40 }, bufferPages: true, info: { Title: 'Lista de Clientes' } });
+  require('./pdf-i18n').traduzirDoc(doc, ctx.lingua);
   doc.pipe(res);
   const L = doc.page.margins.left, R = doc.page.width - doc.page.margins.right, W = R - L;
   const fundo = () => doc.page.height - doc.page.margins.bottom;
